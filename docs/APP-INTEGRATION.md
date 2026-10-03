@@ -86,6 +86,7 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | Löschen | `session.delete {session_id}` | **verweigert laufende Sessions (4023)** → vorher `session.close {session_id: runtimeId}` |
 | Im Terminal öffnen | `window.hermesDesktop.openSessionInTerminal(id)` (IPC) | stored-id ok (tui resume); Rückgabe `{ok}` prüfen |
 | ID kopieren | `window.hermesDesktop.writeClipboard(text)` (IPC) | Feature-Detect |
+| Info-Dichte folgen | SDK `host.settings.get/subscribe('sessionListDensity')` | Werte `compact`/`comfortable`/`detailed`; App-persistiert unter localStorage `hermes.desktop.sessionListDensity` (Fallback-Lesepfad) |
 | Nicht verfügbar | gelesen/ungelesen, Export | App-lokale Stores bzw. Renderer-Bibliothek ohne Plugin-Door |
 
 Hinweis: `host.setPersistedSessionHidden` ist ein **REST**-Door und 404t für

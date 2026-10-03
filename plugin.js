@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.7.0'
+const VERSION = '1.8.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -170,10 +170,12 @@ const DEFAULT_SETTINGS = {
     livePollSec: 30,
     refreshSec: 45,
     view: 'list',
+    gridCols: 'auto',
     gridMin: 150,
     gridGap: 6,
     gridLines: 2,
-    gridPreview: true
+    gridPreview: true,
+    infoDensity: 'auto'
   },
   groups: {
     enabled: true,
@@ -918,6 +920,34 @@ const $sessions = atom([])
 const $sessionsError = atom(null)
 const $liveMap = atom({}) // runtimeId -> { storedId, status, at }
 const $activity = atom({}) // storedId -> { kind, name, at }
+const $appDensity = atom('compact') // App-Einstellung "Dichte der Session-Liste" (sessionListDensity)
+
+/** Folgt der App-Einstellung zur Session-Listen-Dichte (Feature-Detect). */
+function watchAppDensity() {
+  try {
+    const settingsApi = host.settings
+
+    if (!settingsApi || typeof settingsApi.get !== 'function') {
+      return () => {}
+    }
+
+    try {
+      $appDensity.set(String(settingsApi.get('sessionListDensity') || 'compact'))
+    } catch {
+      $appDensity.set('compact')
+    }
+
+    if (typeof settingsApi.subscribe === 'function') {
+      return settingsApi.subscribe('sessionListDensity', value => {
+        $appDensity.set(String(value || 'compact'))
+      })
+    }
+  } catch {
+    /* ältere Builds ohne settings-API */
+  }
+
+  return () => {}
+}
 
 let refreshInFlight = null
 
@@ -1023,8 +1053,11 @@ function applyGrid() {
   try {
     const tabs = $settings.get().tabs || {}
     const root = document.documentElement
+    const cols = String(tabs.gridCols || 'auto')
+    const fixedCols = ['1', '2', '3', '4'].includes(cols)
 
-    root.style.setProperty('--sf-grid-min', `${clampNumber(tabs.gridMin, 110, 280, 150)}px`)
+    root.style.setProperty('--sf-grid-cols', fixedCols ? cols : 'auto-fill')
+    root.style.setProperty('--sf-grid-min', fixedCols ? '0px' : `${clampNumber(tabs.gridMin, 110, 280, 150)}px`)
     root.style.setProperty('--sf-grid-gap', `${clampNumber(tabs.gridGap, 2, 16, 6)}px`)
     root.style.setProperty('--sf-grid-lines', String(clampNumber(tabs.gridLines, 1, 4, 2)))
   } catch (error) {
@@ -1039,6 +1072,10 @@ function normalizeRow(row) {
     title: String(row?.title || '').trim(),
     preview: String(row?.preview || '').trim(),
     cwd: String(row?.cwd || '').trim(),
+    branch: String(row?.git_branch || '').trim(),
+    model: String(row?.model || '').trim(),
+    toolCount: Number(row?.tool_call_count || 0),
+    pinned: Boolean(row?.pinned),
     source: String(row?.source || '').trim(),
     startedAt: Number(row?.started_at || 0) * 1000,
     messageCount: Number(row?.message_count || 0),
@@ -1701,6 +1738,18 @@ const EN = {
   deleteConfirmBody: 'Removes the session and its transcript — this cannot be undone.',
   copySessionId: 'Copy ID',
   renameLiveOnly: 'Renaming is available once the session is active/loaded — open it, then rename.',
+  tabsGridCols: 'Grid: columns',
+  tabsGridColsDesc: 'Fixed column count, or automatic based on card width.',
+  tabsGridColsAuto: 'Auto',
+  tabsInfoDensity: 'Info density',
+  tabsInfoDensityDesc: 'How much context each entry shows — like Hermes Desktop. Comfortable adds branch/model/counters, Detailed also the preview line. Follow Hermes mirrors the app setting live.',
+  infoDensityAuto: 'Follow Hermes',
+  infoDensityCompact: 'Compact',
+  infoDensityComfortable: 'Comfortable',
+  infoDensityDetailed: 'Detailed',
+  metaMessages: n => `${n} messages`,
+  metaToolCalls: n => `${n} tool calls`,
+  unpin: 'Unpin',
   navPersonal: 'Personal',
   secPersonal: 'Personalization',
   secPersonalDesc: 'Accent tint for core UI, a custom chat background (image or video), and a content area framed with rounded corners and a soft shadow.',
@@ -2053,6 +2102,18 @@ const DE = {
   deleteConfirmBody: 'Entfernt die Session samt Verlauf — nicht rückgängig zu machen.',
   copySessionId: 'ID kopieren',
   renameLiveOnly: 'Umbenennen ist möglich, sobald die Session aktiv/geladen ist — einmal öffnen, dann umbenennen.',
+  tabsGridCols: 'Grid: Spalten',
+  tabsGridColsDesc: 'Feste Spaltenzahl oder automatisch nach Kartenbreite.',
+  tabsGridColsAuto: 'Auto',
+  tabsInfoDensity: 'Info-Dichte',
+  tabsInfoDensityDesc: 'Wie viel Kontext jeder Eintrag zeigt — wie in Hermes Desktop. Komfortabel ergänzt Branch/Modell/Zähler, Detailreich zusätzlich die Vorschau-Zeile. „Wie Hermes“ übernimmt die App-Einstellung live.',
+  infoDensityAuto: 'Wie Hermes',
+  infoDensityCompact: 'Kompakt',
+  infoDensityComfortable: 'Komfortabel',
+  infoDensityDetailed: 'Detailreich',
+  metaMessages: n => `${n} Nachrichten`,
+  metaToolCalls: n => `${n} Tool-Aufrufe`,
+  unpin: 'Anpinnen aufheben',
   navPersonal: 'Individuell',
   secPersonal: 'Individualisierung',
   secPersonalDesc: 'Akzent-Tönung für die Kern-UI, eigener Chat-Hintergrund (Bild oder Video) und ein Content-Bereich mit runden Ecken und dezentem Schlagschatten.',
@@ -2157,7 +2218,7 @@ const CSS = `
 .sf-tab-count{font-size:10px;color:var(--ui-text-quaternary)}
 /* Session-Ansicht: Liste (Standard) oder Grid-Karten */
 .sf-items{display:flex;flex-direction:column;gap:2px}
-.sf-items[data-view=grid]{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--sf-grid-min,150px),1fr));gap:var(--sf-grid-gap,6px);padding:2px 2px 8px}
+.sf-items[data-view=grid]{display:grid;grid-template-columns:repeat(var(--sf-grid-cols,auto-fill),minmax(var(--sf-grid-min,150px),1fr));gap:var(--sf-grid-gap,6px);padding:2px 2px 8px}
 .sf-items[data-view=grid] .sf-tab{flex-direction:column;align-items:stretch;height:auto;gap:3px;padding:8px;border-radius:8px;background:color-mix(in srgb,var(--ui-text-primary) 4%,transparent)}
 .sf-items[data-view=grid] .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08))}
 .sf-items[data-view=grid] .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12))}
@@ -2165,6 +2226,7 @@ const CSS = `
 .sf-items[data-view=grid] .sf-tab-main{flex:1 1 auto;width:100%}
 .sf-items[data-view=grid] .sf-tab-title{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--sf-grid-lines,2);overflow:hidden;overflow-wrap:anywhere}
 .sf-items[data-view=grid] .sf-tab-preview{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.sf-tab-details{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:14px;color:var(--ui-text-tertiary)}
 .sf-items[data-view=grid] .sf-tab-meta{margin-top:auto;flex-wrap:wrap;row-gap:2px}
 /* More-Button (List- und Grid-Ansicht): dezent, erscheint bei Hover/Fokus */
 .sf-more{display:grid;place-items:center;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--ui-text-tertiary);cursor:pointer;opacity:0;transition:opacity .12s ease;flex-shrink:0}
@@ -3411,8 +3473,36 @@ function StackLayers({ style, color }) {
   })
 }
 
+function rowDetailsLine(row, t) {
+  const parts = []
+  const branch = String(row.branch || '').trim()
+
+  if (branch) {
+    parts.push(branch)
+  }
+
+  const model = String(row.model || '').split('/').pop()?.trim()
+
+  if (model) {
+    parts.push(model)
+  }
+
+  if (row.messageCount > 0) {
+    const count = compactNumber ? compactNumber(row.messageCount) : row.messageCount
+    parts.push(t('metaMessages', count))
+  }
+
+  if (row.toolCount > 0) {
+    const count = compactNumber ? compactNumber(row.toolCount) : row.toolCount
+    parts.push(t('metaToolCalls', count))
+  }
+
+  return parts.join(' · ')
+}
+
 function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign, dragging, setDragging }) {
   const settings = useValue($settings)
+  const appDensity = useValue($appDensity)
   const activity = useValue($activity)
   const live = useValue($liveMap)
   const tabsCfg = settings.tabs
@@ -3544,6 +3634,11 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     t
   })
 
+  // Info-Dichte (wie Hermes Desktop): kompakt = Basis, komfortabel = + Details-
+  // Zeile (Branch · Modell · Zähler), detailreich = + Vorschau-Zeile.
+  const infoDensity = tabsCfg.infoDensity === 'auto' ? appDensity : tabsCfg.infoDensity
+  const detailsLine = infoDensity !== 'compact' ? rowDetailsLine(row, t) : ''
+
   const meta = []
 
   if (tabsCfg.showSource && row.source && row.source !== 'local' && row.source !== 'desktop' && row.source !== 'tui') {
@@ -3571,7 +3666,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     { key: 'sep1', separator: true },
     { icon: 'edit', key: 'rename', label: t('renameMenu'), run: () => onMore('rename', row) },
     { icon: 'symbol-color', key: 'color', label: t('sessionColorAction'), run: () => onMore('color', row) },
-    { icon: 'pin', key: 'pin', label: t('pin'), run: () => onMore('pin', row) },
+    { icon: 'pin', key: 'pin', label: row.pinned ? t('unpin') : t('pin'), run: () => onMore('pin', row) },
     { icon: 'repo-forked', key: 'branch', label: t('branchSession'), run: () => onMore('branch', row) },
     { icon: 'folder', key: 'move', label: t('moveToProject'), run: () => onMore('move', row) },
     { key: 'sep2', separator: true },
@@ -3640,7 +3735,9 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         className: 'sf-tab-main',
         children: [
           jsx('div', { className: 'sf-tab-title', children: row.title || t('untitled') }),
-          ((cozy && tabsCfg.showPreview) || (tabsCfg.view === 'grid' && tabsCfg.gridPreview)) && row.preview
+          detailsLine ? jsx('div', { className: 'sf-tab-details', children: detailsLine }) : null,
+          (((cozy && tabsCfg.showPreview) || (tabsCfg.view === 'grid' && tabsCfg.gridPreview) || infoDensity === 'detailed') &&
+          row.preview)
             ? jsx('div', { className: 'sf-tab-preview', children: row.preview })
             : null
         ]
@@ -4181,7 +4278,7 @@ function SessionsPane() {
 
     if (action === 'pin') {
       try {
-        host.sessions.pin(row.id, true)
+        host.sessions.pin(row.id, !row.pinned)
       } catch (error) {
         host.notifyError(error, t('pin'))
       }
@@ -4831,6 +4928,21 @@ function SettingsPage() {
             })
           }),
           jsx(Row, {
+            title: t('tabsGridCols'),
+            description: t('tabsGridColsDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'auto', label: t('tabsGridColsAuto') },
+                { id: '1', label: '1' },
+                { id: '2', label: '2' },
+                { id: '3', label: '3' },
+                { id: '4', label: '4' }
+              ],
+              value: tabs.gridCols,
+              onChange: value => patch('tabs', 'gridCols', value)
+            })
+          }),
+          jsx(Row, {
             title: t('tabsGridGap'),
             description: t('tabsGridGapDesc'),
             action: jsx(NumberInput, {
@@ -4857,6 +4969,20 @@ function SettingsPage() {
             description: t('tabsGridPreviewDesc'),
             checked: tabs.gridPreview,
             onChange: value => patch('tabs', 'gridPreview', value)
+          }),
+          jsx(Row, {
+            title: t('tabsInfoDensity'),
+            description: t('tabsInfoDensityDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'auto', label: t('infoDensityAuto') },
+                { id: 'compact', label: t('infoDensityCompact') },
+                { id: 'comfortable', label: t('infoDensityComfortable') },
+                { id: 'detailed', label: t('infoDensityDetailed') }
+              ],
+              value: tabs.infoDensity,
+              onChange: value => patch('tabs', 'infoDensity', value)
+            })
           }),
           jsx(Row, {
             title: t('tabsStatusStyle'),
@@ -5601,6 +5727,9 @@ export default {
     applyGrid()
     const stopGridWatch = $settings.listen(() => applyGrid())
 
+    // 2b-5) Info-Dichte „Wie Hermes": folgt der App-Einstellung live.
+    const stopAppDensityWatch = watchAppDensity()
+
     // 2c) Umlaufender Glow-Ring folgt der Aktivität (Modus „busy").
     const stopArcWatch = [
       $activity.listen(() => syncArc()),
@@ -5795,6 +5924,7 @@ export default {
         stopPersonalWatch()
         clearPersonal()
         stopGridWatch()
+        stopAppDensityWatch()
         removeCss()
         disposeAnimation()
         wheelController.dispose()

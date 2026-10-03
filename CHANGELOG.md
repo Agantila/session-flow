@@ -3,6 +3,21 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.8.0] — 2026-10-04
+
+### Neu
+- **Mehrspaltiges Grid**: Neue Option „Grid: Spalten“ (Auto oder fest 1–4) —
+  Auto füllt wie bisher nach Kartenbreite, feste Spalten teilen die Pane
+  gleichmäßig auf.
+- **Info-Dichte wie Hermes Desktop**: Neue Option „Info-Dichte“ (Wie Hermes /
+  Kompakt / Komfortabel / Detailreich) — bildet die App-Einstellung „Dichte
+  der Session-Liste“ für List- UND Grid-Ansicht ab: Komfortabel ergänzt eine
+  Detail-Zeile (Branch · Modell · Nachrichten · Tool-Aufrufe), Detailreich
+  zusätzlich die Vorschau-Zeile. „Wie Hermes“ folgt der App-Einstellung live
+  (`host.settings.subscribe('sessionListDensity')`).
+- **Pin-Toggle im More-Menü**: „Anpinnen“/„Loslösen“ je nach Server-Status
+  (`pinned` aus `session.list`).
+
 ## [1.7.0] — 2026-10-04
 
 ### Neu

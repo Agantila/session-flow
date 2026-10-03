@@ -46,10 +46,12 @@ Animationen unabhängig von diesen Schaltern.
 |---|---|---|
 | `tabs.density` | `compact` | `compact` (einzeilig) oder `cozy` (mit Vorschau-Zeile). |
 | `tabs.view` | `list` | `list` oder `grid` (Kartenansicht) — auch per Toolbar-Button umschaltbar. |
-| `tabs.gridMin` | `150` | Grid: Mindest-Kartenbreite in px (Spalten füllen automatisch). |
+| `tabs.gridMin` | `150` | Grid: Mindest-Kartenbreite in px (nur bei Spalten = Auto). |
+| `tabs.gridCols` | `auto` | Grid-Spalten: `auto` (nach Kartenbreite) oder fest `1`–`4`. |
 | `tabs.gridGap` | `6` | Grid: Abstand zwischen den Karten in px. |
 | `tabs.gridLines` | `2` | Grid: max. Zeilen für den Kartentitel (1–4). |
 | `tabs.gridPreview` | `true` | Grid: Vorschau der letzten Nachricht auf den Karten. |
+| `tabs.infoDensity` | `auto` | Info-Dichte: `auto` (wie Hermes), `compact`, `comfortable`, `detailed`. Komfortabel = Detail-Zeile (Branch·Modell·Zähler), Detailreich = + Vorschau; gilt für Liste und Grid. |
 | `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |
 | `tabs.showTime` | `true` | Alter der Session anzeigen. |
 | `tabs.showPreview` | `false` | Letzte Nachricht als Vorschau (cozy-Dichte). |

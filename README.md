@@ -111,8 +111,9 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
   blocks, code blocks, list items.
 - **Ctrl+Scroll**: on/off, modifier key, threshold, cooldown, invert, wrap,
   HUD on/off + duration, ignore selectors (CSS).
-- **Session list**: density (compact/cozy), view (list/grid — card width, gap,
-  title lines, preview), status style (icon/dot/both), time, preview, message
+- **Session list**: density (compact/cozy), view (list/grid — columns, card
+  width, gap, title lines, preview, info density like Hermes), status style
+  (icon/dot/both), time, preview, message
   count, source badge, open-as (replace/stack/tab), max sessions, hide cron,
   live poll, refresh.
 - **Tab groups**: on/off, auto-grouping (off/date/source), stack style,

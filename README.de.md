@@ -119,8 +119,9 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
 - **Strg+Scroll**: an/aus, Zusatztaste (`Ctrl`/`Alt`/`Ctrl+Shift`/`Meta`),
   Schwelle, Sperrzeit, Richtung umkehren, Umlauf, HUD an/aus + Dauer,
   Ignorier-Selektoren (CSS).
-- **Session-Tabs**: Dichte (kompakt/bequem), Ansicht (Liste/Grid — Kartenbreite,
-  Abstand, Titel-Zeilen, Vorschau), Status-Darstellung (Icon/Punkt/beides),
+- **Session-Tabs**: Dichte (kompakt/bequem), Ansicht (Liste/Grid — Spalten,
+  Kartenbreite, Abstand, Titel-Zeilen, Vorschau, Info-Dichte wie Hermes),
+  Status-Darstellung (Icon/Punkt/beides),
   Zeit, Vorschau, Nachrichtenanzahl, Quelle, Öffnen-als (Ersetzen/Stapeln/Tab),
   max. Sessions, Cron ausblenden, Live-Poll, Refresh.
 - **Tab-Gruppen**: an/aus, Auto-Gruppierung (aus/Datum/Quelle), Stapel-Stil,

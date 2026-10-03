@@ -145,7 +145,16 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   IPC-Doors (`openSessionInTerminal`, `writeClipboard`). Der
   **Neue-Session-Button** liest `hermes.desktop.projectScope` (App-localStorage)
   + `projects.list` und erstellt per `session.create` (Params wie die App:
-  cols/source/cwd/cwd_explicit/profile).
+  cols/source/cwd/cwd_explicit/profile). **Grid-Spalten** (`tabs.gridCols`)
+  laufen über `--sf-grid-cols` (Zahl oder `auto-fill`) + `--sf-grid-min`
+  (0 bei fester Zahl). **Info-Dichte** (`tabs.infoDensity`) bildet Hermes'
+  `sessionListDensity` ab — `auto` folgt live über
+  `host.settings.subscribe('sessionListDensity', …)` (Feature-Detect; Fallback
+  bleibt `compact`); Komfortabel rendert `.sf-tab-details`
+  (Branch · Modell · Nachrichten · Tool-Aufrufe), Detailreich zusätzlich die
+  Vorschau-Zeile. **Wichtig**: Plugin-i18n interpoliert Funktions-Keys per
+  Args — `t('metaMessages', n)` (NICHT `t('key')(n)`; letzteres warf die Pane
+  in den Error-Boundary).
 - **Close-Button-Fix (v1.7)**: deckender Kontrast-Chip
   (`color-mix(foreground 9%, dt-card)`) statt gestapelter Transparenzen +
   Hover-Label-Mask für ALLE Tab-Varianten (die App maskiert nur
