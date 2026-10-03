@@ -1,6 +1,6 @@
 # Session Flow — Hermes Desktop Plugin
 
-Drei Features in einem Plugin, alle live konfigurierbar:
+Vier Features in einem Plugin, alle live konfigurierbar:
 
 1. **Chat-Animation (Zeile für Zeile)** — Antworten werden mit Easing weich
    eingeblendet. Beim Öffnen/Wechseln eines Chats laufen die sichtbaren Zeilen
@@ -16,6 +16,11 @@ Drei Features in einem Plugin, alle live konfigurierbar:
    benannte, farbige **Gruppen** legen (Rechtsklick oder Drag & Drop), Gruppen
    klappen zu einem **Stapel** zusammen (spine / fanned / pill). Optional
    automatische Gruppierung nach Datum oder Quelle.
+4. **Glass & Lesbarkeit** — Optionaler Frost-Effekt für **Eingabefeld** und
+   **UI-Chips**: eine weiche Blur-Fläche mit dezentem, aus der Hermes-Akzent-
+   farbe gefärbtem **Verlaufs-Overlay** (transparent auslaufend), damit Texte
+   auch ohne eigene Hintergrundfläche gut lesbar bleiben. Bereiche und Optik
+   (Blur, Sättigung, Deckkraft, Winkel, Stärke) sind frei einstellbar.
 
 Alles ist in den **Plugin-Einstellungen** anpassbar: `Session Flow`-Seite in der
 Sidebar, ⌘K/Ctrl+K → „Session Flow: Einstellungen", oder das Zahnrad in der Pane.
@@ -84,6 +89,9 @@ Volle Referenz inkl. Defaults: [docs/SETTINGS.md](docs/SETTINGS.md).
   (Ersetzen/Stapeln/Tab), max. Sessions, Cron ausblenden, Live-Poll, Refresh.
 - **Tab-Gruppen**: an/aus, Auto-Gruppierung (aus/Datum/Quelle), Stapel-Stil,
   „Nicht gruppiert"-Bereich.
+- **Glass & Lesbarkeit**: an/aus, Blur, Sättigung, Flächen-Deckkraft,
+  Akzent-Tönung, Verlauf (an/aus, Winkel, Stärke, Endpunkt), feine Kontur,
+  Bereiche (Eingabefeld / Chips / Statusleiste).
 
 ---
 

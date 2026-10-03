@@ -3,6 +3,23 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.1.0] — 2026-10-03
+
+### Added
+- **Glass & Lesbarkeit**: optionaler Frost-Effekt für **Eingabefeld** und
+  **UI-Chips** (Modell-/Reasoning-Pill, Statusleisten-Einträge) mit dezentem,
+  akzentgefärbtem **Verlauf als Transparenz-Overlay** — Beschriftungen bleiben
+  auch ohne eigene Fläche lesbar. Alles einzeln einstellbar: Blur, Sättigung,
+  Flächen-Deckkraft, Akzent-Tönung, Verlauf (an/aus, Winkel, Stärke, Endpunkt),
+  feine Kontur und Bereiche (Eingabefeld / Chips / Statusleiste).
+- Palette-Command „Session Flow: Glass-Effekt umschalten".
+
+### Notes
+- Der Blur folgt dem systemweiten „Transparenz reduzieren"-Gate der App
+  automatisch und setzt bewusst kein `!important` auf `backdrop-filter`.
+- Zoom-Flächen (Bild-Lightbox, Editor) bleiben unberührt; die Umsetzung ist
+  rein deklarativ (Attribute + Custom Properties auf `<html>`, kein CSS-Rebuild).
+
 ## [1.0.0] — 2026-10-03
 
 ### Added

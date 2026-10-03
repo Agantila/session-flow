@@ -65,6 +65,42 @@ Animationen unabhängig von diesen Schaltern.
 Gruppen-Daten (Name, Farbe, Zuordnung, Collapse-Zustand) liegen separat unter
 `hermes.plugin.session-flow.groups.v1`.
 
+## Glass & Lesbarkeit
+
+Optionaler Frost-Effekt, der Eingabefeld und Chips eine lesbare Fläche gibt
+(dezenter, akzentgefärbter Verlauf als Transparenz-Overlay). Umsetzung: die
+Einstellungen werden als `data-sf-glass`-Tokens + Custom Properties auf `<html>`
+gespiegelt; das Plugin-CSS reagiert rein per Selektor — kein CSS-Rebuild, kein
+`!important` auf `backdrop-filter` (der „Transparenz reduzieren"-Gate der App
+greift weiterhin automatisch).
+
+| Key | Default | Wirkung |
+|---|---|---|
+| `glass.enabled` | `true` | Master-Schalter. Aus = Tokens/Variablen werden restlos entfernt. |
+| `glass.blurPx` | `10` | Blur-Stärke in px (0–40; Chips ×0.75, Statusleiste ×0.6). |
+| `glass.saturate` | `115` | Sättigung in % (100–200). |
+| `glass.fill` | `86` | Deckkraft der Grundfläche in % (50–94; gilt für Composer-Fill inkl. Dock-Karten). |
+| `glass.tint` | `8` | Anteil Akzentfarbe in der Fläche in % (0–40). |
+| `glass.gradient` | `true` | Verlaufs-Overlay aus der Akzentfarbe. |
+| `glass.angle` | `165` | Verlaufs-Winkel in ° (0–360). |
+| `glass.gradOpacity` | `12` | Stärke des Verlaufs in % (0–60). |
+| `glass.reach` | `72` | Position (in %), ab der der Verlauf vollständig transparent ist (20–100). |
+| `glass.ring` | `true` | Hauchdünne, akzentgefärbte Innenkontur um Chips (box-shadow, kein Layout-Shift). |
+| `glass.scopes.composer` | `true` | Eingabefeld (Composer-Oberfläche + Dock-Karten) inkl. Blur. |
+| `glass.scopes.chips` | `true` | Modell- und Reasoning-Pill im Composer. |
+| `glass.scopes.statusbar` | `false` | Einträge der Statusleiste. |
+
+Hinweise:
+
+- **Performance**: Blur auf dem Eingabefeld kostet beim Scrollen/Streamen etwas
+  GPU. Wenn es sich je zäh anfühlt: `glass.blurPx` senken oder
+  `glass.scopes.composer` abschalten.
+- **Handles**: Chips werden über stabile App-Hooks adressiert
+  (`[data-tour='model-pill']`, `[data-testid='reasoning-pill']`); die
+  Modell-Pill existiert nur im Primär-Chat, die Reasoning-Pill überall.
+- Im **HUD-Modus** gewinnt bewusst die HUD-eigene Gestaltung (dort nullt die
+  App Backdrop-Filter mit `!important`).
+
 ## Gruppe vs. Session-Farbe
 
 - **Gruppenfarbe**: eigener Swatch-Picker im Gruppen-Dialog (Rechtsklick auf

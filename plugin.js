@@ -96,7 +96,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.0.0'
+const VERSION = '1.1.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -158,6 +158,19 @@ const DEFAULT_SETTINGS = {
     autoMode: 'off',
     stackStyle: 'spine',
     showUngrouped: true
+  },
+  glass: {
+    enabled: true,
+    blurPx: 10,
+    saturate: 115,
+    tint: 8,
+    fill: 86,
+    gradient: true,
+    angle: 165,
+    gradOpacity: 12,
+    reach: 72,
+    ring: true,
+    scopes: { composer: true, chips: true, statusbar: false }
   }
 }
 
@@ -220,6 +233,70 @@ function resetSettings() {
 function readSetting(section, key) {
   const value = $settings.get()[section]
   return value ? value[key] : undefined
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Glass & Lesbarkeit — Frost + Akzent-Verlauf für Eingabefeld und UI-Chips
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Rein deklarativ: die Einstellungen werden als Attribute + Custom Properties
+// auf <html> gespiegelt (data-sf-glass="composer chips …"), das Stylesheet
+// reagiert ausschließlich per CSS-Selektor darauf. Es wird also nie CSS neu
+// gebaut — nur Variablen gesetzt. Kein backdrop-filter mit !important, damit
+// der app-weite „Transparenz reduzieren"-Gate unangetastet bleibt.
+
+const SF_GLASS_VARS = [
+  '--sf-glass-blur',
+  '--sf-glass-sat',
+  '--sf-glass-tint',
+  '--sf-glass-fill',
+  '--sf-glass-angle',
+  '--sf-glass-grad',
+  '--sf-glass-reach'
+]
+
+function clampNumber(value, min, max, fallback) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback
+}
+
+/** Entfernt Attribut + Variablen wieder vollständig (Dispose / deaktiviert). */
+function clearGlass() {
+  const root = document.documentElement
+  root.removeAttribute('data-sf-glass')
+  for (const name of SF_GLASS_VARS) root.style.removeProperty(name)
+}
+
+function applyGlass() {
+  const glass = $settings.get().glass || {}
+
+  try {
+    if (!glass.enabled) {
+      clearGlass()
+      return
+    }
+
+    const root = document.documentElement
+    const tokens = []
+
+    if (glass.scopes?.composer) tokens.push('composer')
+    if (glass.scopes?.chips) tokens.push('chips')
+    if (glass.scopes?.statusbar) tokens.push('statusbar')
+    if (!glass.gradient) tokens.push('nograd')
+    if (!glass.ring) tokens.push('noring')
+
+    root.setAttribute('data-sf-glass', tokens.join(' ') || 'none')
+    root.style.setProperty('--sf-glass-blur', `${clampNumber(glass.blurPx, 0, 40, 10)}px`)
+    root.style.setProperty('--sf-glass-sat', `${clampNumber(glass.saturate, 100, 200, 115)}%`)
+    root.style.setProperty('--sf-glass-tint', `${clampNumber(glass.tint, 0, 40, 8)}%`)
+    root.style.setProperty('--sf-glass-fill', `${clampNumber(glass.fill, 50, 94, 86)}%`)
+    root.style.setProperty('--sf-glass-angle', `${clampNumber(glass.angle, 0, 360, 165)}deg`)
+    root.style.setProperty('--sf-glass-grad', `${clampNumber(glass.gradOpacity, 0, 60, 12)}%`)
+    root.style.setProperty('--sf-glass-reach', `${clampNumber(glass.reach, 20, 100, 72)}%`)
+  } catch (error) {
+    console.warn(`[${ID}] glass apply failed`, error)
+    clearGlass()
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -846,7 +923,29 @@ const EN = {
   delete: 'Delete',
   errOpen: 'Could not open the session',
   ageNow: 'now',
-  paneCount: n => `${n} sessions`
+  paneCount: n => `${n} sessions`,
+
+  // Glass & readability
+  secGlass: 'Glass & readability',
+  glassEnabled: 'Glass effect',
+  glassEnabledDesc:
+    'Gives the input field and chips a soft frosted fill with a subtle accent gradient — labels stay readable even over busy backdrops.',
+  glassBlur: 'Blur (px)',
+  glassSaturate: 'Saturation (%)',
+  glassFill: 'Fill opacity (%)',
+  glassTint: 'Accent tint (%)',
+  glassGradient: 'Accent gradient',
+  glassGradientDesc: 'Linear gradient from the accent color fading to transparent, layered over the fill.',
+  glassAngle: 'Gradient angle (°)',
+  glassGradOpacity: 'Gradient strength (%)',
+  glassReach: 'Gradient fades by (%)',
+  glassRing: 'Hairline outline',
+  glassRingDesc: 'A fine accent-tinted outline around chips.',
+  glassScopeComposer: 'Input field',
+  glassScopeChips: 'Chips (model / reasoning)',
+  glassScopeStatusbar: 'Status bar items',
+  glassHint:
+    'Blur follows the system reduce-transparency preference automatically; zoom surfaces stay untouched. Blur on the input costs a little GPU while the transcript scrolls — lower it if it ever feels heavy.'
 }
 
 const DE = {
@@ -991,7 +1090,29 @@ const DE = {
   deleteGroupConfirm: 'Gruppe „{0}" löschen? Die Sessions bleiben erhalten und wandern zurück in die Liste.',
   errOpen: 'Session konnte nicht geöffnet werden',
   ageNow: 'jetzt',
-  paneCount: n => `${n} Sessions`
+  paneCount: n => `${n} Sessions`,
+
+  // Glass & Lesbarkeit
+  secGlass: 'Glass & Lesbarkeit',
+  glassEnabled: 'Glass-Effekt',
+  glassEnabledDesc:
+    'Gibt Eingabefeld und Chips eine weiche Frost-Fläche mit dezentem Akzent-Verlauf — Beschriftungen bleiben auch über unruhigem Hintergrund gut lesbar.',
+  glassBlur: 'Blur (px)',
+  glassSaturate: 'Sättigung (%)',
+  glassFill: 'Flächen-Deckkraft (%)',
+  glassTint: 'Akzent-Tönung (%)',
+  glassGradient: 'Akzent-Verlauf',
+  glassGradientDesc: 'Linearer Verlauf von der Akzentfarbe ins Transparente, über der Fläche.',
+  glassAngle: 'Verlaufs-Winkel (°)',
+  glassGradOpacity: 'Verlaufs-Stärke (%)',
+  glassReach: 'Verlauf endet bei (%)',
+  glassRing: 'Feine Kontur',
+  glassRingDesc: 'Hauchdünner, akzentgefärbter Rand um die Chips.',
+  glassScopeComposer: 'Eingabefeld',
+  glassScopeChips: 'Chips (Modell / Reasoning)',
+  glassScopeStatusbar: 'Statusleisten-Einträge',
+  glassHint:
+    'Der Blur folgt automatisch der System-Einstellung „Transparenz reduzieren"; Zoom-Flächen bleiben unberührt. Blur auf dem Eingabefeld kostet beim Scrollen etwas GPU — bei Bedarf einfach senken.'
 }
 
 const LOCALES = { en: EN, de: DE }
@@ -1080,6 +1201,60 @@ const CSS = `
 .sf-dialog-row{display:flex;flex-direction:column;gap:6px;margin:10px 0}
 .sf-dialog-label{font-size:11px;font-weight:600;color:var(--ui-text-secondary)}
 @media (prefers-reduced-motion: reduce){.sf-hud{transition:none}}
+
+/* ── Glass & Lesbarkeit (optional; gesteuert über :root[data-sf-glass]-Tokens) ─
+   Rein additiv: Flächen bekommen einen weichen Frost + dezenten, akzent-
+   gefärbten Verlauf, damit Beschriftungen auch ohne eigene Fläche lesbar
+   bleiben. Kein !important auf backdrop-filter — der app-weite
+   „prefers-reduced-transparency"-Gate (styles.css) nullt dann alles global. */
+
+/* Eingabefeld: Basis-Fläche des Composers + Dock-Karten mit Akzent-Tönung */
+:root[data-sf-glass~='composer'] [data-slot='composer-root']{
+  --composer-fill:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) var(--sf-glass-fill,86%),transparent))
+}
+:root[data-sf-glass~='composer'] [data-slot='composer-root'][data-thread-scrolled-up]{
+  --composer-fill:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) calc(var(--sf-glass-fill,86%) + 6%),transparent))
+}
+:root[data-sf-glass~='composer'] [data-slot='composer-surface']{
+  backdrop-filter:blur(var(--sf-glass-blur,10px)) saturate(var(--sf-glass-sat,115%));
+  -webkit-backdrop-filter:blur(var(--sf-glass-blur,10px)) saturate(var(--sf-glass-sat,115%))
+}
+:root[data-sf-glass~='composer']:not([data-sf-glass~='nograd']) [data-slot='composer-surface']::after{
+  content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;
+  background-image:linear-gradient(var(--sf-glass-angle,165deg),color-mix(in srgb,var(--ui-accent) var(--sf-glass-grad,12%),transparent),transparent var(--sf-glass-reach,72%))
+}
+
+/* UI-Chips: Modell- und Reasoning-Pill im Composer */
+:root[data-sf-glass~='chips'] :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
+  background-color:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) 90%,transparent));
+  backdrop-filter:blur(calc(var(--sf-glass-blur,10px) * .75)) saturate(var(--sf-glass-sat,115%));
+  -webkit-backdrop-filter:blur(calc(var(--sf-glass-blur,10px) * .75)) saturate(var(--sf-glass-sat,115%))
+}
+:root[data-sf-glass~='chips']:not([data-sf-glass~='nograd']) :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
+  background-image:linear-gradient(var(--sf-glass-angle,165deg),color-mix(in srgb,var(--ui-accent) var(--sf-glass-grad,12%),transparent),transparent var(--sf-glass-reach,72%))
+}
+:root[data-sf-glass~='chips']:not([data-sf-glass~='noring']) :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 24%,var(--ui-stroke-secondary))
+}
+:root[data-sf-glass~='chips'] :is([data-tour='model-pill'],[data-testid='reasoning-pill']):hover{
+  background-color:color-mix(in srgb,var(--ui-accent) calc(var(--sf-glass-tint,8%) * 2),color-mix(in srgb,var(--dt-card) 94%,transparent))
+}
+
+/* Statusleiste: Einträge als Chips */
+:root[data-sf-glass~='statusbar'] [data-slot='statusbar'] :is(button,a){
+  background-color:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) 88%,transparent));
+  backdrop-filter:blur(calc(var(--sf-glass-blur,10px) * .6)) saturate(var(--sf-glass-sat,115%));
+  -webkit-backdrop-filter:blur(calc(var(--sf-glass-blur,10px) * .6)) saturate(var(--sf-glass-sat,115%))
+}
+:root[data-sf-glass~='statusbar']:not([data-sf-glass~='nograd']) [data-slot='statusbar'] :is(button,a){
+  background-image:linear-gradient(var(--sf-glass-angle,165deg),color-mix(in srgb,var(--ui-accent) var(--sf-glass-grad,12%),transparent),transparent var(--sf-glass-reach,72%))
+}
+:root[data-sf-glass~='statusbar']:not([data-sf-glass~='noring']) [data-slot='statusbar'] :is(button,a){
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 20%,var(--ui-stroke-secondary))
+}
+:root[data-sf-glass~='statusbar'] [data-slot='statusbar'] :is(button,a):hover{
+  background-color:color-mix(in srgb,var(--ui-accent) calc(var(--sf-glass-tint,8%) * 2),color-mix(in srgb,var(--dt-card) 94%,transparent))
+}
 `
 
 function injectCss() {
@@ -2495,6 +2670,7 @@ function SettingsPage() {
   const wheel = settings.wheel
   const tabs = settings.tabs
   const groups = settings.groups
+  const glass = settings.glass
 
   const patch = (section, key, value) => patchSettings(section, { [key]: value })
 
@@ -2842,6 +3018,123 @@ function SettingsPage() {
         ]
       }),
 
+      // ── Glass & Lesbarkeit ─────────────────────────────────────────────
+      jsxs(SettingsSection, {
+        icon: 'paintcan',
+        title: t('secGlass'),
+        children: [
+          jsx(ToggleRow, {
+            label: t('glassEnabled'),
+            description: t('glassEnabledDesc'),
+            checked: glass.enabled,
+            onChange: value => patch('glass', 'enabled', value)
+          }),
+          jsx(Row, {
+            title: t('glassBlur'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 40,
+              step: 1,
+              value: glass.blurPx,
+              onChange: value => patch('glass', 'blurPx', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassSaturate'),
+            action: jsx(NumberInput, {
+              min: 100,
+              max: 200,
+              step: 5,
+              value: glass.saturate,
+              onChange: value => patch('glass', 'saturate', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassFill'),
+            action: jsx(NumberInput, {
+              min: 50,
+              max: 94,
+              step: 2,
+              value: glass.fill,
+              onChange: value => patch('glass', 'fill', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassTint'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 40,
+              step: 1,
+              value: glass.tint,
+              onChange: value => patch('glass', 'tint', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassGradient'),
+            description: t('glassGradientDesc'),
+            checked: glass.gradient,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'gradient', value)
+          }),
+          jsx(Row, {
+            title: t('glassAngle'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 360,
+              step: 5,
+              value: glass.angle,
+              onChange: value => patch('glass', 'angle', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassGradOpacity'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 60,
+              step: 2,
+              value: glass.gradOpacity,
+              onChange: value => patch('glass', 'gradOpacity', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassReach'),
+            action: jsx(NumberInput, {
+              min: 20,
+              max: 100,
+              step: 4,
+              value: glass.reach,
+              onChange: value => patch('glass', 'reach', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassRing'),
+            description: t('glassRingDesc'),
+            checked: glass.ring,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'ring', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('glassScopeComposer'),
+            checked: glass.scopes.composer,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'scopes', { ...glass.scopes, composer: value })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassScopeChips'),
+            checked: glass.scopes.chips,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'scopes', { ...glass.scopes, chips: value })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassScopeStatusbar'),
+            checked: glass.scopes.statusbar,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'scopes', { ...glass.scopes, statusbar: value })
+          }),
+          jsx('p', { className: 'sf-hint', children: t('glassHint') })
+        ]
+      }),
+
       // ── Über ───────────────────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'info',
@@ -2903,6 +3196,11 @@ export default {
     // 2) Controller starten (Animation, Strg+Scroll).
     const disposeAnimation = createAnimationController(ctx)
     const wheelController = createWheelController(ctx)
+
+    // 2b) Glass-Lesbarkeit: Einstellungen als Attribute/Variablen auf <html>
+    //     spiegeln; das Stylesheet reagiert rein per CSS darauf.
+    applyGlass()
+    const stopGlassWatch = $settings.listen(() => applyGlass())
 
     // 3) Session-Daten: initial + bei Events + Polls.
     void refreshSessions()
@@ -3014,6 +3312,20 @@ export default {
         }
       },
       {
+        id: 'cmd-toggle-glass',
+        area: PALETTE_AREA,
+        data: {
+          id: 'session-flow.toggleGlass',
+          label: 'Session Flow: Glass-Effekt umschalten',
+          keywords: ['glass', 'blur', 'chips', 'lesbarkeit', 'readability'],
+          run: () => {
+            const next = !readSetting('glass', 'enabled')
+            patchSettings('glass', { enabled: next })
+            host.notify({ kind: 'info', message: `Session Flow: Glass ${next ? 'an' : 'aus'}` })
+          }
+        }
+      },
+      {
         id: 'key-next',
         area: KEYBINDS_AREA,
         data: {
@@ -3044,6 +3356,8 @@ export default {
       window.clearTimeout(groupsSaveTimer)
       window.clearTimeout(refreshDebounce)
       try {
+        stopGlassWatch()
+        clearGlass()
         removeCss()
         disposeAnimation()
         wheelController.dispose()
