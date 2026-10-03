@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.8.0'
+const VERSION = '1.9.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -175,7 +175,21 @@ const DEFAULT_SETTINGS = {
     gridGap: 6,
     gridLines: 2,
     gridPreview: true,
-    infoDensity: 'auto'
+    infoDensity: 'auto',
+    rowGradOn: false,
+    rowGradFrom: '#7c3aed',
+    rowGradTo: '#00dbda',
+    rowGradAngle: 135,
+    rowShadow: 'off',
+    titleGradOn: false,
+    titleGradFrom: '#e4e4e7',
+    titleGradTo: '#8b8b93',
+    titleGradAngle: 90,
+    selTint: 'standard',
+    selColor: '#7c3aed',
+    selBorder: false,
+    selShadow: 'off',
+    rowLive: false
   },
   groups: {
     enabled: true,
@@ -493,6 +507,92 @@ function applyPersonal() {
   } catch (error) {
     console.warn(`[${ID}] personal apply failed`, error)
     clearPersonal()
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Row-Design (Liste & Grid): Hintergrund-Verlauf, Schlagschatten, Titel-Verlauf,
+// Auswahl-Zustand und Live-Status ( Aktiv/Wartend ). Alles als Attribute und
+// Variablen auf <html> — das Stylesheet reagiert rein deklarativ.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SF_ROW_VARS = [
+  '--sf-row-from',
+  '--sf-row-to',
+  '--sf-row-angle',
+  '--sf-title-from',
+  '--sf-title-to',
+  '--sf-title-angle',
+  '--sf-sel-color'
+]
+
+const SF_ROW_SHADOWS = ['off', 'subtle', 'medium', 'strong']
+
+function clearRows() {
+  const root = document.documentElement
+
+  for (const attr of [
+    'data-sf-rowgrad',
+    'data-sf-rowshadow',
+    'data-sf-titlegrad',
+    'data-sf-seltint',
+    'data-sf-selborder',
+    'data-sf-selshadow',
+    'data-sf-rowlive'
+  ]) {
+    root.removeAttribute(attr)
+  }
+
+  for (const name of SF_ROW_VARS) root.style.removeProperty(name)
+}
+
+function applyRows() {
+  const tabs = $settings.get().tabs || {}
+
+  try {
+    const root = document.documentElement
+    const safeHex = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '').trim()) ? String(value).trim() : fallback)
+
+    // 1) Hintergrund-Verlauf der Zeilen (Liste) und Karten (Grid).
+    if (tabs.rowGradOn) {
+      root.setAttribute('data-sf-rowgrad', 'on')
+      root.style.setProperty('--sf-row-from', safeHex(tabs.rowGradFrom, '#7c3aed'))
+      root.style.setProperty('--sf-row-to', safeHex(tabs.rowGradTo, '#00dbda'))
+      root.style.setProperty('--sf-row-angle', `${clampNumber(tabs.rowGradAngle, 0, 360, 135)}deg`)
+    } else {
+      root.removeAttribute('data-sf-rowgrad')
+      root.style.removeProperty('--sf-row-from')
+      root.style.removeProperty('--sf-row-to')
+      root.style.removeProperty('--sf-row-angle')
+    }
+
+    // 2) Auswählbare Schlagschatten-Stufen.
+    root.setAttribute('data-sf-rowshadow', SF_ROW_SHADOWS.includes(tabs.rowShadow) ? tabs.rowShadow : 'off')
+
+    // 3) Titel als Verlauf.
+    if (tabs.titleGradOn) {
+      root.setAttribute('data-sf-titlegrad', 'on')
+      root.style.setProperty('--sf-title-from', safeHex(tabs.titleGradFrom, '#e4e4e7'))
+      root.style.setProperty('--sf-title-to', safeHex(tabs.titleGradTo, '#8b8b93'))
+      root.style.setProperty('--sf-title-angle', `${clampNumber(tabs.titleGradAngle, 0, 360, 90)}deg`)
+    } else {
+      root.removeAttribute('data-sf-titlegrad')
+      root.style.removeProperty('--sf-title-from')
+      root.style.removeProperty('--sf-title-to')
+      root.style.removeProperty('--sf-title-angle')
+    }
+
+    // 4) Auswahl-Zustand (Tönung, Kontur, Schatten).
+    root.setAttribute('data-sf-seltint', ['standard', 'accent', 'custom'].includes(tabs.selTint) ? tabs.selTint : 'standard')
+    root.style.setProperty('--sf-sel-color', safeHex(tabs.selColor, '#7c3aed'))
+    root.setAttribute('data-sf-selborder', tabs.selBorder ? 'on' : 'off')
+    root.setAttribute('data-sf-selshadow', SF_ROW_SHADOWS.includes(tabs.selShadow) ? tabs.selShadow : 'off')
+
+    // 5) Live-Status: Aktiv/Wartend wie im Tab-Design hervorheben.
+    root.setAttribute('data-sf-rowlive', tabs.rowLive ? 'on' : 'off')
+  } catch (error) {
+    console.warn(`[${ID}] rows apply failed`, error)
+    clearRows()
   }
 }
 
@@ -1545,6 +1645,41 @@ const EN = {
   tabsStatusGlyph: 'Icon',
   tabsStatusDot: 'Dot',
   tabsStatusBoth: 'Icon + dot',
+  tabsDesignHead: 'Design — List & Grid',
+  tabsRowGrad: 'Row background gradient',
+  tabsRowGradDesc: 'Paints session rows (list) and cards (grid) with a two-color gradient.',
+  tabsRowGradFrom: 'Gradient start color',
+  tabsRowGradFromDesc: 'First color of the row gradient (left/top depending on angle).',
+  tabsRowGradTo: 'Gradient end color',
+  tabsRowGradToDesc: 'Second color of the row gradient.',
+  tabsRowGradAngle: 'Gradient angle',
+  tabsRowGradAngleDesc: 'Direction of the gradient in degrees (0–360).',
+  tabsRowShadow: 'Row drop shadow',
+  tabsRowShadowDesc: 'Selectable shadow depth under rows (list) and cards (grid).',
+  tabsTitleGrad: 'Gradient title',
+  tabsTitleGradDesc: 'Renders session titles as two-color gradient text.',
+  tabsTitleGradFrom: 'Title gradient start',
+  tabsTitleGradFromDesc: 'First color of the title gradient.',
+  tabsTitleGradTo: 'Title gradient end',
+  tabsTitleGradToDesc: 'Second color of the title gradient.',
+  tabsTitleGradAngle: 'Title gradient angle',
+  tabsTitleGradAngleDesc: 'Direction of the title gradient in degrees (0–360).',
+  tabsSelHead: 'Selected state',
+  tabsSelTint: 'Selection tint',
+  tabsSelTintDesc: 'Background tint of the selected (open) session.',
+  tabsSelTintStandard: 'Standard',
+  tabsSelTintAccent: 'Accent',
+  tabsSelTintCustom: 'Custom color',
+  tabsSelColor: 'Selection color',
+  tabsSelColorDesc: 'Custom tint color for the selected state.',
+  tabsSelBorder: 'Selection outline',
+  tabsSelBorderDesc: 'Thin outline around the selected row (uses the selection tint).',
+  tabsSelShadow: 'Selection shadow',
+  tabsSelShadowDesc: 'Selectable shadow depth for the selected row/card.',
+  tabsLiveHead: 'Live status',
+  tabsRowLive: 'Highlight active & waiting',
+  tabsRowLiveDesc: 'Sessions that are working or waiting get an accent glow and a pulsing status icon — the same visual language as the tab design.',
+
   tabsShowTime: 'Show time',
   tabsShowTimeDesc: 'How long ago the session was last active.',
   tabsShowPreview: 'Show preview',
@@ -1911,6 +2046,41 @@ const DE = {
   tabsStatusGlyph: 'Icon',
   tabsStatusDot: 'Punkt',
   tabsStatusBoth: 'Icon + Punkt',
+  tabsDesignHead: 'Design — Liste & Grid',
+  tabsRowGrad: 'Zeilen-Hintergrund als Verlauf',
+  tabsRowGradDesc: 'Färbt Session-Zeilen (Liste) und Karten (Grid) mit einem Zwei-Farben-Verlauf.',
+  tabsRowGradFrom: 'Verlauf Startfarbe',
+  tabsRowGradFromDesc: 'Erste Farbe des Zeilen-Verlaufs (links/oben je nach Winkel).',
+  tabsRowGradTo: 'Verlauf Endfarbe',
+  tabsRowGradToDesc: 'Zweite Farbe des Zeilen-Verlaufs.',
+  tabsRowGradAngle: 'Verlaufswinkel',
+  tabsRowGradAngleDesc: 'Richtung des Verlaufs in Grad (0–360).',
+  tabsRowShadow: 'Zeilen-Schlagschatten',
+  tabsRowShadowDesc: 'Auswählbare Schattenstärke unter Zeilen (Liste) und Karten (Grid).',
+  tabsTitleGrad: 'Titel als Verlauf',
+  tabsTitleGradDesc: 'Stellt Session-Titel als Zwei-Farben-Verlauf dar.',
+  tabsTitleGradFrom: 'Titel Verlauf-Start',
+  tabsTitleGradFromDesc: 'Erste Farbe des Titel-Verlaufs.',
+  tabsTitleGradTo: 'Titel Verlauf-Ende',
+  tabsTitleGradToDesc: 'Zweite Farbe des Titel-Verlaufs.',
+  tabsTitleGradAngle: 'Titel Verlaufswinkel',
+  tabsTitleGradAngleDesc: 'Richtung des Titel-Verlaufs in Grad (0–360).',
+  tabsSelHead: 'Auswahl-Zustand',
+  tabsSelTint: 'Auswahl-Tönung',
+  tabsSelTintDesc: 'Hintergrund-Tönung der ausgewählten (geöffneten) Session.',
+  tabsSelTintStandard: 'Standard',
+  tabsSelTintAccent: 'Akzent',
+  tabsSelTintCustom: 'Eigene Farbe',
+  tabsSelColor: 'Auswahl-Farbe',
+  tabsSelColorDesc: 'Eigene Tönungsfarbe für den Auswahl-Zustand.',
+  tabsSelBorder: 'Auswahl-Kontur',
+  tabsSelBorderDesc: 'Dünne Kontur um die ausgewählte Zeile (nutzt die Auswahl-Tönung).',
+  tabsSelShadow: 'Auswahl-Schatten',
+  tabsSelShadowDesc: 'Auswählbare Schattenstärke für die ausgewählte Zeile/Karte.',
+  tabsLiveHead: 'Live-Status',
+  tabsRowLive: 'Aktiv & Wartend hervorheben',
+  tabsRowLiveDesc: 'Arbeitende oder wartende Sessions erhalten einen Akzent-Glow und ein pulsierendes Status-Icon — die gleiche Bildsprache wie im Tab-Design.',
+
   tabsShowTime: 'Zeit anzeigen',
   tabsShowTimeDesc: 'Wie lange die letzte Aktivität der Session her ist.',
   tabsShowPreview: 'Vorschau anzeigen',
@@ -2553,6 +2723,27 @@ html[data-sf-shell~='on'][data-sf-shell-border='on'] [data-pane-host]:not([data-
 .sf-nav-chip[data-active='true']{background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));color:var(--foreground)}
 .sf-settings section{scroll-margin-top:46px}
 .sf-preset-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.sf-subhead{margin:10px 2px 2px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ui-text-quaternary)}
+html[data-sf-rowgrad~=on] .sf-tab{background:linear-gradient(var(--sf-row-angle,135deg),var(--sf-row-from,#7c3aed),var(--sf-row-to,#00dbda))}
+html[data-sf-rowgrad~=on] .sf-tab:hover{filter:brightness(1.07)}
+html[data-sf-rowshadow~=subtle] .sf-tab:not([data-drop=true]){box-shadow:0 1px 2px rgba(0,0,0,.22)}
+html[data-sf-rowshadow~=medium] .sf-tab:not([data-drop=true]){box-shadow:0 2px 6px rgba(0,0,0,.3)}
+html[data-sf-rowshadow~=strong] .sf-tab:not([data-drop=true]){box-shadow:0 4px 14px rgba(0,0,0,.42)}
+html[data-sf-titlegrad~=on] .sf-tab-title{background-image:linear-gradient(var(--sf-title-angle,90deg),var(--sf-title-from,#e4e4e7),var(--sf-title-to,#8b8b93));-webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-sf-rowlive~=on] .sf-tab[data-live=busy]{background:color-mix(in srgb,var(--ui-accent) 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 28%,transparent)}
+html[data-sf-rowlive~=on] .sf-tab[data-live=waiting]{background:color-mix(in srgb,#f59e0b 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,#f59e0b 30%,transparent)}
+html[data-sf-rowlive~=on] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on] .sf-tab[data-live=waiting] .sf-tab-lead{animation:sf-live-pulse 1.6s ease-in-out infinite}
+@keyframes sf-live-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){html[data-sf-rowlive~=on] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on] .sf-tab[data-live=waiting] .sf-tab-lead{animation:none}}
+html[data-sf-rowlive~=on][data-renderer-animations-paused] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on][data-renderer-animations-paused] .sf-tab[data-live=waiting] .sf-tab-lead{animation-play-state:paused}
+html[data-sf-seltint~=accent]{--sf-sel-tone:var(--ui-accent)}
+html[data-sf-seltint~=custom]{--sf-sel-tone:var(--sf-sel-color,#7c3aed)}
+html:is([data-sf-seltint~=accent],[data-sf-seltint~=custom]) .sf-tab[data-active=true]{background:color-mix(in srgb,var(--sf-sel-tone) 16%,transparent)}
+html:is([data-sf-seltint~=accent],[data-sf-seltint~=custom]) .sf-tab[data-active=true]:hover{background:color-mix(in srgb,var(--sf-sel-tone) 24%,transparent)}
+html[data-sf-selborder~=on] .sf-tab[data-active=true]{outline:1px solid color-mix(in srgb,var(--sf-sel-tone,var(--ui-accent)) 55%,transparent);outline-offset:-1px}
+html[data-sf-selshadow~=subtle] .sf-tab[data-active=true]{box-shadow:0 1px 3px rgba(0,0,0,.25)}
+html[data-sf-selshadow~=medium] .sf-tab[data-active=true]{box-shadow:0 2px 8px rgba(0,0,0,.35)}
+html[data-sf-selshadow~=strong] .sf-tab[data-active=true]{box-shadow:0 4px 16px rgba(0,0,0,.5)}
 `
 
 function injectCss() {
@@ -3409,6 +3600,26 @@ function GroupSwatches({ value, onChange, clearLabel }) {
   })
 }
 
+/** Farbwahl-Zeile (Swatches + Hex-Eingabe) für Design-Farben. */
+function colorRowControl(value, onChange, resetLabel) {
+  return jsxs('div', {
+    className: 'sf-row-control',
+    children: [
+      jsx(GroupSwatches, {
+        value: value || null,
+        onChange: next => onChange(next || ''),
+        clearLabel: resetLabel
+      }),
+      jsx(Input, {
+        className: 'sf-num',
+        maxLength: 7,
+        onChange: event => onChange(String(event.target.value || '').trim()),
+        value: value || ''
+      })
+    ]
+  })
+}
+
 /** Ein-/Ausklapp-Caret. */
 function Caret({ open }) {
   return jsx(Codicon, { name: open ? 'chevron-down' : 'chevron-right', size: '0.875rem' })
@@ -3711,9 +3922,17 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         })
       : null
 
+  const liveKind = activityFor(row, live, activity).kind
+  const liveBucket = ['thinking', 'streaming', 'tool', 'working'].includes(liveKind)
+    ? 'busy'
+    : liveKind === 'waiting'
+      ? 'waiting'
+      : 'idle'
+
   const body = jsxs('div', {
     className: 'sf-tab',
     'data-active': active,
+    'data-live': liveBucket,
     'data-dragging': dragging === row.id,
     draggable: true,
     onClick: () => onOpen(row, null),
@@ -4997,6 +5216,121 @@ function SettingsPage() {
               onChange: value => patch('tabs', 'statusStyle', value)
             })
           }),
+          jsx('p', { className: 'sf-subhead', children: t('tabsDesignHead') }),
+          jsx(ToggleRow, {
+            label: t('tabsRowGrad'),
+            description: t('tabsRowGradDesc'),
+            checked: tabs.rowGradOn,
+            onChange: value => patch('tabs', 'rowGradOn', value)
+          }),
+          jsx(Row, {
+            title: t('tabsRowGradFrom'),
+            description: t('tabsRowGradFromDesc'),
+            action: colorRowControl(tabs.rowGradFrom, value => patch('tabs', 'rowGradFrom', value), t('personalAccentReset'))
+          }),
+          jsx(Row, {
+            title: t('tabsRowGradTo'),
+            description: t('tabsRowGradToDesc'),
+            action: colorRowControl(tabs.rowGradTo, value => patch('tabs', 'rowGradTo', value), t('personalAccentReset'))
+          }),
+          jsx(Row, {
+            title: t('tabsRowGradAngle'),
+            description: t('tabsRowGradAngleDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 360,
+              step: 15,
+              value: tabs.rowGradAngle,
+              onChange: value => patch('tabs', 'rowGradAngle', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsRowShadow'),
+            description: t('tabsRowShadowDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'off', label: t('personalShellShadowOff') },
+                { id: 'subtle', label: t('personalShellShadowSubtle') },
+                { id: 'medium', label: t('personalShellShadowMedium') },
+                { id: 'strong', label: t('personalShellShadowStrong') }
+              ],
+              value: tabs.rowShadow,
+              onChange: value => patch('tabs', 'rowShadow', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('tabsTitleGrad'),
+            description: t('tabsTitleGradDesc'),
+            checked: tabs.titleGradOn,
+            onChange: value => patch('tabs', 'titleGradOn', value)
+          }),
+          jsx(Row, {
+            title: t('tabsTitleGradFrom'),
+            description: t('tabsTitleGradFromDesc'),
+            action: colorRowControl(tabs.titleGradFrom, value => patch('tabs', 'titleGradFrom', value), t('personalAccentReset'))
+          }),
+          jsx(Row, {
+            title: t('tabsTitleGradTo'),
+            description: t('tabsTitleGradToDesc'),
+            action: colorRowControl(tabs.titleGradTo, value => patch('tabs', 'titleGradTo', value), t('personalAccentReset'))
+          }),
+          jsx(Row, {
+            title: t('tabsTitleGradAngle'),
+            description: t('tabsTitleGradAngleDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 360,
+              step: 15,
+              value: tabs.titleGradAngle,
+              onChange: value => patch('tabs', 'titleGradAngle', value)
+            })
+          }),
+          jsx('p', { className: 'sf-subhead', children: t('tabsSelHead') }),
+          jsx(Row, {
+            title: t('tabsSelTint'),
+            description: t('tabsSelTintDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'standard', label: t('tabsSelTintStandard') },
+                { id: 'accent', label: t('tabsSelTintAccent') },
+                { id: 'custom', label: t('tabsSelTintCustom') }
+              ],
+              value: tabs.selTint,
+              onChange: value => patch('tabs', 'selTint', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsSelColor'),
+            description: t('tabsSelColorDesc'),
+            action: colorRowControl(tabs.selColor, value => patch('tabs', 'selColor', value), t('personalAccentReset'))
+          }),
+          jsx(ToggleRow, {
+            label: t('tabsSelBorder'),
+            description: t('tabsSelBorderDesc'),
+            checked: tabs.selBorder,
+            onChange: value => patch('tabs', 'selBorder', value)
+          }),
+          jsx(Row, {
+            title: t('tabsSelShadow'),
+            description: t('tabsSelShadowDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'off', label: t('personalShellShadowOff') },
+                { id: 'subtle', label: t('personalShellShadowSubtle') },
+                { id: 'medium', label: t('personalShellShadowMedium') },
+                { id: 'strong', label: t('personalShellShadowStrong') }
+              ],
+              value: tabs.selShadow,
+              onChange: value => patch('tabs', 'selShadow', value)
+            })
+          }),
+          jsx('p', { className: 'sf-subhead', children: t('tabsLiveHead') }),
+          jsx(ToggleRow, {
+            label: t('tabsRowLive'),
+            description: t('tabsRowLiveDesc'),
+            checked: tabs.rowLive,
+            onChange: value => patch('tabs', 'rowLive', value)
+          }),
           jsx(ToggleRow, {
             label: t('tabsShowTime'),
             description: t('tabsShowTimeDesc'),
@@ -5727,9 +6061,9 @@ export default {
     applyGrid()
     const stopGridWatch = $settings.listen(() => applyGrid())
 
-    // 2b-5) Info-Dichte „Wie Hermes": folgt der App-Einstellung live.
-    const stopAppDensityWatch = watchAppDensity()
-
+    // 2b-4b) Row-Design: Verlauf, Schatten, Titel-Verlauf, Auswahl, Live-Status.
+    applyRows()
+    const stopRowsWatch = $settings.listen(() => applyRows())
     // 2c) Umlaufender Glow-Ring folgt der Aktivität (Modus „busy").
     const stopArcWatch = [
       $activity.listen(() => syncArc()),
@@ -5924,6 +6258,8 @@ export default {
         stopPersonalWatch()
         clearPersonal()
         stopGridWatch()
+        stopRowsWatch()
+        clearRows()
         stopAppDensityWatch()
         removeCss()
         disposeAnimation()

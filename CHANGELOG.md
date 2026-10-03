@@ -3,6 +3,21 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.9.0] — 2026-10-04
+
+### Neu
+- **Design-Optionen für Liste & Grid** (Sektion „Session-Tabs"):
+  - **Hintergrund-Verlauf** für Zeilen/Karten — zwei frei wählbare Farben + Winkel (0–360°).
+  - **Auswählbarer Schlagschatten** unter Zeilen/Karten (Aus/Dezent/Mittel/Stark).
+  - **Titel als Verlauf** — zwei Farben + Winkel, via `background-clip: text`.
+  - **Auswahl-Zustand gestaltbar** — Tönung (Standard/Akzent/Eigene Farbe),
+    optionale Kontur und eigene Schattenstufe.
+  - **Live-Status** — „Aktiv & Wartend“-Hervorhebung: Akzent-Glow +
+    pulsierendes Status-Icon, gleiche Bildsprache wie im Tab-Design.
+- Alles rein deklarativ (Attribute/Variablen auf `<html>`), standardmäßig **aus**,
+  live umschaltbar; `prefers-reduced-motion` und pausierte Animationen werden
+  respektiert.
+
 ## [1.8.0] — 2026-10-04
 
 ### Neu

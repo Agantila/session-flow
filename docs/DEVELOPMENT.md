@@ -154,7 +154,13 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   (Branch · Modell · Nachrichten · Tool-Aufrufe), Detailreich zusätzlich die
   Vorschau-Zeile. **Wichtig**: Plugin-i18n interpoliert Funktions-Keys per
   Args — `t('metaMessages', n)` (NICHT `t('key')(n)`; letzteres warf die Pane
-  in den Error-Boundary).
+  in den Error-Boundary). **Row-Design** (`tabs.rowGrad*`, `rowShadow`, `titleGrad*`,
+  `sel*`, `rowLive`) läuft ebenfalls rein deklarativ über `applyRows()` →
+  Attribute/Variablen auf `<html>`; `TabRow` setzt `data-live`
+  (`busy`/`waiting`/`idle`) aus `activityFor`, das CSS reagiert per
+  `[data-sf-seltint~=…]`-Tönung, `outline`-Kontur, `[data-live=…]`-Glow und
+  `sf-live-pulse` (respektiert `prefers-reduced-motion` +
+  `[data-renderer-animations-paused]`).
 - **Close-Button-Fix (v1.7)**: deckender Kontrast-Chip
   (`color-mix(foreground 9%, dt-card)`) statt gestapelter Transparenzen +
   Hover-Label-Mask für ALLE Tab-Varianten (die App maskiert nur
