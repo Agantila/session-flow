@@ -30,7 +30,11 @@ Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    Tool läuft / wartet auf Antwort / fertig / Fehler). Sessions lassen sich in
    benannte, farbige **Gruppen** legen (Rechtsklick oder Drag & Drop), Gruppen
    klappen zu einem **Stapel** zusammen (spine / fanned / pill). Optional
-   automatische Gruppierung nach Datum oder Quelle.
+   automatische Gruppierung nach Datum oder Quelle. Jede Zeile/Karte trägt ein
+   **More-Menü (⋯)** — Öffnen-Varianten, Terminal, Umbenennen, Farbe, Anpinnen,
+   Zweig, In Projekt verschieben, Archivieren, Löschen, ID kopieren — und das
+   Toolbar-＋ startet eine **neue Session im zuletzt gewählten Projekt**. Die
+   Pane rendert als **Liste oder Grid** (Karten-Optionen in den Einstellungen).
 4. **Glass & Lesbarkeit** — Optionaler Frost-Effekt für **Eingabefeld** und
    **UI-Chips**: eine weiche Blur-Fläche mit dezentem, aus der Hermes-Akzent-
    farbe gefärbtem **Verlaufs-Overlay** (transparent auslaufend), damit Texte
@@ -115,9 +119,10 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
 - **Strg+Scroll**: an/aus, Zusatztaste (`Ctrl`/`Alt`/`Ctrl+Shift`/`Meta`),
   Schwelle, Sperrzeit, Richtung umkehren, Umlauf, HUD an/aus + Dauer,
   Ignorier-Selektoren (CSS).
-- **Session-Tabs**: Dichte (kompakt/bequem), Status-Darstellung
-  (Icon/Punkt/beides), Zeit, Vorschau, Nachrichtenanzahl, Quelle, Öffnen-als
-  (Ersetzen/Stapeln/Tab), max. Sessions, Cron ausblenden, Live-Poll, Refresh.
+- **Session-Tabs**: Dichte (kompakt/bequem), Ansicht (Liste/Grid — Kartenbreite,
+  Abstand, Titel-Zeilen, Vorschau), Status-Darstellung (Icon/Punkt/beides),
+  Zeit, Vorschau, Nachrichtenanzahl, Quelle, Öffnen-als (Ersetzen/Stapeln/Tab),
+  max. Sessions, Cron ausblenden, Live-Poll, Refresh.
 - **Tab-Gruppen**: an/aus, Auto-Gruppierung (aus/Datum/Quelle), Stapel-Stil,
   „Nicht gruppiert"-Bereich.
 - **UI-Tabs**: Sidebar-Optik, Radius/Abstände, Trennlinien, aktiver Zustand,

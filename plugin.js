@@ -88,6 +88,12 @@ const {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
+  ConfirmDialog,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   SegmentedControl,
   SessionStatusDot,
   ColorSwatches,
@@ -107,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.6.0'
+const VERSION = '1.7.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -162,7 +168,12 @@ const DEFAULT_SETTINGS = {
     maxItems: 60,
     hideCron: true,
     livePollSec: 30,
-    refreshSec: 45
+    refreshSec: 45,
+    view: 'list',
+    gridMin: 150,
+    gridGap: 6,
+    gridLines: 2,
+    gridPreview: true
   },
   groups: {
     enabled: true,
@@ -910,12 +921,124 @@ const $activity = atom({}) // storedId -> { kind, name, at }
 
 let refreshInFlight = null
 
+/** CWD der zuletzt bekannten Session (Fallback, wenn kein Projekt bestimmt ist). */
+function lastSessionCwd() {
+  const rows = $sessions.get()
+
+  for (const row of rows) {
+    const cwd = String(row.cwd || '').trim()
+
+    if (cwd) {
+      return cwd
+    }
+  }
+
+  return ''
+}
+
+/**
+ * Ziel-CWD für eine neue Session: zuerst das zuletzt gewählte Projekt
+ * (projectScope im App-localStorage; '__no_project__' = Home bleibt bewusst
+ * abgekoppelt), dann das aktive Projekt (projects.db `active_id`), zuletzt die
+ * zuletzt bekannte Session-CWD. Leer = das Backend löst selbst auf.
+ */
+async function resolveNewProjectSessionCwd() {
+  let scopeId = ''
+  let activeId = ''
+  let projects = []
+
+  try {
+    scopeId = String(window.localStorage?.getItem('hermes.desktop.projectScope') || '')
+  } catch {
+    scopeId = ''
+  }
+
+  try {
+    const payload = await host.request('projects.list', {})
+    projects = Array.isArray(payload?.projects) ? payload.projects : []
+    activeId = String(payload?.active_id || '')
+  } catch {
+    // Älteres Backend ohne projects.* — der Fallback unten greift.
+  }
+
+  if (scopeId === '__no_project__') {
+    return { cwd: '', label: '' }
+  }
+
+  const wantedId = (scopeId && scopeId !== '__all_projects__' ? scopeId : '') || activeId
+
+  if (wantedId) {
+    const project = projects.find(entry => entry?.id === wantedId)
+    const cwd = String(project?.primary_path || '').trim()
+
+    if (cwd) {
+      return { cwd, label: String(project?.name || '') }
+    }
+  }
+
+  return { cwd: lastSessionCwd(), label: '' }
+}
+
+/** Neue Session im zuletzt gewählten Projekt starten (Kern-Params wie die App). */
+async function startNewProjectSession() {
+  try {
+    const target = await resolveNewProjectSessionCwd()
+    const params = { cols: 96, source: 'desktop' }
+
+    if (target.cwd) {
+      params.cwd = target.cwd
+      params.cwd_explicit = true
+    }
+
+    try {
+      const profile = host.state?.focusedSessionProfile?.get?.()
+
+      if (typeof profile === 'string' && profile.trim()) {
+        params.profile = profile.trim()
+      }
+    } catch {
+      // Ohne Profil resolve-t das Backend selbst.
+    }
+
+    const created = await host.request('session.create', params)
+    const createdId = String(created?.stored_session_id || created?.session_id || '').trim()
+
+    if (!createdId) {
+      throw new Error('session.create lieferte keine Session-ID')
+    }
+
+    await host.openSession(createdId, { intent: readSetting('tabs', 'openIntent') || 'in-place' })
+    scheduleSessionsRefresh(1500)
+    host.notify({
+      kind: 'success',
+      message: `${CTX?.i18n?.t('newSession') || 'Neue Session'}${target.label ? ` · ${target.label}` : ''}`
+    })
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('newSession') || 'Neue Session')
+  }
+}
+
+/** Grid-Layout-Variablen der Session-Ansicht auf <html> spiegeln. */
+function applyGrid() {
+  try {
+    const tabs = $settings.get().tabs || {}
+    const root = document.documentElement
+
+    root.style.setProperty('--sf-grid-min', `${clampNumber(tabs.gridMin, 110, 280, 150)}px`)
+    root.style.setProperty('--sf-grid-gap', `${clampNumber(tabs.gridGap, 2, 16, 6)}px`)
+    root.style.setProperty('--sf-grid-lines', String(clampNumber(tabs.gridLines, 1, 4, 2)))
+  } catch (error) {
+    console.warn(`[${ID}] grid apply failed`, error)
+  }
+}
+
 function normalizeRow(row) {
   const id = String(row?.id || '')
   return {
     id,
     title: String(row?.title || '').trim(),
     preview: String(row?.preview || '').trim(),
+    cwd: String(row?.cwd || '').trim(),
     source: String(row?.source || '').trim(),
     startedAt: Number(row?.started_at || 0) * 1000,
     messageCount: Number(row?.message_count || 0),
@@ -1548,6 +1671,36 @@ const EN = {
   glassScopeChipsDesc: 'Model and reasoning pills in the composer.',
   glassScopeStatusbar: 'Status bar items',
   glassScopeStatusbarDesc: 'Items in the bar along the bottom edge.',
+  newSession: 'New session',
+  viewSwitch: 'Switch view (list/grid)',
+  tabsView: 'View',
+  tabsViewDesc: 'Show sessions as a compact list or as grid cards.',
+  tabsViewList: 'List',
+  tabsViewGrid: 'Grid',
+  tabsGridMin: 'Grid: card width (px)',
+  tabsGridMinDesc: 'Minimum width of a grid card; columns fill the pane automatically.',
+  tabsGridGap: 'Grid: gap (px)',
+  tabsGridGapDesc: 'Space between grid cards.',
+  tabsGridLines: 'Grid: title lines',
+  tabsGridLinesDesc: 'How many lines a card title may use before it is clipped.',
+  tabsGridPreview: 'Grid: preview text',
+  tabsGridPreviewDesc: 'Shows the last-message preview on grid cards.',
+  rowMore: 'More actions',
+  termOpen: 'Open in terminal',
+  renameMenu: 'Rename…',
+  renameDialogTitle: 'Rename session',
+  renameConfirm: 'Rename',
+  sessionTitleLabel: 'Title',
+  sessionColorAction: 'Color…',
+  branchSession: 'Branch',
+  moveToProject: 'Move to project…',
+  moveNoProjects: 'No projects found',
+  archiveSession: 'Archive',
+  deleteSession: 'Delete',
+  deleteConfirmTitle: 'Delete session?',
+  deleteConfirmBody: 'Removes the session and its transcript — this cannot be undone.',
+  copySessionId: 'Copy ID',
+  renameLiveOnly: 'Renaming is available once the session is active/loaded — open it, then rename.',
   navPersonal: 'Personal',
   secPersonal: 'Personalization',
   secPersonalDesc: 'Accent tint for core UI, a custom chat background (image or video), and a content area framed with rounded corners and a soft shadow.',
@@ -1870,6 +2023,36 @@ const DE = {
   glassScopeChipsDesc: 'Modell- und Reasoning-Pills im Eingabebereich.',
   glassScopeStatusbar: 'Statusleisten-Einträge',
   glassScopeStatusbarDesc: 'Einträge in der Leiste am unteren Rand.',
+  newSession: 'Neue Session',
+  viewSwitch: 'Ansicht wechseln (Liste/Grid)',
+  tabsView: 'Ansicht',
+  tabsViewDesc: 'Sessions als kompakte Liste oder als Grid-Karten anzeigen.',
+  tabsViewList: 'Liste',
+  tabsViewGrid: 'Grid',
+  tabsGridMin: 'Grid: Kartenbreite (px)',
+  tabsGridMinDesc: 'Mindestbreite einer Karte; die Spalten füllen die Pane automatisch.',
+  tabsGridGap: 'Grid: Abstand (px)',
+  tabsGridGapDesc: 'Abstand zwischen den Karten.',
+  tabsGridLines: 'Grid: Titel-Zeilen',
+  tabsGridLinesDesc: 'Wie viele Zeilen ein Kartentitel nutzen darf, bevor er abgeschnitten wird.',
+  tabsGridPreview: 'Grid: Vorschautext',
+  tabsGridPreviewDesc: 'Zeigt die Vorschau der letzten Nachricht auf den Karten.',
+  rowMore: 'Weitere Aktionen',
+  termOpen: 'Im Terminal öffnen',
+  renameMenu: 'Umbenennen…',
+  renameDialogTitle: 'Session umbenennen',
+  renameConfirm: 'Umbenennen',
+  sessionTitleLabel: 'Titel',
+  sessionColorAction: 'Farbe…',
+  branchSession: 'Zweig erstellen',
+  moveToProject: 'In Projekt verschieben…',
+  moveNoProjects: 'Keine Projekte gefunden',
+  archiveSession: 'Archivieren',
+  deleteSession: 'Löschen',
+  deleteConfirmTitle: 'Session löschen?',
+  deleteConfirmBody: 'Entfernt die Session samt Verlauf — nicht rückgängig zu machen.',
+  copySessionId: 'ID kopieren',
+  renameLiveOnly: 'Umbenennen ist möglich, sobald die Session aktiv/geladen ist — einmal öffnen, dann umbenennen.',
   navPersonal: 'Individuell',
   secPersonal: 'Individualisierung',
   secPersonalDesc: 'Akzent-Tönung für die Kern-UI, eigener Chat-Hintergrund (Bild oder Video) und ein Content-Bereich mit runden Ecken und dezentem Schlagschatten.',
@@ -1972,6 +2155,27 @@ const CSS = `
 .sf-tab-time{font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-tab-badge{font-size:9.5px;padding:0 4px;border-radius:4px;background:var(--ui-bg-tertiary,rgba(127,127,127,.12));color:var(--ui-text-tertiary);line-height:14px}
 .sf-tab-count{font-size:10px;color:var(--ui-text-quaternary)}
+/* Session-Ansicht: Liste (Standard) oder Grid-Karten */
+.sf-items{display:flex;flex-direction:column;gap:2px}
+.sf-items[data-view=grid]{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--sf-grid-min,150px),1fr));gap:var(--sf-grid-gap,6px);padding:2px 2px 8px}
+.sf-items[data-view=grid] .sf-tab{flex-direction:column;align-items:stretch;height:auto;gap:3px;padding:8px;border-radius:8px;background:color-mix(in srgb,var(--ui-text-primary) 4%,transparent)}
+.sf-items[data-view=grid] .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08))}
+.sf-items[data-view=grid] .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12))}
+.sf-items[data-view=grid] .sf-tab-lead{align-self:flex-start;width:auto}
+.sf-items[data-view=grid] .sf-tab-main{flex:1 1 auto;width:100%}
+.sf-items[data-view=grid] .sf-tab-title{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--sf-grid-lines,2);overflow:hidden;overflow-wrap:anywhere}
+.sf-items[data-view=grid] .sf-tab-preview{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.sf-items[data-view=grid] .sf-tab-meta{margin-top:auto;flex-wrap:wrap;row-gap:2px}
+/* More-Button (List- und Grid-Ansicht): dezent, erscheint bei Hover/Fokus */
+.sf-more{display:grid;place-items:center;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--ui-text-tertiary);cursor:pointer;opacity:0;transition:opacity .12s ease;flex-shrink:0}
+.sf-tab:hover .sf-more,.sf-more:focus-visible{opacity:1}
+.sf-more:hover{background:color-mix(in srgb,var(--ui-text-primary) 12%,transparent);color:var(--foreground)}
+.sf-items[data-view=grid] .sf-tab{padding-right:30px}
+.sf-items[data-view=grid] .sf-more{position:absolute;top:6px;right:6px}
+.sf-menu-item{display:flex;align-items:center;gap:8px}
+.sf-dialog-list{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow-y:auto}
+.sf-dialog-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:6px;background:transparent;color:var(--foreground);font-size:12px;text-align:left;cursor:pointer}
+.sf-dialog-item:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08))}
 .sf-empty{padding:24px 16px;text-align:center;color:var(--ui-text-tertiary)}
 .sf-empty-title{font-weight:600;color:var(--ui-text-secondary);margin-bottom:4px}
 .sf-empty-body{font-size:11px;line-height:1.5}
@@ -2175,18 +2379,31 @@ const CSS = `
 :root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='nolead'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content > span:first-child:has([class~='rounded-full']){
   display:none
 }
-/* Close-Button: Klickflaeche, Radius, Hover-Chip */
+/* Close-Button: Klickflaeche + eigener, DECKENDER Kontrast-Chip — keine
+   gestapelten Transparenzen (Label/Flaeche darunter waeren sonst durch das
+   X sichtbar und es bliebe unklar, dass es ein Close-Button ist). */
 :root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable]{
   --pane-tab-close-width:var(--sf-ui-tab-close-w,22px)
 }
 :root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'] button{
   border-radius:var(--sf-ui-tab-radius,4px);
   margin-block:3px;
-  margin-right:3px
+  margin-right:3px;
+  color:var(--foreground);
+  background-color:color-mix(in srgb,var(--foreground) 9%,var(--dt-card));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 13%,transparent)
 }
 :root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noclosehover']) :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'] button:hover{
-  background-color:var(--ui-control-active-background,color-mix(in srgb,var(--dt-foreground) 10%,transparent));
+  background-color:color-mix(in srgb,var(--foreground) 18%,var(--dt-card));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 24%,transparent);
   color:var(--foreground)
+}
+/* Label-Pixel unter dem Close-Button auch im Hover-Modus entfernen — die App
+   tut das nur fuer data-slot='pane-tab'; gewrappte Session-Tabs haetten sonst
+   Text unter dem X. */
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable]:hover > .pane-tab-content{
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)));
+  mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)))
 }
 /* Sichtbarkeit: bei Hover (App-Standard), immer oder nur am aktiven Tab */
 :root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'],
@@ -3194,7 +3411,7 @@ function StackLayers({ style, color }) {
   })
 }
 
-function TabRow({ row, active, section, t, onOpen, groupsState, onAssign, dragging, setDragging }) {
+function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign, dragging, setDragging }) {
   const settings = useValue($settings)
   const activity = useValue($activity)
   const live = useValue($liveMap)
@@ -3347,6 +3564,58 @@ function TabRow({ row, active, section, t, onOpen, groupsState, onAssign, draggi
     meta.push(jsx('span', { className: 'sf-tab-time', key: 'time', children: fmtAge(row.startedAt, t) }))
   }
 
+  const moreItems = [
+    { icon: 'browser', key: 'tab', label: t('openTab'), run: () => onOpen(row, 'tab') },
+    { icon: 'link-external', key: 'window', label: t('openWindow'), run: () => onOpen(row, 'window') },
+    { icon: 'terminal', key: 'terminal', label: t('termOpen'), run: () => onMore('terminal', row) },
+    { key: 'sep1', separator: true },
+    { icon: 'edit', key: 'rename', label: t('renameMenu'), run: () => onMore('rename', row) },
+    { icon: 'symbol-color', key: 'color', label: t('sessionColorAction'), run: () => onMore('color', row) },
+    { icon: 'pin', key: 'pin', label: t('pin'), run: () => onMore('pin', row) },
+    { icon: 'repo-forked', key: 'branch', label: t('branchSession'), run: () => onMore('branch', row) },
+    { icon: 'folder', key: 'move', label: t('moveToProject'), run: () => onMore('move', row) },
+    { key: 'sep2', separator: true },
+    { icon: 'archive', key: 'archive', label: t('archiveSession'), run: () => onMore('archive', row) },
+    { icon: 'trash', key: 'delete', label: t('deleteSession'), run: () => onMore('delete', row) },
+    { key: 'sep3', separator: true },
+    { icon: 'copy', key: 'copy', label: t('copySessionId'), run: () => onMore('copy', row) }
+  ]
+
+  const moreRowMenu =
+    DropdownMenu && DropdownMenuContent && DropdownMenuItem && DropdownMenuSeparator && DropdownMenuTrigger
+      ? jsxs(DropdownMenu, {
+          children: [
+            jsx(DropdownMenuTrigger, {
+              asChild: true,
+              children: jsx('button', {
+                'aria-label': t('rowMore'),
+                className: 'sf-more',
+                onClick: event => event.stopPropagation(),
+                onPointerDown: event => event.stopPropagation(),
+                type: 'button',
+                children: jsx(Codicon, { name: 'ellipsis', size: '0.875rem' })
+              })
+            }),
+            jsx(DropdownMenuContent, {
+              align: 'end',
+              children: moreItems.map(item =>
+                item.separator
+                  ? jsx(DropdownMenuSeparator, { key: item.key })
+                  : jsx(DropdownMenuItem, {
+                      className: 'sf-menu-item',
+                      key: item.key,
+                      onSelect: () => item.run(),
+                      children: [
+                        jsx(Codicon, { key: 'i', name: item.icon, size: '0.875rem' }),
+                        jsx('span', { key: 'l', children: item.label })
+                      ]
+                    })
+              )
+            })
+          ]
+        })
+      : null
+
   const body = jsxs('div', {
     className: 'sf-tab',
     'data-active': active,
@@ -3371,12 +3640,13 @@ function TabRow({ row, active, section, t, onOpen, groupsState, onAssign, draggi
         className: 'sf-tab-main',
         children: [
           jsx('div', { className: 'sf-tab-title', children: row.title || t('untitled') }),
-          cozy && tabsCfg.showPreview && row.preview
+          ((cozy && tabsCfg.showPreview) || (tabsCfg.view === 'grid' && tabsCfg.gridPreview)) && row.preview
             ? jsx('div', { className: 'sf-tab-preview', children: row.preview })
             : null
         ]
       }),
-      meta.length ? jsx('div', { className: 'sf-tab-meta', children: meta }) : null
+      meta.length ? jsx('div', { className: 'sf-tab-meta', children: meta }) : null,
+      moreRowMenu
     ]
   })
 
@@ -3386,6 +3656,408 @@ function TabRow({ row, active, section, t, onOpen, groupsState, onAssign, draggi
       jsx(ContextMenuContent, { children: menuItems })
     ]
   })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Row-Aktionen (More-Menü): Hermes-Session-Aktionen für List- und Grid-Ansicht
+// ─────────────────────────────────────────────────────────────────────────────
+// Spiegel der Desktop-Aktionen, soweit das Gateway sie für Plugins anbietet:
+// Terminal öffnen (IPC), Umbenennen (session.title), Anpinnen/Farbe (SDK),
+// Zweig erstellen (session.branch_stored), In Projekt verschieben
+// (session.workspace.move), Archivieren (session.archive), Löschen
+// (session.delete — schließt eine laufende Runtime vorher) und ID kopieren.
+// Lokale App-Zustände (gelesen/ungelesen, Export) haben keine Plugin-Door und
+// bleiben bewusst außen vor.
+
+function liveRuntimeIdFor(storedId) {
+  try {
+    for (const [runtimeId, entry] of Object.entries($liveMap.get())) {
+      if (entry && entry.storedId === storedId) {
+        return runtimeId
+      }
+    }
+  } catch {
+    /* Live-Map evtl. noch leer */
+  }
+
+  return ''
+}
+
+function makeIdempotencyKey() {
+  return `sf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+async function openSessionInTerminalRow(row) {
+  try {
+    const desktop = window.hermesDesktop
+
+    if (!desktop || typeof desktop.openSessionInTerminal !== 'function') {
+      throw new Error('Desktop-API nicht verfuegbar')
+    }
+
+    const result = await desktop.openSessionInTerminal(row.id, {})
+
+    if (result && result.ok === false) {
+      throw new Error(String(result.error || 'open failed'))
+    }
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('termOpen') || 'Terminal')
+  }
+}
+
+async function renameSessionRow(row, title) {
+  const next = String(title || '').trim()
+
+  if (!next || next === row.title) {
+    return
+  }
+
+  const runtimeId = liveRuntimeIdFor(row.id)
+
+  try {
+    await host.request('session.title', { session_id: runtimeId || row.id, title: next })
+  } catch (error) {
+    if (!runtimeId) {
+      throw new Error(CTX?.i18n?.t('renameLiveOnly') || String(error))
+    }
+
+    throw error
+  }
+
+  scheduleSessionsRefresh(1200)
+}
+
+async function branchSessionRow(row) {
+  try {
+    const params = {
+      cols: 96,
+      idempotency_key: makeIdempotencyKey(),
+      parent_session_id: row.id,
+      source: 'desktop'
+    }
+
+    if (row.cwd) {
+      params.cwd = row.cwd
+    }
+
+    const created = await host.request('session.branch_stored', params)
+    const createdId = String(created?.stored_session_id || created?.session_id || '').trim()
+
+    if (!createdId) {
+      throw new Error('branch lieferte keine Session-ID')
+    }
+
+    await host.openSession(createdId, { intent: readSetting('tabs', 'openIntent') || 'in-place' })
+    scheduleSessionsRefresh(1500)
+    host.notify({ kind: 'success', message: CTX?.i18n?.t('branchSession') || 'Zweig erstellt' })
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('branchSession') || 'Zweig')
+  }
+}
+
+async function moveSessionRow(row, project) {
+  const cwd = String(project?.path || '').trim()
+
+  if (!cwd) {
+    throw new Error(CTX?.i18n?.t('moveNoProjects') || 'Kein Projekt')
+  }
+
+  await host.request('session.workspace.move', { cwd, session_key: row.id })
+  scheduleSessionsRefresh(1200)
+  host.notify({ kind: 'success', message: `${CTX?.i18n?.t('moveToProject') || 'Projekt'} · ${project.name || cwd}` })
+}
+
+async function archiveSessionRow(row) {
+  try {
+    await host.request('session.archive', { archived: true, session_id: row.id })
+    scheduleSessionsRefresh(800)
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('archiveSession') || 'Archivieren')
+  }
+}
+
+async function deleteSessionRow(row) {
+  const runtimeId = liveRuntimeIdFor(row.id)
+
+  if (runtimeId) {
+    try {
+      await host.request('session.close', { session_id: runtimeId })
+    } catch {
+      /* Runtime evtl. schon weg — delete entscheidet */
+    }
+  }
+
+  await host.request('session.delete', { session_id: row.id })
+  scheduleSessionsRefresh(800)
+}
+
+async function copySessionIdRow(row) {
+  try {
+    const desktop = window.hermesDesktop
+
+    if (desktop && typeof desktop.writeClipboard === 'function') {
+      await desktop.writeClipboard(row.id)
+    } else if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(row.id)
+    }
+
+    host.notify({ kind: 'info', message: `${CTX?.i18n?.t('copySessionId') || 'ID'}: ${row.id}` })
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('copySessionId') || 'ID')
+  }
+}
+
+async function fetchProjectChoices() {
+  const payload = await host.request('projects.list', {})
+
+  return (Array.isArray(payload?.projects) ? payload.projects : [])
+    .map(project => ({
+      id: String(project?.id || ''),
+      name: String(project?.name || '').trim(),
+      path: String(project?.primary_path || '').trim()
+    }))
+    .filter(project => project.path)
+}
+
+function RowRenameDialog({ row, t, onDone }) {
+  const [value, setValue] = useState(row.title || '')
+
+  const commit = async () => {
+    try {
+      await renameSessionRow(row, value)
+      onDone()
+    } catch (error) {
+      host.notifyError(error, t('renameDialogTitle'))
+    }
+  }
+
+  return jsxs(Dialog, {
+    open: true,
+    onOpenChange: open => {
+      if (!open) {
+        onDone()
+      }
+    },
+    children: [
+      jsx(DialogContent, {
+        className: 'sf-dialog',
+        children: jsxs(Fragment, {
+          children: [
+            jsx(DialogHeader, { children: jsx(DialogTitle, { children: t('renameDialogTitle') }) }),
+            jsxs('div', {
+              className: 'sf-dialog-row',
+              children: [
+                jsx('label', { className: 'sf-dialog-label', children: t('sessionTitleLabel') }),
+                jsx(Input, {
+                  autoFocus: true,
+                  onChange: event => setValue(event.target.value),
+                  onKeyDown: event => {
+                    if (event.key === 'Enter') {
+                      void commit()
+                    }
+                  },
+                  value
+                })
+              ]
+            }),
+            jsxs(DialogFooter, {
+              children: [
+                jsx(Button, { onClick: onDone, size: 'sm', variant: 'ghost', children: t('cancel') }),
+                jsx(Button, { onClick: () => void commit(), size: 'sm', children: t('renameConfirm') })
+              ]
+            })
+          ]
+        })
+      })
+    ]
+  })
+}
+
+function RowColorDialog({ row, t, onDone }) {
+  return jsxs(Dialog, {
+    open: true,
+    onOpenChange: open => {
+      if (!open) {
+        onDone()
+      }
+    },
+    children: [
+      jsx(DialogContent, {
+        className: 'sf-dialog',
+        children: jsxs(Fragment, {
+          children: [
+            jsx(DialogHeader, { children: jsx(DialogTitle, { children: t('sessionColorAction') }) }),
+            jsx('div', {
+              className: 'sf-dialog-row',
+              children: jsx(GroupSwatches, {
+                clearLabel: t('clearColor'),
+                onChange: color => {
+                  try {
+                    host.sessions.setColor(row.id, color)
+                  } catch (error) {
+                    host.notifyError(error, t('sessionColorAction'))
+                  }
+
+                  onDone()
+                },
+                value: null
+              })
+            })
+          ]
+        })
+      })
+    ]
+  })
+}
+
+function RowMoveDialog({ row, t, onDone }) {
+  const [choices, setChoices] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+
+    fetchProjectChoices()
+      .then(list => {
+        if (alive) {
+          setChoices(list)
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setChoices([])
+        }
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const pick = async project => {
+    try {
+      await moveSessionRow(row, project)
+      onDone()
+    } catch (error) {
+      host.notifyError(error, t('moveToProject'))
+    }
+  }
+
+  return jsxs(Dialog, {
+    open: true,
+    onOpenChange: open => {
+      if (!open) {
+        onDone()
+      }
+    },
+    children: [
+      jsx(DialogContent, {
+        className: 'sf-dialog',
+        children: jsxs(Fragment, {
+          children: [
+            jsx(DialogHeader, { children: jsx(DialogTitle, { children: t('moveToProject') }) }),
+            choices === null
+              ? jsx('div', { className: 'sf-row-desc', children: '…' })
+              : choices.length === 0
+                ? jsx('div', { className: 'sf-row-desc', children: t('moveNoProjects') })
+                : jsx('div', {
+                    className: 'sf-dialog-list',
+                    children: choices.map(project =>
+                      jsx('button', {
+                        className: 'sf-dialog-item',
+                        key: project.path,
+                        onClick: () => void pick(project),
+                        type: 'button',
+                        children: project.name || project.path
+                      })
+                    )
+                  }),
+            jsx(DialogFooter, {
+              children: jsx(Button, { onClick: onDone, size: 'sm', variant: 'ghost', children: t('cancel') })
+            })
+          ]
+        })
+      })
+    ]
+  })
+}
+
+function RowDeleteDialog({ row, t, onDone }) {
+  const confirm = async () => {
+    await deleteSessionRow(row)
+    onDone()
+  }
+
+  if (ConfirmDialog) {
+    return jsx(ConfirmDialog, {
+      cancelLabel: t('cancel'),
+      confirmLabel: t('deleteSession'),
+      description: t('deleteConfirmBody'),
+      destructive: true,
+      onClose: onDone,
+      onConfirm: confirm,
+      open: true,
+      title: t('deleteConfirmTitle')
+    })
+  }
+
+  return jsxs(Dialog, {
+    open: true,
+    onOpenChange: open => {
+      if (!open) {
+        onDone()
+      }
+    },
+    children: [
+      jsx(DialogContent, {
+        className: 'sf-dialog',
+        children: jsxs(Fragment, {
+          children: [
+            jsx(DialogHeader, { children: jsx(DialogTitle, { children: t('deleteConfirmTitle') }) }),
+            jsx('div', { className: 'sf-row-desc', children: t('deleteConfirmBody') }),
+            jsxs(DialogFooter, {
+              children: [
+                jsx(Button, { onClick: onDone, size: 'sm', variant: 'ghost', children: t('cancel') }),
+                jsx(Button, {
+                  onClick: () => {
+                    void confirm().catch(error => host.notifyError(error, t('deleteSession')))
+                  },
+                  size: 'sm',
+                  children: t('deleteSession')
+                })
+              ]
+            })
+          ]
+        })
+      })
+    ]
+  })
+}
+
+function RowDialogHost({ state, setState, t }) {
+  if (!state) {
+    return null
+  }
+
+  const row = state.row
+  const close = () => setState(null)
+
+  if (state.kind === 'rename') {
+    return jsx(RowRenameDialog, { row, t, onDone: close })
+  }
+
+  if (state.kind === 'color') {
+    return jsx(RowColorDialog, { row, t, onDone: close })
+  }
+
+  if (state.kind === 'move') {
+    return jsx(RowMoveDialog, { row, t, onDone: close })
+  }
+
+  if (state.kind === 'delete') {
+    return jsx(RowDeleteDialog, { row, t, onDone: close })
+  }
+
+  return null
 }
 
 function newGroupDialogState() {
@@ -3489,10 +4161,56 @@ function SessionsPane() {
   const focused = useValue(host.state.focusedStoredSessionId)
   const active = useValue(host.state.activeSessionId)
   const [dialog, setDialog] = useState(() => newGroupDialogState())
+  const [rowDialog, setRowDialog] = useState(null)
   const [dragging, setDragging] = useState(null)
 
   const sections = useMemo(() => buildSections(), [rows, groupsState, settings])
   const totalCount = sections.reduce((sum, section) => sum + section.items.length, 0)
+
+  // More-Menü: direkte Aktionen oder Dialog (Umbenennen/Farbe/Projekt/Löschen).
+  const onMore = (action, row) => {
+    if (!row) {
+      return
+    }
+
+    if (action === 'rename' || action === 'color' || action === 'move' || action === 'delete') {
+      setRowDialog({ kind: action, row })
+
+      return
+    }
+
+    if (action === 'pin') {
+      try {
+        host.sessions.pin(row.id, true)
+      } catch (error) {
+        host.notifyError(error, t('pin'))
+      }
+
+      return
+    }
+
+    if (action === 'terminal') {
+      void openSessionInTerminalRow(row)
+
+      return
+    }
+
+    if (action === 'branch') {
+      void branchSessionRow(row)
+
+      return
+    }
+
+    if (action === 'archive') {
+      void archiveSessionRow(row)
+
+      return
+    }
+
+    if (action === 'copy') {
+      void copySessionIdRow(row)
+    }
+  }
 
   const open = (row, intent) => {
     haptic('tap')
@@ -3575,20 +4293,26 @@ function SessionsPane() {
           }),
           showStack ? jsx(StackLayers, { key: 'stack', style: stackStyle, color: section.color }) : null,
           expanded
-            ? section.items.map(row =>
-                jsx(TabRow, {
-                  key: row.id,
-                  row,
-                  active: row.id === (focused || active),
-                  section,
-                  t,
-                  onOpen: open,
-                  groupsState,
-                  onAssign: assign,
-                  dragging,
-                  setDragging
-                })
-              )
+            ? jsx('div', {
+                className: 'sf-items',
+                'data-view': settings.tabs.view === 'grid' ? 'grid' : 'list',
+                key: 'items',
+                children: section.items.map(row =>
+                  jsx(TabRow, {
+                    key: row.id,
+                    row,
+                    active: row.id === (focused || active),
+                    section,
+                    t,
+                    onOpen: open,
+                    onMore,
+                    groupsState,
+                    onAssign: assign,
+                    dragging,
+                    setDragging
+                  })
+                )
+              })
             : null
         ]
       })
@@ -3603,13 +4327,36 @@ function SessionsPane() {
         children: t('paneCount', totalCount)
       }),
       jsx(Tip, {
+        label: t('viewSwitch'),
+        children: jsx(Button, {
+          'aria-label': t('viewSwitch'),
+          onClick: () => patchSettings('tabs', { view: settings.tabs.view === 'grid' ? 'list' : 'grid' }),
+          size: 'icon-xs',
+          variant: 'ghost',
+          children: jsx(Codicon, {
+            name: settings.tabs.view === 'grid' ? 'list-unordered' : 'layout',
+            size: '0.875rem'
+          })
+        })
+      }),
+      jsx(Tip, {
+        label: t('newSession'),
+        children: jsx(Button, {
+          'aria-label': t('newSession'),
+          onClick: () => void startNewProjectSession(),
+          size: 'icon-xs',
+          variant: 'ghost',
+          children: jsx(Codicon, { name: 'add', size: '0.875rem' })
+        })
+      }),
+      jsx(Tip, {
         label: t('newGroup'),
         children: jsx(Button, {
           'aria-label': t('newGroup'),
           onClick: () => setDialog({ ...newGroupDialogState(), open: true }),
           size: 'icon-xs',
           variant: 'ghost',
-          children: jsx(Codicon, { name: 'add', size: '0.875rem' })
+          children: jsx(Codicon, { name: 'layers', size: '0.875rem' })
         })
       }),
       jsx(Tip, {
@@ -3659,7 +4406,12 @@ function SessionsPane() {
 
   return jsxs('div', {
     className: 'sf-pane',
-    children: [toolbar, body, jsx(GroupDialog, { state: dialog, setState: setDialog, t })]
+    children: [
+      toolbar,
+      body,
+      jsx(GroupDialog, { state: dialog, setState: setDialog, t }),
+      jsx(RowDialogHost, { state: rowDialog, setState: setRowDialog, t })
+    ]
   })
 }
 
@@ -4054,6 +4806,57 @@ function SettingsPage() {
               value: tabs.density,
               onChange: value => patch('tabs', 'density', value)
             })
+          }),
+          jsx(Row, {
+            title: t('tabsView'),
+            description: t('tabsViewDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'list', label: t('tabsViewList') },
+                { id: 'grid', label: t('tabsViewGrid') }
+              ],
+              value: tabs.view,
+              onChange: value => patch('tabs', 'view', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsGridMin'),
+            description: t('tabsGridMinDesc'),
+            action: jsx(NumberInput, {
+              min: 110,
+              max: 280,
+              step: 10,
+              value: tabs.gridMin,
+              onChange: value => patch('tabs', 'gridMin', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsGridGap'),
+            description: t('tabsGridGapDesc'),
+            action: jsx(NumberInput, {
+              min: 2,
+              max: 16,
+              step: 1,
+              value: tabs.gridGap,
+              onChange: value => patch('tabs', 'gridGap', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsGridLines'),
+            description: t('tabsGridLinesDesc'),
+            action: jsx(NumberInput, {
+              min: 1,
+              max: 4,
+              step: 1,
+              value: tabs.gridLines,
+              onChange: value => patch('tabs', 'gridLines', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('tabsGridPreview'),
+            description: t('tabsGridPreviewDesc'),
+            checked: tabs.gridPreview,
+            onChange: value => patch('tabs', 'gridPreview', value)
           }),
           jsx(Row, {
             title: t('tabsStatusStyle'),
@@ -4794,6 +5597,10 @@ export default {
     const stopPersonalWatch = $settings.listen(() => applyPersonal())
     ctx.setInterval(() => syncPaneBackgrounds(), 2500)
 
+    // 2b-4) Session-Ansicht (Liste/Grid): Layout-Variablen auf <html>.
+    applyGrid()
+    const stopGridWatch = $settings.listen(() => applyGrid())
+
     // 2c) Umlaufender Glow-Ring folgt der Aktivität (Modus „busy").
     const stopArcWatch = [
       $activity.listen(() => syncArc()),
@@ -4987,6 +5794,7 @@ export default {
         clearGlass()
         stopPersonalWatch()
         clearPersonal()
+        stopGridWatch()
         removeCss()
         disposeAnimation()
         wheelController.dispose()

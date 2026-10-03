@@ -133,6 +133,24 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
 - **Datei-Picker**: `window.hermesDesktop.selectPaths({ title, filters, multiple:false })`
   (App-IPC `hermes:selectPaths`) → absolute Pfade; Bild/Video wird an der
   Endung erkannt.
+- **Sessions-Pane (v1.7)**: Ansicht `list`/`grid` über `data-view` am
+  `.sf-items`-Wrapper + `--sf-grid-*`-Variablen (`applyGrid()`); Grid-Karten
+  sind dieselben TabRows (CSS-only Umbau — Klick, Drag & Drop, Kontextmenü
+  bleiben unverändert). Das **More-Menü** (`DropdownMenu` aus dem SDK, mit
+  Feature-Detect) und die Dialoge (`RowDialogHost`: rename/color/move/delete)
+  rufen dieselben Gateway-RPCs wie die App auf — `session.title` (nur für
+  live/geladene Sessions!), `session.branch_stored`, `session.workspace.move`,
+  `session.archive`, `session.delete` (vorher Runtime über `$liveMap`
+  schließen, sonst Fehler 4023 „cannot delete an active session“) — sowie
+  IPC-Doors (`openSessionInTerminal`, `writeClipboard`). Der
+  **Neue-Session-Button** liest `hermes.desktop.projectScope` (App-localStorage)
+  + `projects.list` und erstellt per `session.create` (Params wie die App:
+  cols/source/cwd/cwd_explicit/profile).
+- **Close-Button-Fix (v1.7)**: deckender Kontrast-Chip
+  (`color-mix(foreground 9%, dt-card)`) statt gestapelter Transparenzen +
+  Hover-Label-Mask für ALLE Tab-Varianten (die App maskiert nur
+  `[data-slot='pane-tab']` — die gewrappten Session-Tabs blieben sonst
+  unmaskiert und der Text lief unter dem ✕ durch).
 
 ### Session-Liste & Aktivität
 

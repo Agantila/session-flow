@@ -45,6 +45,11 @@ Animationen unabhängig von diesen Schaltern.
 | Key | Default | Wirkung |
 |---|---|---|
 | `tabs.density` | `compact` | `compact` (einzeilig) oder `cozy` (mit Vorschau-Zeile). |
+| `tabs.view` | `list` | `list` oder `grid` (Kartenansicht) — auch per Toolbar-Button umschaltbar. |
+| `tabs.gridMin` | `150` | Grid: Mindest-Kartenbreite in px (Spalten füllen automatisch). |
+| `tabs.gridGap` | `6` | Grid: Abstand zwischen den Karten in px. |
+| `tabs.gridLines` | `2` | Grid: max. Zeilen für den Kartentitel (1–4). |
+| `tabs.gridPreview` | `true` | Grid: Vorschau der letzten Nachricht auf den Karten. |
 | `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |
 | `tabs.showTime` | `true` | Alter der Session anzeigen. |
 | `tabs.showPreview` | `false` | Letzte Nachricht als Vorschau (cozy-Dichte). |
@@ -55,6 +60,22 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.hideCron` | `true` | Cron-Sessions ausblenden. |
 | `tabs.livePollSec` | `30` | Intervall der Live-Status-Abfrage (`session.active_list`). Min. 10s. |
 | `tabs.refreshSec` | `45` | Intervall des Listen-Refresh (`session.list`). Min. 15s. |
+
+### Pane-Buttons & More-Menü
+
+- **Ansicht wechseln** (Toolbar): schaltet Liste ⇄ Grid.
+- **Neue Session** (＋, Toolbar): startet eine Session mit dem CWD des **zuletzt
+  gewählten Projekts** — Reihenfolge: eingescopetes Projekt (`projectScope`),
+  sonst aktives Projekt (`projects.db`), sonst zuletzt bekannte Session-CWD.
+  Der Home-Scope bleibt bewusst abgekoppelt (kein CWD). Danach öffnet die
+  Session direkt (gemäß `tabs.openIntent`).
+- **Neue Gruppe** (layers-Icon): öffnet den Gruppen-Dialog.
+- **More-Menü (⋯)** auf jeder Zeile/Karte (erscheint bei Hover): In neuem Tab,
+  Neues Fenster, Im Terminal öffnen, Umbenennen…, Farbe…, Anpinnen, Zweig
+  erstellen, In Projekt verschieben…, Archivieren, Löschen (mit Bestätigung),
+  ID kopieren. Umbenennen erfordert eine aktive/geladene Session
+  (`session.title`-RPC); App-lokale Aktionen (gelesen/ungelesen, Export) stehen
+  Plugins nicht zur Verfügung und fehlen daher bewusst.
 
 ## Tab-Gruppen
 

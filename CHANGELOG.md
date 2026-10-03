@@ -3,6 +3,36 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.7.0] — 2026-10-04
+
+### Neu
+- **Neue Session im zuletzt gewählten Projekt**: Neuer Toolbar-Button (＋)
+  startet eine Session mit dem CWD des zuletzt gewählten Projekts — Reihenfolge:
+  eingescopetes Projekt (`hermes.desktop.projectScope`), sonst aktives Projekt
+  (`projects.db`), sonst zuletzt bekannte Session-CWD; Home bleibt bewusst
+  abgekoppelt. Nutzt dieselben Kern-Params wie die App (`session.create`) und
+  öffnet die neue Session direkt.
+- **More-Menü (⋯) in Listen- UND Grid-Ansicht**: Session-Aktionen wie in Hermes
+  Desktop — In neuem Tab/Fenster, Im Terminal öffnen, Umbenennen (Dialog),
+  Farbe (Swatches), Anpinnen, Zweig erstellen (`session.branch_stored`),
+  In Projekt verschieben (`session.workspace.move` + Projekt-Auswahl),
+  Archivieren (`session.archive`), Löschen (`session.delete` mit vorherigem
+  Runtime-Close + Bestätigungsdialog), ID kopieren. Live verifiziert
+  (create/rename/move/archive/delete); App-lokale Aktionen (gelesen/ungelesen,
+  Export) haben keine Plugin-Door und sind dokumentiert ausgenommen.
+- **Grid-Ansicht**: Sessions als Karten (auto-fill) — umschaltbar per
+  Toolbar-Button und Einstellungen; Optionen: Kartenbreite, Abstand,
+  Titel-Zeilen, Vorschautext.
+
+### Fixed
+- **Close-Button im Sidebar-Look klar erkennbar**: Das ✕ sitzt jetzt auf einem
+  **deckenden Kontrast-Chip** statt gestapelter Transparenzen (Label/Fläche
+  darunter schienen vorher durch); zusätzlich bekommt das Label beim Hover eine
+  Fade-Maske für ALLE Tab-Varianten — die App maskiert nur
+  `data-slot='pane-tab'`, gewrappte Session-Tabs blieben sonst unmaskiert.
+- Toolbar: „Neue Gruppe" trägt jetzt ein Gruppen-Icon (`layers`) statt des ＋
+  (das ＋ gehört der neuen Session).
+
 ## [1.6.0] — 2026-10-03
 
 ### Neu — Individualisierung (neue Einstellungs-Sektion)

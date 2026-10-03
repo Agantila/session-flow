@@ -27,7 +27,11 @@ A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    compact tab with an **activity icon** (thinking / writing / tool running /
    waiting / done / error). Sessions go into named, coloured **groups** (drag &
    drop or right-click), groups collapse into a **stack** (spine / fanned /
-   pill); optional auto-grouping by date or source.
+   pill); optional auto-grouping by date or source. Every row/card carries a
+   **More (⋯) actions menu** — open variants, terminal, rename, colour, pin,
+   branch, move to project, archive, delete, copy ID — and the toolbar **＋
+   starts a new session in your last chosen project**. The pane renders as a
+   **list or a grid** (card options in the settings).
 4. **Glass & readability** — An optional frost effect for the **input field**
    and **UI chips**: a soft blur with a subtle **accent-tinted gradient overlay
    fading to transparent**, so labels stay readable even without their own
@@ -107,9 +111,10 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
   blocks, code blocks, list items.
 - **Ctrl+Scroll**: on/off, modifier key, threshold, cooldown, invert, wrap,
   HUD on/off + duration, ignore selectors (CSS).
-- **Session list**: density (compact/cozy), status style (icon/dot/both),
-  time, preview, message count, source badge, open-as (replace/stack/tab),
-  max sessions, hide cron, live poll, refresh.
+- **Session list**: density (compact/cozy), view (list/grid — card width, gap,
+  title lines, preview), status style (icon/dot/both), time, preview, message
+  count, source badge, open-as (replace/stack/tab), max sessions, hide cron,
+  live poll, refresh.
 - **Tab groups**: on/off, auto-grouping (off/date/source), stack style,
   “ungrouped” bucket.
 - **UI tabs**: sidebar look, radius/gaps, dividers, active state, label

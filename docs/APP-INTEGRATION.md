@@ -74,6 +74,24 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
   repliziert die Form. Live verifiziert: Bild-Layer + laufendes Video
   (readyState 4, `currentTime` läuft) über `hermes-media://stream/…`.
 
+## Plugin-Doors für Session-Aktionen (Hermes-Optionsübernahme, v1.7)
+
+| Aktion | Door | Hinweise |
+|---|---|---|
+| Neue Session in Projekt | `projects.list` (→ `active_id`, `primary_path`) + `localStorage['hermes.desktop.projectScope']` + `session.create` | Params wie die App: `{cols:96, source:'desktop', cwd?, cwd_explicit?, profile?}`; Scope-Werte: `__all_projects__` = Übersicht, `__no_project__` = Home (abgekoppelt) |
+| Umbenennen | `session.title {session_id, title}` | **Nur live/geladen** (Runtime-ID aus `$liveMap` bevorzugen; stored-ID ⇒ „session not found“). Die App nutzt für persistierte Zeilen REST — kein Plugin-Door |
+| Zweig erstellen | `session.branch_stored {parent_session_id, cols, source, cwd?, idempotency_key}` | Lehnt leere Sessions ab („nothing to branch — send a message first“); Antwort: `stored_session_id` |
+| In Projekt verschieben | `session.workspace.move {session_key, cwd}` | cwd = `primary_path` des Zielprojekts |
+| Archivieren | `session.archive {session_id, archived}` | akzeptiert stored-id/-key/-title; Runtime-ID first |
+| Löschen | `session.delete {session_id}` | **verweigert laufende Sessions (4023)** → vorher `session.close {session_id: runtimeId}` |
+| Im Terminal öffnen | `window.hermesDesktop.openSessionInTerminal(id)` (IPC) | stored-id ok (tui resume); Rückgabe `{ok}` prüfen |
+| ID kopieren | `window.hermesDesktop.writeClipboard(text)` (IPC) | Feature-Detect |
+| Nicht verfügbar | gelesen/ungelesen, Export | App-lokale Stores bzw. Renderer-Bibliothek ohne Plugin-Door |
+
+Hinweis: `host.setPersistedSessionHidden` ist ein **REST**-Door und 404t für
+runtime-only (noch nicht persistierte) Sessions — für die Runtime-Stufe
+`session.set_hidden`/`session.close` (Gateway-RPC) verwenden.
+
 ## Verifikations-Rezepte (Linux, Wayland/KDE)
 
 | Ziel | Weg |
