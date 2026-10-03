@@ -1,0 +1,10 @@
+# Normalize line endings on checkout/commit
+* text=auto eol=lf
+
+# Explicitly binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.gif binary

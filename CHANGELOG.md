@@ -16,6 +16,15 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   erhalten bleiben. Live verifiziert: alle 7 Tabs markiert, Session-Tabs im
   Content-Bereich mit 4 px Radius + Chip-Höhe.
 
+### Dokumentation
+- **Volle Projektstruktur für Weiterentwicklung & GitHub**: bilinguales README
+  (`README.md` englisch als GitHub-Hauptansicht, `README.de.md` deutsch),
+  `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `docs/README.md`
+  (Doku-Index), `docs/APP-INTEGRATION.md` (App-Hooks, fragile Selektoren,
+  Verifikations-Rezepte), `docs/ROADMAP.md`, GitHub-Templates für Issues & PRs
+  sowie CI (`.github/workflows/check.yml`), dazu `.editorconfig` und
+  `.gitattributes`.
+
 ## [1.5.0] — 2026-10-03
 
 ### Added

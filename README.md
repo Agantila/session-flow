@@ -1,164 +1,190 @@
 # Session Flow — Hermes Desktop Plugin
 
-Fünf Features in einem Plugin, alle live konfigurierbar:
+**English** · [Deutsch](README.de.md)
 
-1. **Chat-Animation (Zeile für Zeile)** — Antworten werden mit Easing weich
-   eingeblendet. Beim Öffnen/Wechseln eines Chats laufen die sichtbaren Zeilen
-   als Kaskade von oben nach unten ein; während des Streamens animiert jede
-   Zeile genau einmal, sobald sie fertig geschrieben ist.
-2. **Strg + Scroll = Session-Zyklus** — Mit gedrückter Zusatztaste (Standard
-   `Ctrl`) und Mausrad durch die aktiven Sessions scrollen. Ein HUD zeigt
-   Position und Titel. Zoom-Flächen (Bild-Lightbox, Code-Editor) behalten ihr
-   eigenes Verhalten.
-3. **Session-Tabs mit Firefox-artigen Gruppen** — Eine Pane listet alle
-   Sessions als kompakte Tabs mit **Aktivitäts-Icon** (denkt / schreibt /
-   Tool läuft / wartet auf Antwort / fertig / Fehler). Sessions lassen sich in
-   benannte, farbige **Gruppen** legen (Rechtsklick oder Drag & Drop), Gruppen
-   klappen zu einem **Stapel** zusammen (spine / fanned / pill). Optional
-   automatische Gruppierung nach Datum oder Quelle.
-4. **Glass & Lesbarkeit** — Optionaler Frost-Effekt für **Eingabefeld** und
-   **UI-Chips**: eine weiche Blur-Fläche mit dezentem, aus der Hermes-Akzent-
-   farbe gefärbtem **Verlaufs-Overlay** (transparent auslaufend), damit Texte
-   auch ohne eigene Hintergrundfläche gut lesbar bleiben. Bereiche und Optik
-   (Blur, Sättigung, Deckkraft, Winkel, Stärke) sind frei einstellbar.
-5. **UI-Tabs im Sidebar-Look** — Die Tabs des Content-Bereichs werden zu leicht
-   abgerundeten Chips wie die Sidebar-Sessions: ruhiger Hover/aktiver Zustand,
-   verbessertes Label (Schreibweise, Größe) und ein freundlicherer **Close-Button**
-   (Klickfläche, Hover-Chip, Sichtbarkeit bei Hover / immer / am aktiven Tab).
-   **Live-Infos aus dem Sidepanel**: arbeitende Sessions (denkt / schreibt /
-   Tools) tragen den umlaufenden Glow-Ring auf ihrem Tab, der Status-Punkt
-   bleibt ein-/ausblendbar.
+Smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style
+session groups, glass readability for the composer, and sidebar-style content
+tabs — five features in one plain-ESM plugin, all live-configurable from a
+built-in settings page.
 
-Alles ist in den **Plugin-Einstellungen** anpassbar: `Session Flow`-Seite in der
-Sidebar, ⌘K/Ctrl+K → „Session Flow: Einstellungen", oder das Zahnrad in der Pane.
+Developed and used on Linux (Wayland/KDE) with Hermes Desktop and its plugin
+SDK (`~/.hermes/desktop-plugins/`). No build step, no dependencies, one file.
 
-![Feature-Überblick](docs/overview.png)
+## Features
 
-> Hinweis: `docs/overview.png` ist optional — lege dort gern einen Screenshot ab.
+1. **Line-by-line chat animation** — Assistant answers ease in instead of
+   popping. Opening or switching a chat cascades the visible lines top to
+   bottom; while streaming, each line animates exactly once as soon as it is
+   fully written. Duration, stagger, travel, easing presets, thinking/code/list
+   options — all adjustable.
+2. **Ctrl+Scroll = session cycling** — Hold a modifier (Ctrl by default) and
+   scroll through your active sessions, with a HUD showing position and title.
+   Zoom surfaces (image lightbox, Monaco editor) keep their own behaviour.
+3. **Session pane with Firefox-style groups** — A pane lists every session as a
+   compact tab with an **activity icon** (thinking / writing / tool running /
+   waiting / done / error). Sessions go into named, coloured **groups** (drag &
+   drop or right-click), groups collapse into a **stack** (spine / fanned /
+   pill); optional auto-grouping by date or source.
+4. **Glass & readability** — An optional frost effect for the **input field**
+   and **UI chips**: a soft blur with a subtle **accent-tinted gradient overlay
+   fading to transparent**, so labels stay readable even without their own
+   background. Blur, saturation, opacity, tint, gradient angle/strength and
+   scopes (composer / chips / status bar) are fully configurable — including a
+   travelling glow ring on the border (the same effect Hermes uses on running
+   session rows).
+5. **Sidebar-style UI tabs** — The content-area tabs become gently rounded
+   chips like the sidebar session rows: calm hover/active states, a better
+   **label** (case, size) and a friendlier **close button** (hit area, hover
+   chip, visibility: on hover / always / active tab only). **Live session info
+   from the sidebar engine**: sessions that are working (thinking / writing /
+   tools) get the travelling glow ring on their tab.
 
----
+Everything is adjustable on the **plugin settings page** — `Session Flow` in
+the sidebar, ⌘K/Ctrl+K → “Session Flow: Einstellungen”, or the gear icon in the
+pane. The page has a **sticky category bar** (Chat · Ctrl+Scroll · Session list ·
+Groups · UI tabs · Glass · About) and one-click presets for the UI tabs.
+
+![Feature overview](docs/overview.png)
+
+> `docs/overview.png` is optional — drop your own screenshot there.
 
 ## Installation
 
-Voraussetzung: Hermes Desktop (neu genug für das Plugin-SDK,
-`~/.hermes/desktop-plugins/` wird unterstützt).
+Requirement: Hermes Desktop recent enough to support the plugin SDK and the
+`~/.hermes/desktop-plugins/` directory.
 
 ```bash
-# Aus dem Repo-Verzeichnis:
-./install.sh            # kopiert plugin.js nach ~/.hermes/desktop-plugins/session-flow/
-./install.sh --link     # Entwicklungsmodus: Symlink statt Kopie (Hot-Reload beim Speichern)
+# From the repo directory:
+./install.sh            # copies plugin.js to ~/.hermes/desktop-plugins/session-flow/
+./install.sh --link     # dev mode: symlink instead of a copy (hot reload on save)
 ```
 
-Danach in der App: **⌘K / Ctrl+K → „Reload desktop plugins"** — oder die App
-einmal neu starten. Das Plugin lädt danach automatisch bei jedem Start.
+Then in the app: **⌘K / Ctrl+K → “Reload desktop plugins”** — or simply restart
+the app once. After that the plugin loads automatically on every start.
 
-**Manuell:** die Datei `plugin.js` nach
-`~/.hermes/desktop-plugins/session-flow/plugin.js` kopieren. Der Ordnername
-**muss** `session-flow` heißen (= Plugin-id).
+**Manual:** copy `plugin.js` to `~/.hermes/desktop-plugins/session-flow/plugin.js`.
+The folder name **must** be `session-flow` (= the plugin id).
 
-**Deinstallieren:** `./uninstall.sh` (entfernt nur das Installationsziel,
-nicht das Repo).
+**Uninstall:** `./uninstall.sh` (removes the installed copy, not the repo).
 
-### Teilen
+### Sharing
 
-- Repo-URL weitergeben + Installationsanleitung oben.
-- Oder ein Install-Link (Hermes Deep-Link): `hermes://plugin/install?repo=<owner>/<repo>`
-  — der Nutzer bekommt einen Bestätigungsdialog und wählt die Komponenten.
+- Hand over the repo URL plus the install steps above.
+- Or use a Hermes deep link: `hermes://plugin/install?repo=<owner>/<repo>` —
+  the user gets a confirmation dialog and picks the components.
 
----
+## Usage
 
-## Nutzung
-
-| Aktion | Wie |
+| Action | How |
 |---|---|
-| Session öffnen | Klick auf einen Tab |
-| Kontextmenü (Pin, Gruppe, Farbe, Öffnen als…) | Rechtsklick auf einen Tab |
-| Gruppe anlegen / bearbeiten / löschen | Zahnrad-/„+"-Button im Pane-Header oder Rechtsklick/Doppelklick auf eine Gruppen-Überschrift |
-| Session in Gruppe verschieben | Tab per Drag & Drop auf eine Gruppe ziehen — oder Rechtsklick → „In Gruppe verschieben" |
-| Gruppe einklappen | Klick auf die Gruppen-Überschrift |
-| Sessions durchscrollen | `Ctrl` + Mausrad |
-| Einstellungen | Sidebar „Session Flow" oder ⌘K → „Session Flow: Einstellungen" |
+| Open a session | Click a tab |
+| Context menu (pin, group, colour, open as…) | Right-click a tab |
+| Create / edit / delete a group | Gear / “+” button in the pane header — or right-click / double-click a group header |
+| Move a session into a group | Drag & drop onto a group — or right-click → “In Gruppe verschieben” |
+| Collapse a group | Click the group header |
+| Cycle through sessions | `Ctrl` + mouse wheel |
+| Settings | Sidebar “Session Flow” or ⌘K → “Session Flow: Einstellungen” |
 
----
+## Settings
 
-## Einstellungen (Kurzüberblick)
+Full reference incl. defaults: [docs/SETTINGS.md](docs/SETTINGS.md).
 
-Volle Referenz inkl. Defaults: [docs/SETTINGS.md](docs/SETTINGS.md).
-Die Seite hat eine **sticky Kategorie-Leiste** (Chat · Strg+Scroll · Session-Liste ·
-Gruppen · UI-Tabs · Glass · Über) — Klick springt zur Sektion, Scrollen markiert
-die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
-(„Sidebar-Look", „Minimal", „Hermes-Standard").
+The page has a **sticky category bar** (Chat · Ctrl+Scroll · Session list ·
+Groups · UI tabs · Glass · About) — clicking jumps to a section, scrolling
+highlights the current one. The UI-tabs section additionally offers one-click
+presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
 
-- **Chat-Animation**: an/aus, Kaskade beim Öffnen, Zeile-für-Zeile beim
-  Streamen, Dauer, Versatz pro Zeile, max. Staffel-Schritte, Bewegung (px),
-  Easing (4 Presets), Thinking-Blöcke überspringen, Code-Blöcke, Listenpunkte.
-- **Strg+Scroll**: an/aus, Zusatztaste (`Ctrl`/`Alt`/`Ctrl+Shift`/`Meta`),
-  Schwelle, Sperrzeit, Richtung umkehren, Umlauf, HUD an/aus + Dauer,
-  Ignorier-Selektoren (CSS).
-- **Session-Tabs**: Dichte (kompakt/bequem), Status-Darstellung
-  (Icon/Punkt/beides), Zeit, Vorschau, Nachrichtenanzahl, Quelle, Öffnen-als
-  (Ersetzen/Stapeln/Tab), max. Sessions, Cron ausblenden, Live-Poll, Refresh.
-- **Tab-Gruppen**: an/aus, Auto-Gruppierung (aus/Datum/Quelle), Stapel-Stil,
-  „Nicht gruppiert"-Bereich.
-- **UI-Tabs**: Sidebar-Optik, Radius/Abstände, Trennlinien, aktiver Zustand,
-  Label (Schreibweise/Größe), Status-Punkt, Close-Button (Modus/Klickfläche/
-  Hover-Chip), Glow an arbeitenden Tabs.
-- **Glass & Lesbarkeit**: an/aus, Blur, Sättigung, Flächen-Deckkraft,
-  Akzent-Tönung, Verlauf (an/aus, Winkel, Stärke, Endpunkt), feine Kontur,
-  Bereiche (Eingabefeld / Chips / Statusleiste).
+- **Chat animation**: on/off, cascade on open, line-by-line while streaming,
+  duration, stagger, max steps, travel (px), easing (4 presets), skip thinking
+  blocks, code blocks, list items.
+- **Ctrl+Scroll**: on/off, modifier key, threshold, cooldown, invert, wrap,
+  HUD on/off + duration, ignore selectors (CSS).
+- **Session list**: density (compact/cozy), status style (icon/dot/both),
+  time, preview, message count, source badge, open-as (replace/stack/tab),
+  max sessions, hide cron, live poll, refresh.
+- **Tab groups**: on/off, auto-grouping (off/date/source), stack style,
+  “ungrouped” bucket.
+- **UI tabs**: sidebar look, radius/gaps, dividers, active state, label
+  (case/size), status dot, close button (mode/hit area/hover chip), glow on
+  working tabs.
+- **Glass & readability**: on/off, blur, saturation, fill opacity, accent tint,
+  gradient (on/off, angle, strength, fade point), hairline ring, scopes.
 
----
-
-## Entwicklung
-
-Alles steckt in **einer** Datei: [`plugin.js`](plugin.js). Kein Build, kein
-`npm install` — Desktop-Plugins werden als reines ESM zur Laufzeit geladen und
-bei jedem Speichern hot-reloaded.
-
-```bash
-npm run check          # Syntaxcheck + Locale-Key-Audit (nur Node nötig)
-./install.sh --link    # ein mal einrichten, danach: speichern -> App lädt neu
-```
-
-Konventionen, die man nicht brechen darf (sonst lädt das Plugin nicht):
-
-- **Kein JSX** — nur `jsx()`/`jsxs()` von `react/jsx-runtime` (die Datei wird
-  unkompiliert geladen).
-- **Nur drei Imports**: `@hermes/plugin-sdk`, `react`, `react/jsx-runtime`.
-- **Keine hartkodierten Farben** — nur Theme-Variablen (`var(--ui-…)`).
-- Timers/Listener über `ctx`, DOM-Observer + injizierte `<style>`-Tags über
-  `ctx.onDispose` abräumen.
-
-Mehr Details zur Architektur (Controller-Design, Animations-Dedupe, Stores,
-Troubleshooting): [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
-
-### Dateistruktur des Repos
+## Project structure
 
 ```
 session-flow/
-├── plugin.js            # Das Plugin (wird installiert)
-├── install.sh           # Installer (Kopie oder --link für Dev)
-├── uninstall.sh
-├── scripts/check.mjs    # Syntaxcheck + i18n-Audit
+├── plugin.js                    # THE plugin (single file, loaded as-is)
+├── install.sh                   # Installer (copy or --link for dev)
+├── uninstall.sh                 # Removes the installed copy
+├── package.json                 # npm scripts only — no dependencies
+├── scripts/
+│   └── check.mjs                # Syntax check + i18n key audit (stdlib only)
 ├── docs/
-│   ├── SETTINGS.md      # Alle Optionen erklärt
-│   └── DEVELOPMENT.md   # Architektur & Dev-Workflow
-├── CHANGELOG.md
+│   ├── README.md                # Docs index
+│   ├── SETTINGS.md              # Every option explained (German)
+│   ├── DEVELOPMENT.md           # Architecture & dev workflow (German)
+│   ├── APP-INTEGRATION.md       # App hooks we depend on + verification recipes
+│   └── ROADMAP.md               # Ideas & known limits
+├── .github/
+│   ├── workflows/check.yml      # CI: npm run check on push/PR
+│   ├── ISSUE_TEMPLATE/          # Bug report & feature request forms
+│   └── PULL_REQUEST_TEMPLATE.md
+├── CHANGELOG.md                 # Keep-a-Changelog style (German)
+├── CONTRIBUTING.md              # Contribution guide (German)
+├── SECURITY.md                  # Security notes (German)
+├── CODE_OF_CONDUCT.md
 └── LICENSE (MIT)
 ```
 
----
+## Development
 
-## Bekannte Grenzen / Roadmap
+Everything lives in **one** file: [`plugin.js`](plugin.js). No build, no
+`npm install` — desktop plugins are loaded as plain ESM at runtime and
+hot-reloaded on every save.
 
-- **Profil-Scope:** Die Session-Liste liest das *aktive* Profil (über den
-  Gateway-RPC `session.list`). Multi-Profil-Ansicht ist als Option geplant.
-- **Gruppen-Sortierung:** Manuelle Gruppen haben feste Reihenfolge (Erstellung);
-  freies Umsortieren von Gruppen und Tab-Reihenfolgen ist Roadmap.
-- **Animation** greift auf Assistant-Nachrichten (Markdown-Blöcke). User-
-  Nachrichten und Tool-Karten bleiben bewusst unangetastet.
-- `prefers-reduced-motion` **deaktiviert alle Animationen** automatisch.
+```bash
+npm run check          # syntax check + locale key audit (Node only)
+./install.sh --link    # set up once; then: save -> the app reloads the plugin
+```
 
-## Lizenz
+House rules that must not be broken (otherwise the plugin refuses to load):
 
-MIT — siehe [LICENSE](LICENSE).
+- **No JSX** — only `jsx()` / `jsxs()` from `react/jsx-runtime` (the file is
+  loaded uncompiled).
+- **Only three imports**: `@hermes/plugin-sdk`, `react`, `react/jsx-runtime`.
+- **No hard-coded colours** — theme variables only (`var(--ui-…)` / `var(--dt-…)`).
+- **No backticks inside the CSS template literal** — not even in comments; a
+  stray backtick terminates the template and breaks the plugin (`npm run check`
+  catches it).
+- Clean up timers/listeners via `ctx`, DOM observers + injected `<style>` tags
+  via `ctx.onDispose`.
+
+Architecture (controllers, animation dedupe, stores, verification recipes):
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) ·
+App hooks & fragile selectors: [docs/APP-INTEGRATION.md](docs/APP-INTEGRATION.md).
+
+## Known limits
+
+- **Profile scope:** the session list reads the *active* profile (gateway RPC
+  `session.list`). Multi-profile view is planned.
+- **Group ordering:** manual groups keep creation order; free reordering of
+  groups and tab order is on the roadmap.
+- **Animation** applies to assistant messages (markdown blocks); user messages
+  and tool cards stay untouched on purpose.
+- `prefers-reduced-motion` disables all animations automatically.
+- More in [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) (German) — dev loop, conventions, PR
+checklist and how to publish the repo to GitHub.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) — plugins run unsandboxed in the renderer; report
+issues via GitHub.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
