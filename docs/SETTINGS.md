@@ -151,6 +151,47 @@ Hinweise:
   setzt `host.sessions.setColor` und erscheint damit auch auf der
   Core-Sidebar-Zeile (gleiche Quelle).
 
+## Individualisierung
+
+Eigene Akzentfarbe, eigener Chat-Hintergrund und die Abgrenzung des
+Content-Bereichs. Alle Optionen sind standardmäßig **aus** — es ändert sich
+nichts, bis du sie einschaltest.
+
+### Akzent-Tönung (Keys `personal.accent*`)
+
+- **Akzentfarben-Tönung** (`accentOn`): wendet deine Akzentfarbe auf elementare
+  UI-Elemente an — Buttons, aktive Zustände, Hover, Fokusringe, Hervorhebungen.
+  Status-Farben (Rot/Grün/Gelb) bleiben unverändert.
+- **Akzentfarbe** (`accentColor`): Swatch-Reihe der Theme-Palette oder Hex-Wert
+  (`#rrggbb`) — unvollständige Eingaben werden ignoriert, bis sie gültig sind.
+- **Zurücksetzen** (Swatch-„Zurücksetzen"): stellt die Standard-Akzentfarbe ein.
+- Deaktivieren stellt sofort die Theme-Akzentfarbe wieder her.
+
+### Chat-Hintergrund (Keys `personal.bg*`)
+
+- **Chat-Hintergrund** (`bgOn`): zeigt ein eigenes Bild oder Video hinter den
+  Chat-Nachrichten.
+- **Art des Hintergrunds** (`bgKind`): Bild oder Video (stumm, läuft in
+  Schleife; der Datei-Picker erkennt die Art automatisch an der Endung).
+- **Datei** (`bgPath`): absoluter Pfad zu einer lokalen Bild-/Videodatei — über
+  „Datei wählen…" (nativer Dialog) oder eintippen. Die Ausgabe läuft über das
+  App-Protokoll `hermes-media://stream/…` (unterstützt auch große Dateien).
+- **Darstellung** (`bgFit`): Füllen (`cover`) oder Einpassen (`contain`).
+- **Abdunkeln %** (`bgDim`, 0–85): dunkler Overlay für Lesbarkeit.
+- **Weichzeichnen px** (`bgBlur`, 0–24): weicher Blur auf dem Hintergrund.
+- **Gilt für** (`bgScope`): nur Chat-Sessions oder alle Pane-Ansichten.
+- Technik: pro Pane-Host wird ein `.sf-bg-layer` unterhalb des Inhalts
+  injiziert; Videos laufen nur auf sichtbaren Panes.
+
+### Content-Bereich abgrenzen (Keys `personal.shell*`)
+
+- **Content-Bereich abgrenzen** (`shellOn`): runde Ecken + Schlagschatten auf
+  dem Ansichtsbereich der Tabs; Overlay-/schwebende Panes bleiben ausgenommen.
+- **Ecken-Radius px** (`shellRadius`, 4–24): Rundung der Ecken.
+- **Schatten** (`shellShadow`): aus / dezent / mittel / stark.
+- **Feine Kontur** (`shellBorder`): zusätzliche Hairline um den Bereich.
+- **Gilt für** (`shellScope`): alle Panes oder nur Chats.
+
 ## Über
 
 - **Version**: die aktuell von der App geladene Plugin-Version.

@@ -24,6 +24,9 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | `.pane-tab-content [class~='truncate']` | Tab-Label (Größe/Schreibweise) | Klasse = Tailwind-Utility |
 | `[data-renderer-animations-paused]` (auf `:root`) | unsere Arcs pausieren wie die App | stabil (App-eigenes Attribut) |
 | `[data-hud-shell]` | HUD-Modus: dort bewusst keine eigenen Filter (App nullt global mit `!important`) | stabil |
+| `[data-pane-host]` | Pane-Container für Content-Shell (Radius/Schatten) + Hintergrund-Layer | **Anchor-positioniert mit Inline-Styles** — CSS darf hier NIE Geometrie/overflow ändern, nur additiv färben/runden; Overlays über `[data-pane-overlay]` ausnehmen |
+| `[data-pane-hidden]` | inaktiver Keep-Alive-Tab (gleiche Rect wie der sichtbare!) | Video-Gating: nur sichtbare Panes dekodieren lassen |
+| `window.hermesDesktop.selectPaths` | nativer Datei-Picker (IPC `hermes:selectPaths`, Optionen `{ title, filters, multiple }`) → absolute Pfade | vor Nutzung auf Existenz prüfen; App-APIs können sich ändern |
 
 ## Theme-Tokens (CSS-Variablen)
 
@@ -37,6 +40,7 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | `--ui-sidebar-surface-background` | (App) Tab-Strip-Hintergrund |
 | `--pane-tab-close-width` | Breite der Close-Klickfläche (App-Variable, wir überschreiben sie) |
 | `--radius-scalar` | Theme-Radius-Skalar (echte Variable); `--radius-2xl` existiert NICHT zur Laufzeit (Tailwind inlined) |
+| `--ui-accent` | Akzent der Kern-UI (Basis aller Fills/Strokes/Hover/Aktiv-Zustände via `color-mix`); Quelle: `--theme-midground` | 
 | `--ui-text-*`, `--ui-stroke-*` | Text/Rahmen überall |
 
 **Regel:** Keine hartkodierten Farben. Alles über Tokens + `color-mix(...)`.
@@ -59,6 +63,16 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
   (`getComputedStyle(...).borderTopLeftRadius` → `--sf-arc-radius`, 4-s-Refresh),
   weil Theme-Variablen wie `--radius-2xl` inline kompiliert und zur Laufzeit
   leer sind.
+
+- **App-CSS ist gelayert** (`@layer base/utilities/components`) — Plugin-`<style>`
+  ist **unlayered** und sticht jede Layer-Deklaration **ohne `!important`**.
+  Darauf baut der Akzent-Override (`html[data-sf-accent] → --ui-accent`); die
+  App-Definition `--ui-accent: var(--theme-midground)` liegt in `@layer base`.
+- **`hermes-media://stream/<encodeURIComponent(pfad)>`**: App-Protokoll für
+  lokale Dateien (Range-fähig, Video-Seeking, umgeht den Data-URL-Größen-Cap).
+  Der Renderer baut es in `src/lib/media.ts` (`mediaStreamUrl`); das Plugin
+  repliziert die Form. Live verifiziert: Bild-Layer + laufendes Video
+  (readyState 4, `currentTime` läuft) über `hermes-media://stream/…`.
 
 ## Verifikations-Rezepte (Linux, Wayland/KDE)
 

@@ -4,7 +4,8 @@
 
 Smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style
 session groups, glass readability for the composer, and sidebar-style content
-tabs — five features in one plain-ESM plugin, all live-configurable from a
+tabs, and full personalization — six features in one plain-ESM plugin, all
+live-configurable from a
 built-in settings page.
 
 Developed and used on Linux (Wayland/KDE) with Hermes Desktop and its plugin
@@ -40,11 +41,16 @@ A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    chip, visibility: on hover / always / active tab only). **Live session info
    from the sidebar engine**: sessions that are working (thinking / writing /
    tools) get the travelling glow ring on their tab.
+6. **Personalization** — pick your own **accent color** for core UI elements
+   (buttons, active states, hovers, focus rings), set a **chat background**
+   (your own image or video file, with fit / dimming / blur and scope), and
+   **frame the content area** of tabs with rounded corners and a soft drop
+   shadow (radius, shadow strength, hairline outline, scope).
 
 Everything is adjustable on the **plugin settings page** — `Session Flow` in
 the sidebar, ⌘K/Ctrl+K → “Session Flow: Einstellungen”, or the gear icon in the
 pane. The page has a **sticky category bar** (Chat · Ctrl+Scroll · Session list ·
-Groups · UI tabs · Glass · About) and one-click presets for the UI tabs.
+Groups · UI tabs · Glass · Personal · About) and one-click presets for the UI tabs.
 
 ![Feature overview](docs/overview.png)
 
@@ -111,6 +117,9 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
   working tabs.
 - **Glass & readability**: on/off, blur, saturation, fill opacity, accent tint,
   gradient (on/off, angle, strength, fade point), hairline ring, scopes.
+- **Personalization**: accent tint (swatch or hex), chat background (image or
+  video via native file picker, fit/dim/blur/scope), content-area frame
+  (radius, shadow strength, hairline outline, scope).
 
 ## Project structure
 

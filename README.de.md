@@ -4,7 +4,8 @@
 
 Weiche Zeile-für-Zeile-Animation im Chat, Strg+Scroll durch die Sessions,
 Firefox-artige Session-Gruppen, Glass-Lesbarkeit für den Composer und
-Sidebar-Style-Tabs im Content-Bereich — **fünf Features in einem Plugin**, ohne
+Sidebar-Style-Tabs im Content-Bereich und volle Individualisierung — **sechs
+Features in einem Plugin**, ohne
 Build-Schritt, ohne Abhängigkeiten, alles live über die eingebaute
 Einstellungsseite konfigurierbar.
 
@@ -45,11 +46,17 @@ Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    **Live-Infos aus dem Sidepanel**: arbeitende Sessions (denkt / schreibt /
    Tools) tragen den umlaufenden Glow-Ring auf ihrem Tab, der Status-Punkt
    bleibt ein-/ausblendbar.
+6. **Individualisierung** — eigene **Akzentfarbe** für elementare UI-Elemente
+   (Buttons, aktive Zustände, Hover, Fokusringe), eigener **Chat-Hintergrund**
+   (eigene Bild- oder Videodatei, mit Darstellung / Abdunkeln / Weichzeichnen
+   und Geltungsbereich) und der **Content-Bereich der Tabs** mit runden Ecken
+   und dezentem Schlagschatten (Radius, Schattenstärke, feine Kontur,
+   Geltungsbereich).
 
 Alles ist in den **Plugin-Einstellungen** anpassbar: `Session Flow`-Seite in der
 Sidebar, ⌘K/Ctrl+K → „Session Flow: Einstellungen", oder das Zahnrad in der Pane.
 Die Seite hat eine **sticky Kategorie-Leiste** (Chat · Strg+Scroll · Session-Liste ·
-Gruppen · UI-Tabs · Glass · Über) und Ein-Klick-Presets für die UI-Tabs.
+Gruppen · UI-Tabs · Glass · Individuell · Über) und Ein-Klick-Presets für die UI-Tabs.
 
 ![Feature-Überblick](docs/overview.png)
 
@@ -119,6 +126,9 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
 - **Glass & Lesbarkeit**: an/aus, Blur, Sättigung, Flächen-Deckkraft,
   Akzent-Tönung, Verlauf (an/aus, Winkel, Stärke, Endpunkt), feine Kontur,
   Bereiche (Eingabefeld / Chips / Statusleiste).
+- **Individualisierung**: Akzent-Tönung (Swatch oder Hex), Chat-Hintergrund
+  (Bild/Video über nativen Datei-Picker, Darstellung/Abdunkeln/Weichzeichnen/
+  Geltungsbereich), Content-Bereich abgrenzen (Radius/Schatten/Kontur/Bereich).
 
 ## Projektstruktur
 

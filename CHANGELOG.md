@@ -3,6 +3,31 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.6.0] — 2026-10-03
+
+### Neu — Individualisierung (neue Einstellungs-Sektion)
+- **Akzentfarben-Tönung**: eigene Akzentfarbe (Swatch oder Hex) färbt die
+  elementaren UI-Elemente der App (Buttons, aktive Zustände, Hover, Fokusringe,
+  Hervorhebungen). Umgesetzt als unlayered `--ui-accent`-Override, der die
+  `@layer base`-Definition der App sticht — ohne `!important`.
+- **Chat-Hintergrund (Bild/Video)**: eigene Datei per nativem Picker
+  (`hermesDesktop.selectPaths`) oder Pfad-Eingabe; Ausgabe über das
+  App-Protokoll `hermes-media://stream/…` (Range-fähig — Video live verifiziert:
+  readyState 4, currentTime läuft). Optionen: Art (Bild/Video, automatische
+  Erkennung nach Endung), Darstellung (Füllen/Einpassen), Abdunkeln %,
+  Weichzeichnen px, Geltungsbereich (nur Chats/alle Panes). Der Hintergrund-
+  Layer (`.sf-bg-layer`) wird pro Pane-Host injiziert; Videos laufen nur auf
+  sichtbaren Panes (Keep-Alive bleibt ruhig).
+- **Content-Bereich abgrenzen**: runde Ecken (4–24 px) + dezenter Schlagschatten
+  (aus/dezent/mittel/stark) + optionale feine Kontur auf den Pane-Hosts
+  (`[data-pane-host]`, Overlay-Panes ausgenommen); Geltungsbereich wählbar.
+
+### Geändert
+- Einstellungs-Navigation um Kategorie **Individuell** erweitert (sticky Leiste).
+- i18n beider Bundles auf 275 Keys; `docs/SETTINGS.md`, `docs/DEVELOPMENT.md`,
+  `docs/APP-INTEGRATION.md`, `docs/README.md` und beide READMEs aktualisiert.
+- Version 1.6.0 (`plugin.js` + `package.json`).
+
 ## [1.5.2] — 2026-10-03
 
 ### Geändert

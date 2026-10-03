@@ -2,7 +2,7 @@
  * Session Flow — Hermes Desktop Plugin
  * ====================================
  *
- * Drei Features, alle in den Plugin-Einstellungen anpassbar:
+ * Sechs Bereiche, alle in den Plugin-Einstellungen anpassbar:
  *
  *  1. CHAT-ANIMATION — Antworten werden "Zeile für Zeile" mit Easing eingeblendet.
  *     • Beim Laden/Wechsel eines Chats: die sichtbaren Zeilen kaskadieren von oben
@@ -25,6 +25,16 @@
  *       mit "Stack"-Optik (spine/fanned/pill), Drag & Drop zum Einsortieren.
  *     • Optional automatische Gruppierung (nach Datum oder Source).
  *     • Öffnen per Klick, Kontextmenü (Rechtsklick) für Gruppen/Pin/Farbe.
+ *
+ *  4. GLASS & LESBARKEIT — optionaler Frost-Effekt + Akzent-Verlauf für
+ *     Eingabefeld, Chips und Statusleiste, inkl. umlaufendem Glow-Ring.
+ *
+ *  5. UI-TABS — Sidebar-Optik für die Content-Tab-Leiste: Label, Close-Button,
+ *     Live-Status (Glow an arbeitenden Tabs).
+ *
+ *  6. INDIVIDUALISIERUNG — Akzentfarben-Tönung für elementare UI, eigener
+ *     Chat-Hintergrund (Bild/Video über hermes-media://stream/…), Content-
+ *     Bereich mit runden Ecken + dezentem Schlagschatten.
  *
  * Install: Datei nach `$HERMES_HOME/desktop-plugins/session-flow/plugin.js`
  * kopieren (Ordnername == Plugin-id!). Das Repo liefert `install.sh` dafür.
@@ -97,7 +107,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.5.2'
+const VERSION = '1.6.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -191,6 +201,22 @@ const DEFAULT_SETTINGS = {
     arcWidth: 1.5,
     arcDuration: 3.2,
     scopes: { composer: true, chips: true, statusbar: false }
+  },
+  personal: {
+    accentOn: false,
+    accentColor: '#7c3aed',
+    bgOn: false,
+    bgKind: 'image',
+    bgPath: '',
+    bgFit: 'cover',
+    bgDim: 35,
+    bgBlur: 0,
+    bgScope: 'chat',
+    shellOn: false,
+    shellRadius: 10,
+    shellShadow: 'subtle',
+    shellBorder: true,
+    shellScope: 'all'
   }
 }
 
@@ -324,6 +350,252 @@ function applyGlass() {
   } catch (error) {
     console.warn(`[${ID}] glass apply failed`, error)
     clearGlass()
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Individualisierung — Akzent-Tönung, Chat-Hintergrund, Content-Abgrenzung
+// ─────────────────────────────────────────────────────────────────────────────
+//
+//  • Akzent: überschreibt --ui-accent (Quelle der Fills/Strokes/Hover/aktiver
+//    Zustände der App). Das Plugin-<style> ist unlayered und gewinnt damit
+//    gegen die @layer-base-Definition — kein !important nötig.
+//  • Hintergrund: lokale Dateien laufen über das App-Protokoll
+//    hermes-media://stream/<encodeURIComponent(pfad)> (Range-fähig, auch für
+//    Videos). Das Plugin setzt nur Variablen; ein JS-Sync legt pro Pane-Host
+//    einen .sf-bg-layer an (Bild als background-image, Video als <video>-Kind).
+//  • Shell: runde Ecken + Schlagschatten auf [data-pane-host] (ohne Overlays).
+//    Nichts an overflow/Geometrie ändern — die Panes werden per Anchor
+//    positioniert (Inline-Styles), ein Eingriff dort bricht das Layout.
+
+const SF_PERSONAL_VARS = [
+  '--sf-accent-color',
+  '--sf-bg-url',
+  '--sf-bg-fit',
+  '--sf-bg-dim',
+  '--sf-bg-blur',
+  '--sf-shell-radius',
+  '--sf-shell-shadow'
+]
+
+const SHELL_SHADOWS = {
+  off: 'none',
+  subtle: '0 1px 2px color-mix(in srgb, #000 10%, transparent), 0 6px 16px color-mix(in srgb, #000 9%, transparent)',
+  medium: '0 2px 4px color-mix(in srgb, #000 12%, transparent), 0 10px 28px color-mix(in srgb, #000 13%, transparent)',
+  strong: '0 3px 10px color-mix(in srgb, #000 16%, transparent), 0 18px 44px color-mix(in srgb, #000 20%, transparent)'
+}
+
+/** URL für lokale Dateien über das App-Protokoll (Range-fähig, Video-tauglich). */
+function mediaStreamUrl(filePath) {
+  return `hermes-media://stream/${encodeURIComponent(filePath)}`
+}
+
+/** Entfernt alle injizierten Hintergrund-Layer (Dispose / deaktiviert). */
+function removePaneBackgrounds() {
+  try {
+    document.querySelectorAll('[data-sf-bg-layer]').forEach(layer => layer.remove())
+  } catch {
+    /* DOM evtl. schon weg — egal */
+  }
+}
+
+function clearPersonal() {
+  const root = document.documentElement
+
+  for (const attr of [
+    'data-sf-accent',
+    'data-sf-bg',
+    'data-sf-bg-kind',
+    'data-sf-bg-scope',
+    'data-sf-shell',
+    'data-sf-shell-shadow',
+    'data-sf-shell-border',
+    'data-sf-shell-scope'
+  ]) {
+    root.removeAttribute(attr)
+  }
+
+  for (const name of SF_PERSONAL_VARS) root.style.removeProperty(name)
+  removePaneBackgrounds()
+}
+
+function applyPersonal() {
+  const p = $settings.get().personal || {}
+
+  try {
+    const root = document.documentElement
+
+    // 1) Akzentfarbe → --ui-accent (färbt Buttons, aktive Zustände, Hover,
+    //    Fokusringe und Hervorhebungen der App).
+    const accent = String(p.accentColor || '').trim()
+
+    if (p.accentOn && /^#[0-9a-f]{6}$/i.test(accent)) {
+      root.setAttribute('data-sf-accent', 'on')
+      root.style.setProperty('--sf-accent-color', accent)
+    } else {
+      root.removeAttribute('data-sf-accent')
+      root.style.removeProperty('--sf-accent-color')
+    }
+
+    // 2) Chat-Hintergrund (Bild/Video).
+    const bgPath = String(p.bgPath || '').trim()
+    const hasBg = Boolean(p.bgOn) && bgPath.length > 0
+
+    if (hasBg) {
+      root.setAttribute('data-sf-bg', 'on')
+      root.setAttribute('data-sf-bg-kind', p.bgKind === 'video' ? 'video' : 'image')
+      root.setAttribute('data-sf-bg-scope', p.bgScope === 'all' ? 'all' : 'chat')
+      root.style.setProperty('--sf-bg-url', `url("${mediaStreamUrl(bgPath)}")`)
+      root.style.setProperty('--sf-bg-fit', p.bgFit === 'contain' ? 'contain' : 'cover')
+      root.style.setProperty('--sf-bg-dim', `${clampNumber(p.bgDim, 0, 85, 35)}%`)
+      root.style.setProperty('--sf-bg-blur', `${clampNumber(p.bgBlur, 0, 24, 0)}px`)
+    } else {
+      for (const attr of ['data-sf-bg', 'data-sf-bg-kind', 'data-sf-bg-scope']) {
+        root.removeAttribute(attr)
+      }
+
+      for (const name of ['--sf-bg-url', '--sf-bg-fit', '--sf-bg-dim', '--sf-bg-blur']) {
+        root.style.removeProperty(name)
+      }
+    }
+
+    // 3) Content-Abgrenzung (runde Ecken + Schlagschatten + optionale Kontur).
+    if (p.shellOn) {
+      root.setAttribute('data-sf-shell', 'on')
+      root.setAttribute('data-sf-shell-shadow', SHELL_SHADOWS[p.shellShadow] ? p.shellShadow : 'subtle')
+      root.setAttribute('data-sf-shell-border', p.shellBorder ? 'on' : 'off')
+      root.setAttribute('data-sf-shell-scope', p.shellScope === 'chat' ? 'chat' : 'all')
+      root.style.setProperty('--sf-shell-radius', `${clampNumber(p.shellRadius, 4, 24, 10)}px`)
+      root.style.setProperty('--sf-shell-shadow', SHELL_SHADOWS[p.shellShadow] || SHELL_SHADOWS.subtle)
+    } else {
+      for (const attr of ['data-sf-shell', 'data-sf-shell-shadow', 'data-sf-shell-border', 'data-sf-shell-scope']) {
+        root.removeAttribute(attr)
+      }
+
+      root.style.removeProperty('--sf-shell-radius')
+      root.style.removeProperty('--sf-shell-shadow')
+    }
+
+    syncPaneBackgrounds()
+  } catch (error) {
+    console.warn(`[${ID}] personal apply failed`, error)
+    clearPersonal()
+  }
+}
+
+/**
+ * Legt je Pane-Host einen .sf-bg-layer an bzw. aktualisiert ihn. Video nur auf
+ * SICHTBAREN Panes — Keep-Alive-Panes bleiben sonst dekodierend im Hintergrund
+ * (data-pane-hidden markiert inaktive Tab-Layer). Läuft im 2,5-s-Takt, damit
+ * neu gemountete Panes versorgt werden; React lässt fremde Kinder in Ruhe.
+ */
+function syncPaneBackgrounds() {
+  try {
+    const p = $settings.get().personal || {}
+    const bgPath = String(p.bgPath || '').trim()
+    const active = Boolean(p.bgOn) && bgPath.length > 0
+    const kind = p.bgKind === 'video' ? 'video' : 'image'
+    const scopeAll = p.bgScope === 'all'
+
+    for (const host of document.querySelectorAll('[data-pane-host]')) {
+      const paneId = host.getAttribute('data-pane-host') || ''
+      const applies = active && (scopeAll || paneId.startsWith('session-tile:'))
+      const existing = host.querySelector('[data-sf-bg-layer]')
+
+      if (!applies) {
+        if (existing) {
+          existing.remove()
+        }
+
+        continue
+      }
+
+      const visible = !host.hasAttribute('data-pane-hidden')
+      const sig = `${kind}|${bgPath}|${p.bgFit}|${visible ? 'v' : 'h'}`
+
+      if (existing && existing.getAttribute('data-sf-bg-sig') === sig) {
+        continue
+      }
+
+      const layer = existing || document.createElement('div')
+
+      if (!existing) {
+        layer.className = 'sf-bg-layer'
+        layer.setAttribute('data-sf-bg-layer', '')
+        host.appendChild(layer)
+      }
+
+      layer.setAttribute('data-sf-bg-sig', sig)
+
+      const oldVideo = layer.querySelector('[data-sf-bg-video]')
+
+      if (oldVideo) {
+        oldVideo.remove()
+      }
+
+      if (kind === 'video' && visible) {
+        const video = document.createElement('video')
+        video.setAttribute('data-sf-bg-video', '')
+        video.setAttribute('aria-hidden', 'true')
+        video.muted = true
+        video.loop = true
+        video.autoplay = true
+        video.playsInline = true
+        video.src = mediaStreamUrl(bgPath)
+        layer.appendChild(video)
+
+        const play = video.play()
+
+        if (play && typeof play.catch === 'function') {
+          play.catch(() => {})
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`[${ID}] pane background sync failed`, error)
+  }
+}
+
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'mkv', 'm4v', 'avi']
+
+/** Nativer Datei-Picker (App-IPC selectPaths) + Auto-Erkennung Bild/Video. */
+function pickBackgroundFile() {
+  try {
+    const desktop = window.hermesDesktop
+
+    if (!desktop || typeof desktop.selectPaths !== 'function') {
+      console.warn(`[${ID}] selectPaths nicht verfügbar`)
+      return
+    }
+
+    desktop
+      .selectPaths({
+        multiple: false,
+        title: 'Hintergrund-Bild oder -Video wählen',
+        filters: [
+          {
+            name: 'Bilder & Videos',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'mp4', 'webm', 'mov', 'mkv', 'm4v']
+          }
+        ]
+      })
+      .then(paths => {
+        const first = Array.isArray(paths) && paths.length ? String(paths[0]) : ''
+
+        if (!first) {
+          return
+        }
+
+        const ext = (first.split('.').pop() || '').toLowerCase()
+        patchSettings('personal', {
+          bgPath: first,
+          bgOn: true,
+          bgKind: VIDEO_EXTENSIONS.includes(ext) ? 'video' : 'image'
+        })
+      })
+      .catch(error => console.warn(`[${ID}] background picker failed`, error))
+  } catch (error) {
+    console.warn(`[${ID}] background picker failed`, error)
   }
 }
 
@@ -1276,6 +1548,51 @@ const EN = {
   glassScopeChipsDesc: 'Model and reasoning pills in the composer.',
   glassScopeStatusbar: 'Status bar items',
   glassScopeStatusbarDesc: 'Items in the bar along the bottom edge.',
+  navPersonal: 'Personal',
+  secPersonal: 'Personalization',
+  secPersonalDesc: 'Accent tint for core UI, a custom chat background (image or video), and a content area framed with rounded corners and a soft shadow.',
+  personalAccentOn: 'Accent tint',
+  personalAccentOnDesc: 'Applies your own accent color to core UI elements — buttons, active states, hovers, focus rings and highlights.',
+  personalAccentColor: 'Accent color',
+  personalAccentColorDesc: 'Pick a swatch or type a hex value (#rrggbb).',
+  personalAccentReset: 'Reset',
+  personalAccentHint: 'Takes effect immediately; disabling restores the theme accent.',
+  personalBgOn: 'Chat background',
+  personalBgOnDesc: 'Shows your own image or video behind the chat messages.',
+  personalBgKind: 'Background type',
+  personalBgKindDesc: 'Image (static file) or video (muted, loops automatically).',
+  personalBgKindImage: 'Image',
+  personalBgKindVideo: 'Video',
+  personalBgPath: 'File',
+  personalBgPathDesc: 'Absolute path to a local image or video file.',
+  personalBgPathPick: 'Choose…',
+  personalBgPathHint: 'Pick a file with "Choose…" or paste a path like /home/deniz/Pictures/bg.jpg.',
+  personalBgFit: 'Fit',
+  personalBgFitDesc: 'How the media fills the pane.',
+  personalBgFitCover: 'Cover',
+  personalBgFitContain: 'Contain',
+  personalBgDim: 'Dim %',
+  personalBgDimDesc: 'Darkens the background so text stays readable (0 = off).',
+  personalBgBlur: 'Blur px',
+  personalBgBlurDesc: 'Softens the background image (0 = off).',
+  personalBgScope: 'Applies to',
+  personalBgScopeDesc: 'Only session chats, or every pane view.',
+  personalBgScopeChat: 'Chats',
+  personalBgScopeAll: 'All panes',
+  personalShellOn: 'Frame content area',
+  personalShellOnDesc: 'Rounds the view area of tabs and lifts it with a soft drop shadow.',
+  personalShellRadius: 'Corner radius px',
+  personalShellRadiusDesc: 'Roundness of the content area corners.',
+  personalShellShadow: 'Shadow',
+  personalShellShadowDesc: 'Strength of the drop shadow.',
+  personalShellShadowOff: 'Off',
+  personalShellShadowSubtle: 'Subtle',
+  personalShellShadowMedium: 'Medium',
+  personalShellShadowStrong: 'Strong',
+  personalShellBorder: 'Hairline outline',
+  personalShellBorderDesc: 'Draws a fine line around the content area.',
+  personalShellScope: 'Applies to',
+  personalShellScopeDesc: 'Only session chats, or every pane view.',
   glassHint:
     'Blur follows the system reduce-transparency preference automatically; zoom surfaces stay untouched. Blur on the input costs a little GPU while the transcript scrolls — lower it if it ever feels heavy.'
 }
@@ -1553,6 +1870,51 @@ const DE = {
   glassScopeChipsDesc: 'Modell- und Reasoning-Pills im Eingabebereich.',
   glassScopeStatusbar: 'Statusleisten-Einträge',
   glassScopeStatusbarDesc: 'Einträge in der Leiste am unteren Rand.',
+  navPersonal: 'Individuell',
+  secPersonal: 'Individualisierung',
+  secPersonalDesc: 'Akzent-Tönung für die Kern-UI, eigener Chat-Hintergrund (Bild oder Video) und ein Content-Bereich mit runden Ecken und dezentem Schlagschatten.',
+  personalAccentOn: 'Akzentfarben-Tönung',
+  personalAccentOnDesc: 'Wendet deine eigene Akzentfarbe auf elementare UI-Elemente an — Buttons, aktive Zustände, Hover, Fokusringe und Hervorhebungen.',
+  personalAccentColor: 'Akzentfarbe',
+  personalAccentColorDesc: 'Swatch wählen oder Hex-Wert eintippen (#rrggbb).',
+  personalAccentReset: 'Zurücksetzen',
+  personalAccentHint: 'Wirkt sofort; Deaktivieren stellt die Theme-Akzentfarbe wieder her.',
+  personalBgOn: 'Chat-Hintergrund',
+  personalBgOnDesc: 'Zeigt ein eigenes Bild oder Video hinter den Chat-Nachrichten.',
+  personalBgKind: 'Art des Hintergrunds',
+  personalBgKindDesc: 'Bild (statische Datei) oder Video (stumm, läuft in Schleife).',
+  personalBgKindImage: 'Bild',
+  personalBgKindVideo: 'Video',
+  personalBgPath: 'Datei',
+  personalBgPathDesc: 'Absoluter Pfad zu einer lokalen Bild- oder Videodatei.',
+  personalBgPathPick: 'Datei wählen…',
+  personalBgPathHint: 'Über "Datei wählen…" auswählen oder Pfad einfügen, z. B. /home/deniz/Bilder/hintergrund.jpg.',
+  personalBgFit: 'Darstellung',
+  personalBgFitDesc: 'Wie das Medium die Fläche füllt.',
+  personalBgFitCover: 'Füllen',
+  personalBgFitContain: 'Einpassen',
+  personalBgDim: 'Abdunkeln %',
+  personalBgDimDesc: 'Dunkelt den Hintergrund ab, damit Texte lesbar bleiben (0 = aus).',
+  personalBgBlur: 'Weichzeichnen px',
+  personalBgBlurDesc: 'Zeichnet den Hintergrund weich (0 = aus).',
+  personalBgScope: 'Gilt für',
+  personalBgScopeDesc: 'Nur Chat-Sessions oder alle Pane-Ansichten.',
+  personalBgScopeChat: 'Chats',
+  personalBgScopeAll: 'Alle Panes',
+  personalShellOn: 'Content-Bereich abgrenzen',
+  personalShellOnDesc: 'Gibt dem Ansichtsbereich der Tabs runde Ecken und hebt ihn mit einem dezenten Schlagschatten ab.',
+  personalShellRadius: 'Ecken-Radius px',
+  personalShellRadiusDesc: 'Rundung der Ecken des Content-Bereichs.',
+  personalShellShadow: 'Schatten',
+  personalShellShadowDesc: 'Stärke des Schlagschattens.',
+  personalShellShadowOff: 'Aus',
+  personalShellShadowSubtle: 'Dezent',
+  personalShellShadowMedium: 'Mittel',
+  personalShellShadowStrong: 'Stark',
+  personalShellBorder: 'Feine Kontur',
+  personalShellBorderDesc: 'Zieht eine feine Linie um den Content-Bereich.',
+  personalShellScope: 'Gilt für',
+  personalShellScopeDesc: 'Nur Chat-Sessions oder alle Pane-Ansichten.',
   glassHint:
     'Der Blur folgt automatisch der System-Einstellung „Transparenz reduzieren"; Zoom-Flächen bleiben unberührt. Blur auf dem Eingabefeld kostet beim Scrollen etwas GPU — bei Bedarf einfach senken.'
 }
@@ -1857,6 +2219,54 @@ const CSS = `
 :root[data-renderer-animations-paused] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']::after{animation-play-state:paused}
 
 /* ── Einstellungs-Navigation: sticky Kategorie-Chips ─────────────────── */
+/* ── Individualisierung: Akzent-Tönung · Content-Shell · Hintergrund-Layer ──
+   Der .sf-bg-layer wird per JS in die Pane-Hosts gesetzt; hier nur die
+   Darstellung. Variablen (--sf-*) kommen von applyPersonal(). Die Akzent-Regel
+   ist unlayered und sticht damit die @layer-base-Definition der App. */
+
+html[data-sf-accent~='on']{--ui-accent:var(--sf-accent-color,#7c3aed)}
+
+html[data-sf-shell~='on'] [data-pane-host]:not([data-pane-overlay]){
+  border-radius:var(--sf-shell-radius,10px);
+  border:1px solid transparent;
+  box-shadow:var(--sf-shell-shadow,none)
+}
+html[data-sf-shell~='on'][data-sf-shell-scope='chat'] [data-pane-host]:not([data-pane-overlay]):not([data-pane-host^='session-tile:']){
+  border-radius:0;
+  border:none;
+  box-shadow:none
+}
+html[data-sf-shell~='on'][data-sf-shell-border='on'] [data-pane-host]:not([data-pane-overlay]){
+  border-color:var(--ui-stroke-tertiary,color-mix(in srgb,currentColor 12%,transparent))
+}
+
+.sf-bg-layer{
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  background-image:var(--sf-bg-url,none);
+  background-size:var(--sf-bg-fit,cover);
+  background-position:center;
+  background-repeat:no-repeat;
+  border-radius:inherit;
+  filter:blur(var(--sf-bg-blur,0px))
+}
+.sf-bg-layer::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:color-mix(in srgb,#000 var(--sf-bg-dim,35%),transparent)
+}
+.sf-bg-layer video{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:var(--sf-bg-fit,cover);
+  pointer-events:none
+}
+
 .sf-nav{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:3px;margin:0 -6px 2px;padding:6px;overflow-x:auto;background:color-mix(in srgb,var(--ui-editor-surface-background,var(--background)) 90%,transparent);border-bottom:1px solid var(--ui-stroke-tertiary);scrollbar-width:none;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .sf-nav::-webkit-scrollbar{display:none}
 .sf-nav-chip{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;height:24px;padding:0 9px;border:0;border-radius:999px;background:transparent;color:var(--ui-text-tertiary);font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background-color .12s ease,color .12s ease}
@@ -3279,6 +3689,7 @@ const SETTINGS_CATEGORIES = [
   { id: 'sf-sec-groups', icon: 'layers', labelKey: 'navGroups' },
   { id: 'sf-sec-uitabs', icon: 'multiple-windows', labelKey: 'navUiTabs' },
   { id: 'sf-sec-glass', icon: 'paintcan', labelKey: 'navGlass' },
+  { id: 'sf-sec-personal', icon: 'symbol-color', labelKey: 'navPersonal' },
   { id: 'sf-sec-about', icon: 'info', labelKey: 'navAbout' }
 ]
 
@@ -3407,6 +3818,7 @@ function SettingsPage() {
   const groups = settings.groups
   const glass = settings.glass
   const uiTabs = settings.uiTabs
+  const personal = settings.personal
 
   const patch = (section, key, value) => patchSettings(section, { [key]: value })
 
@@ -4122,6 +4534,178 @@ function SettingsPage() {
         ]
       }),
 
+      // ── Individualisierung ──────────────────────────────────────────────
+      jsxs(SettingsSection, {
+        icon: 'symbol-color',
+        id: 'sf-sec-personal',
+        title: t('secPersonal'),
+        description: t('secPersonalDesc'),
+        children: [
+          jsx(ToggleRow, {
+            label: t('personalAccentOn'),
+            description: t('personalAccentOnDesc'),
+            checked: personal.accentOn,
+            onChange: value => patch('personal', 'accentOn', value)
+          }),
+          jsx(Row, {
+            title: t('personalAccentColor'),
+            description: t('personalAccentColorDesc'),
+            action: jsxs('div', {
+              className: 'sf-row-control',
+              children: [
+                jsx(GroupSwatches, {
+                  value: personal.accentColor || null,
+                  onChange: value => patch('personal', 'accentColor', value || '#7c3aed'),
+                  clearLabel: t('personalAccentReset')
+                }),
+                jsx(Input, {
+                  className: 'sf-num',
+                  maxLength: 7,
+                  onChange: event => patch('personal', 'accentColor', String(event.target.value || '').trim()),
+                  placeholder: '#7c3aed',
+                  value: personal.accentColor || ''
+                })
+              ]
+            })
+          }),
+          jsx('p', { className: 'sf-hint', children: t('personalAccentHint') }),
+          jsx(ToggleRow, {
+            label: t('personalBgOn'),
+            description: t('personalBgOnDesc'),
+            checked: personal.bgOn,
+            onChange: value => patch('personal', 'bgOn', value)
+          }),
+          jsx(Row, {
+            title: t('personalBgKind'),
+            description: t('personalBgKindDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'image', label: t('personalBgKindImage') },
+                { id: 'video', label: t('personalBgKindVideo') }
+              ],
+              value: personal.bgKind,
+              onChange: value => patch('personal', 'bgKind', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalBgPath'),
+            description: t('personalBgPathDesc'),
+            action: jsxs('div', {
+              className: 'sf-row-control',
+              children: [
+                jsx(Input, {
+                  onChange: event => patch('personal', 'bgPath', String(event.target.value || '').trim()),
+                  placeholder: '/home/deniz/Pictures/bg.jpg',
+                  value: personal.bgPath || ''
+                }),
+                jsx(Button, {
+                  onClick: () => pickBackgroundFile(),
+                  size: 'sm',
+                  variant: 'ghost',
+                  children: t('personalBgPathPick')
+                })
+              ]
+            })
+          }),
+          jsx('p', { className: 'sf-hint', children: t('personalBgPathHint') }),
+          jsx(Row, {
+            title: t('personalBgFit'),
+            description: t('personalBgFitDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'cover', label: t('personalBgFitCover') },
+                { id: 'contain', label: t('personalBgFitContain') }
+              ],
+              value: personal.bgFit,
+              onChange: value => patch('personal', 'bgFit', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalBgDim'),
+            description: t('personalBgDimDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 85,
+              step: 5,
+              value: personal.bgDim,
+              onChange: value => patch('personal', 'bgDim', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalBgBlur'),
+            description: t('personalBgBlurDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 24,
+              step: 2,
+              value: personal.bgBlur,
+              onChange: value => patch('personal', 'bgBlur', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalBgScope'),
+            description: t('personalBgScopeDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'chat', label: t('personalBgScopeChat') },
+                { id: 'all', label: t('personalBgScopeAll') }
+              ],
+              value: personal.bgScope,
+              onChange: value => patch('personal', 'bgScope', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('personalShellOn'),
+            description: t('personalShellOnDesc'),
+            checked: personal.shellOn,
+            onChange: value => patch('personal', 'shellOn', value)
+          }),
+          jsx(Row, {
+            title: t('personalShellRadius'),
+            description: t('personalShellRadiusDesc'),
+            action: jsx(NumberInput, {
+              min: 4,
+              max: 24,
+              step: 1,
+              value: personal.shellRadius,
+              onChange: value => patch('personal', 'shellRadius', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalShellShadow'),
+            description: t('personalShellShadowDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'off', label: t('personalShellShadowOff') },
+                { id: 'subtle', label: t('personalShellShadowSubtle') },
+                { id: 'medium', label: t('personalShellShadowMedium') },
+                { id: 'strong', label: t('personalShellShadowStrong') }
+              ],
+              value: personal.shellShadow,
+              onChange: value => patch('personal', 'shellShadow', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('personalShellBorder'),
+            description: t('personalShellBorderDesc'),
+            checked: personal.shellBorder,
+            onChange: value => patch('personal', 'shellBorder', value)
+          }),
+          jsx(Row, {
+            title: t('personalShellScope'),
+            description: t('personalShellScopeDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'all', label: t('personalBgScopeAll') },
+                { id: 'chat', label: t('personalBgScopeChat') }
+              ],
+              value: personal.shellScope,
+              onChange: value => patch('personal', 'shellScope', value)
+            })
+          })
+        ]
+      }),
+
       // ── Über ───────────────────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'info',
@@ -4204,6 +4788,11 @@ export default {
     //     spiegeln; das Stylesheet reagiert rein per CSS darauf.
     applyGlass()
     const stopGlassWatch = $settings.listen(() => applyGlass())
+
+    // 2b-3) Individualisierung: Akzent-Tönung, Chat-Hintergrund, Content-Shell.
+    applyPersonal()
+    const stopPersonalWatch = $settings.listen(() => applyPersonal())
+    ctx.setInterval(() => syncPaneBackgrounds(), 2500)
 
     // 2c) Umlaufender Glow-Ring folgt der Aktivität (Modus „busy").
     const stopArcWatch = [
@@ -4396,6 +4985,8 @@ export default {
         clearUiTabs()
         stopGlassWatch()
         clearGlass()
+        stopPersonalWatch()
+        clearPersonal()
         removeCss()
         disposeAnimation()
         wheelController.dispose()

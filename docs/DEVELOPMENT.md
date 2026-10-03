@@ -118,6 +118,21 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
 - **Reduced transparency**: bewusst **kein `!important`** auf `backdrop-filter` —
   der app-weite Gate (styles.css) nullt dann global; die Flächen/Fills bleiben.
 - **Dispose**: `clearGlass()` entfernt Attribut + Variablen restlos.
+- **Individualisierung (Personal)**: `applyPersonal()` spiegelt die Sektion als
+  Attribute + Variablen (`data-sf-accent/bg/shell*`, `--sf-accent-color`,
+  `--sf-bg-*`, `--sf-shell-*`). Akzent = **unlayered `--ui-accent`-Override**
+  (sticht `@layer base` der App — kein `!important`). Hintergrund = pro
+  Pane-Host injizierter `.sf-bg-layer` (`z-index:-1`, unter dem Inhalt; Video
+  als `<video>`-Kind, **nur auf sichtbaren Panes** — `[data-pane-hidden]`-Gate,
+  damit Keep-Alive-Tabs nichts dekodieren). Dateien laufen über
+  `hermes-media://stream/<encodeURIComponent(pfad)>` (App-Protokoll, Range-
+  fähig — live verifiziert inkl. laufendem Video). Shell = Radius + Schatten +
+  Kontur auf `[data-pane-host]:not([data-pane-overlay])` — **nie** Geometrie
+  oder overflow der Panes anfassen (Anchor-Inline-Styles!). `syncPaneBackgrounds()`
+  läuft im 2,5-s-Takt für neu gemountete Panes; Dispose über `clearPersonal()`.
+- **Datei-Picker**: `window.hermesDesktop.selectPaths({ title, filters, multiple:false })`
+  (App-IPC `hermes:selectPaths`) → absolute Pfade; Bild/Video wird an der
+  Endung erkannt.
 
 ### Session-Liste & Aktivität
 

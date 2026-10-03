@@ -5,7 +5,7 @@ entwicklerorientiert; die Nutzer-Doku steht im Root-README.
 
 | Datei | Kurzbeschreibung |
 |---|---|
-| [SETTINGS.md](SETTINGS.md) | **Optionen-Referenz**: jede Einstellung mit Key, Default und Wirkung — Sektion für Sektion (Animation, Strg+Scroll, Session-Tabs, Gruppen, UI-Tabs, Glass). Bei jeder neuen Option pflegen! |
+| [SETTINGS.md](SETTINGS.md) | **Optionen-Referenz**: jede Einstellung mit Key, Default und Wirkung — Sektion für Sektion (Animation, Strg+Scroll, Session-Tabs, Gruppen, UI-Tabs, Glass, Individualisierung). Bei jeder neuen Option pflegen! |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | **Architektur & Dev-Workflow**: Controller-Design (Animation, Wheel, Glass, UI-Tabs), Animations-Dedupe, Stores, i18n, Konventionen, Troubleshooting-Tabelle. |
 | [APP-INTEGRATION.md](APP-INTEGRATION.md) | **App-Hooks & fragile Selektoren**: alle DOM-Anker, Theme-Tokens und Techniken, auf die das Plugin sich stützt (inkl. Risiko-Einschätzung) + Verifikations-Rezepte (Log-Kanal, `_meta`-Stempel, Hot-Reload). |
 | [ROADMAP.md](ROADMAP.md) | **Ideen & bekannte Grenzen**: was als Nächstes ansteht und was bewusst nicht passiert. |
