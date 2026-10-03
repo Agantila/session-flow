@@ -96,7 +96,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.2.0'
+const VERSION = '1.3.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -170,6 +170,10 @@ const DEFAULT_SETTINGS = {
     gradOpacity: 12,
     reach: 72,
     ring: true,
+    arc: true,
+    arcMode: 'always',
+    arcWidth: 1.5,
+    arcDuration: 3.2,
     scopes: { composer: true, chips: true, statusbar: false }
   }
 }
@@ -252,7 +256,9 @@ const SF_GLASS_VARS = [
   '--sf-glass-fill',
   '--sf-glass-angle',
   '--sf-glass-grad',
-  '--sf-glass-reach'
+  '--sf-glass-reach',
+  '--sf-arc-width',
+  '--sf-arc-duration'
 ]
 
 function clampNumber(value, min, max, fallback) {
@@ -264,6 +270,7 @@ function clampNumber(value, min, max, fallback) {
 function clearGlass() {
   const root = document.documentElement
   root.removeAttribute('data-sf-glass')
+  root.removeAttribute('data-sf-arc')
   for (const name of SF_GLASS_VARS) root.style.removeProperty(name)
 }
 
@@ -293,9 +300,63 @@ function applyGlass() {
     root.style.setProperty('--sf-glass-angle', `${clampNumber(glass.angle, 0, 360, 165)}deg`)
     root.style.setProperty('--sf-glass-grad', `${clampNumber(glass.gradOpacity, 0, 60, 12)}%`)
     root.style.setProperty('--sf-glass-reach', `${clampNumber(glass.reach, 20, 100, 72)}%`)
+    root.style.setProperty('--sf-arc-width', `${clampNumber(glass.arcWidth, 0.5, 4, 1.5)}px`)
+    root.style.setProperty('--sf-arc-duration', `${clampNumber(glass.arcDuration, 1, 12, 3.2)}s`)
+    syncArc()
   } catch (error) {
     console.warn(`[${ID}] glass apply failed`, error)
     clearGlass()
+  }
+}
+
+/** Arbeitet die aktuelle Session gerade (denkt/schreibt/Tool/arbeitet)? */
+function currentSessionBusy() {
+  let focused = null
+
+  try {
+    focused = host.state.focusedStoredSessionId.get() || null
+  } catch {
+    focused = null
+  }
+
+  if (!focused) {
+    return false
+  }
+
+  const detail = $activity.get()[focused]
+
+  if (detail && ['thinking', 'streaming', 'tool', 'working'].includes(detail.kind)) {
+    return true
+  }
+
+  const live = Object.values($liveMap.get()).find(entry => entry.storedId === focused)
+
+  return Boolean(live && ['working', 'starting', 'resuming', 'streaming'].includes(live.status))
+}
+
+/**
+ * Umlaufender Glow-Ring (derselbe Effekt, den Hermes bei laufenden Sessions
+ * zeigt): im Modus „busy" nur, solange die aktive Session arbeitet.
+ */
+function syncArc() {
+  const root = document.documentElement
+  const glass = $settings.get().glass || {}
+
+  try {
+    if (!glass.enabled || !glass.arc) {
+      root.removeAttribute('data-sf-arc')
+      return
+    }
+
+    if (glass.arcMode === 'busy' && !currentSessionBusy()) {
+      root.removeAttribute('data-sf-arc')
+      return
+    }
+
+    root.setAttribute('data-sf-arc', 'on')
+  } catch (error) {
+    console.warn(`[${ID}] arc sync failed`, error)
+    root.removeAttribute('data-sf-arc')
   }
 }
 
@@ -981,6 +1042,16 @@ const EN = {
   glassReachDesc: 'Point where the gradient has fully faded to transparent.',
   glassRing: 'Hairline outline',
   glassRingDesc: 'A fine accent-tinted outline around chips.',
+  glassArc: 'Travelling glow',
+  glassArcDesc: 'A soft accent highlight runs along the border — the same effect Hermes shows on running sessions.',
+  glassArcMode: 'Glow mode',
+  glassArcModeDesc: 'Always visible, or only while the current session is working.',
+  glassArcAlways: 'Always',
+  glassArcBusy: 'While working',
+  glassArcWidth: 'Glow width (px)',
+  glassArcWidthDesc: 'Thickness of the travelling highlight.',
+  glassArcDuration: 'Glow lap (s)',
+  glassArcDurationDesc: 'Seconds one lap around the border takes.',
   glassScopeComposer: 'Input field',
   glassScopeComposerDesc: 'Input field plus the cards docked to it.',
   glassScopeChips: 'Chips (model / reasoning)',
@@ -1191,6 +1262,16 @@ const DE = {
   glassReachDesc: 'Punkt, ab dem der Verlauf vollständig transparent ist.',
   glassRing: 'Feine Kontur',
   glassRingDesc: 'Hauchdünner, akzentgefärbter Rand um die Chips.',
+  glassArc: 'Umlaufender Glow',
+  glassArcDesc: 'Ein weicher Akzent-Lichtpunkt läuft am Rand entlang — derselbe Effekt, den Hermes bei laufenden Sessions zeigt.',
+  glassArcMode: 'Glow-Modus',
+  glassArcModeDesc: 'Immer sichtbar oder nur, während die aktuelle Session arbeitet.',
+  glassArcAlways: 'Immer',
+  glassArcBusy: 'Bei Aktivität',
+  glassArcWidth: 'Glow-Breite (px)',
+  glassArcWidthDesc: 'Dicke des umlaufenden Lichtpunkts.',
+  glassArcDuration: 'Glow-Umlauf (s)',
+  glassArcDurationDesc: 'Sekunden für eine Runde um den Rand.',
   glassScopeComposer: 'Eingabefeld',
   glassScopeComposerDesc: 'Eingabefeld samt der angedockten Karten.',
   glassScopeChips: 'Chips (Modell / Reasoning)',
@@ -1295,7 +1376,10 @@ const CSS = `
    bleiben. Kein !important auf backdrop-filter — der app-weite
    „prefers-reduced-transparency"-Gate (styles.css) nullt dann alles global. */
 
-/* Eingabefeld: Basis-Fläche des Composers + Dock-Karten mit Akzent-Tönung */
+/* Eingabefeld — Fläche + Verlauf malt das Surface SELBST (Border-Box): exakt
+   derselbe Radius wie die Outline, also keine Haarlinien-Lücke mehr an den
+   Ecken. Der Input-Fill-Layer wird dafür transparent und trägt stattdessen
+   den umlaufenden Glow-Ring. */
 :root[data-sf-glass~='composer'] [data-slot='composer-root']{
   --composer-fill:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) var(--sf-glass-fill,86%),transparent))
 }
@@ -1303,13 +1387,36 @@ const CSS = `
   --composer-fill:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) calc(var(--sf-glass-fill,86%) + 6%),transparent))
 }
 :root[data-sf-glass~='composer'] [data-slot='composer-surface']{
+  background-color:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) var(--sf-glass-fill,86%),transparent));
+  background-origin:border-box;background-clip:border-box;
   backdrop-filter:blur(var(--sf-glass-blur,10px)) saturate(var(--sf-glass-sat,115%));
   -webkit-backdrop-filter:blur(var(--sf-glass-blur,10px)) saturate(var(--sf-glass-sat,115%))
 }
-:root[data-sf-glass~='composer']:not([data-sf-glass~='nograd']) [data-slot='composer-surface']::after{
-  content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;
+:root[data-sf-glass~='composer']:not([data-sf-glass~='nograd']) [data-slot='composer-surface']{
   background-image:linear-gradient(var(--sf-glass-angle,165deg),color-mix(in srgb,var(--ui-accent) var(--sf-glass-grad,12%),transparent),transparent var(--sf-glass-reach,72%))
 }
+/* Fill-Layer: transparent + konzentrischer Radius (r − 1px = Innenkante des
+   Borders) — sonst bleibt an den Ecken je ein Haarlinien-Spalt. */
+:root[data-sf-glass~='composer'] [data-slot='composer-surface'] > [class~='-z-10']{
+  background-color:transparent;
+  border-radius:calc(var(--radius-2xl,1.5rem) - 1px)
+}
+/* Umlaufender Glow-Ring — gleiche Technik wie .arc-border der App (Mask-Ring
+   + per transform animierter Verlaufs-Layer, rein auf dem Compositor). */
+:root[data-sf-glass~='composer'][data-sf-arc~='on'] [data-slot='composer-surface'] > [class~='-z-10']{
+  overflow:hidden;
+  padding:var(--sf-arc-width,1.5px);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude
+}
+:root[data-sf-glass~='composer'][data-sf-arc~='on'] [data-slot='composer-surface'] > [class~='-z-10']::before{
+  content:'';position:absolute;top:0;left:0;width:240%;height:240%;
+  background:repeating-linear-gradient(var(--sf-arc-angle,160deg),transparent 0%,color-mix(in srgb,var(--ui-accent) 0%,transparent) 18.75%,var(--ui-accent) 25%,color-mix(in srgb,var(--ui-accent) 45%,transparent) 31.25%,transparent 43.75%,transparent 50%);
+  will-change:transform;
+  animation:sf-arc-ring var(--sf-arc-duration,3.2s) linear infinite
+}
+@keyframes sf-arc-ring{0%{transform:translate(0,0)}100%{transform:translate(-50%,-50%)}}
 
 /* UI-Chips: Modell- und Reasoning-Pill im Composer */
 :root[data-sf-glass~='chips'] :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
@@ -1325,6 +1432,20 @@ const CSS = `
 }
 :root[data-sf-glass~='chips'] :is([data-tour='model-pill'],[data-testid='reasoning-pill']):hover{
   background-color:color-mix(in srgb,var(--ui-accent) calc(var(--sf-glass-tint,8%) * 2),color-mix(in srgb,var(--dt-card) 94%,transparent))
+}
+/* Umlaufender Glow der Chips: radialer Conic-Highlight (kleine Fläche, daher
+   als @property-Turn umgesetzt); läuft um den Chip-Rand. */
+:root[data-sf-glass~='chips'][data-sf-arc~='on'] :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
+  position:relative
+}
+:root[data-sf-glass~='chips'][data-sf-arc~='on'] :is([data-tour='model-pill'],[data-testid='reasoning-pill'])::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  padding:var(--sf-arc-width,1.5px);
+  background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 232deg,color-mix(in srgb,var(--ui-accent) 40%,transparent) 285deg,var(--ui-accent) 330deg,transparent 360deg);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  animation:sf-arc-turn var(--sf-arc-duration,3.2s) linear infinite
 }
 
 /* Statusleiste: Einträge als Chips */
@@ -1342,6 +1463,33 @@ const CSS = `
 :root[data-sf-glass~='statusbar'] [data-slot='statusbar'] :is(button,a):hover{
   background-color:color-mix(in srgb,var(--ui-accent) calc(var(--sf-glass-tint,8%) * 2),color-mix(in srgb,var(--dt-card) 94%,transparent))
 }
+:root[data-sf-glass~='statusbar'][data-sf-arc~='on'] [data-slot='statusbar'] :is(button,a){
+  position:relative
+}
+:root[data-sf-glass~='statusbar'][data-sf-arc~='on'] [data-slot='statusbar'] :is(button,a)::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  padding:var(--sf-arc-width,1.5px);
+  background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 232deg,color-mix(in srgb,var(--ui-accent) 40%,transparent) 285deg,var(--ui-accent) 330deg,transparent 360deg);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  animation:sf-arc-turn var(--sf-arc-duration,3.2s) linear infinite
+}
+
+/* Registrierte Winkel-Property für den Conic-Glow (Chips/Statusleiste). */
+@property --sf-arc-turn{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes sf-arc-turn{to{--sf-arc-turn:360deg}}
+
+/* Barrierearmut: reduzierter Motion stoppt den Umlauf; pausierte Renderer
+   (Fenster im Hintergrund) pausieren ihn wie die App-eigenen Arcs. */
+@media (prefers-reduced-motion: reduce){
+  :root[data-sf-arc] [data-slot='composer-surface'] > [class~='-z-10']::before,
+  :root[data-sf-arc] :is([data-tour='model-pill'],[data-testid='reasoning-pill'])::after,
+  :root[data-sf-arc] [data-slot='statusbar'] :is(button,a)::after{animation:none}
+}
+:root[data-renderer-animations-paused] [data-slot='composer-surface'] > [class~='-z-10']::before,
+:root[data-renderer-animations-paused] :is([data-tour='model-pill'],[data-testid='reasoning-pill'])::after,
+:root[data-renderer-animations-paused] [data-slot='statusbar'] :is(button,a)::after{animation-play-state:paused}
 `
 
 function injectCss() {
@@ -3237,6 +3385,47 @@ function SettingsPage() {
             onChange: value => patch('glass', 'ring', value)
           }),
           jsx(ToggleRow, {
+            label: t('glassArc'),
+            description: t('glassArcDesc'),
+            checked: glass.arc,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'arc', value)
+          }),
+          jsx(Row, {
+            title: t('glassArcMode'),
+            description: t('glassArcModeDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'always', label: t('glassArcAlways') },
+                { id: 'busy', label: t('glassArcBusy') }
+              ],
+              value: glass.arcMode,
+              onChange: value => patch('glass', 'arcMode', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassArcWidth'),
+            description: t('glassArcWidthDesc'),
+            action: jsx(NumberInput, {
+              min: 0.5,
+              max: 4,
+              step: 0.5,
+              value: glass.arcWidth,
+              onChange: value => patch('glass', 'arcWidth', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassArcDuration'),
+            description: t('glassArcDurationDesc'),
+            action: jsx(NumberInput, {
+              min: 1,
+              max: 12,
+              step: 0.5,
+              value: glass.arcDuration,
+              onChange: value => patch('glass', 'arcDuration', value)
+            })
+          }),
+          jsx(ToggleRow, {
             label: t('glassScopeComposer'),
             description: t('glassScopeComposerDesc'),
             checked: glass.scopes.composer,
@@ -3332,6 +3521,13 @@ export default {
     //     spiegeln; das Stylesheet reagiert rein per CSS darauf.
     applyGlass()
     const stopGlassWatch = $settings.listen(() => applyGlass())
+
+    // 2c) Umlaufender Glow-Ring folgt der Aktivität (Modus „busy").
+    const stopArcWatch = [
+      $activity.listen(() => syncArc()),
+      $liveMap.listen(() => syncArc()),
+      host.state.focusedStoredSessionId.listen(() => syncArc())
+    ]
 
     // Versions-Stempel: belegt im Plugin-Storage, welche Version zuletzt sauber
     // geladen wurde (Hilfe beim Debuggen nach Kopie/Hot-Reload).
@@ -3497,6 +3693,7 @@ export default {
       window.clearTimeout(groupsSaveTimer)
       window.clearTimeout(refreshDebounce)
       try {
+        for (const stop of stopArcWatch) stop()
         stopGlassWatch()
         clearGlass()
         removeCss()

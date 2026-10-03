@@ -3,6 +3,24 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.3.0] — 2026-10-03
+
+### Fixed
+- **Eck-Lücke am Eingabefeld behoben**: Fläche und Akzent-Verlauf malt jetzt das
+  Composer-Surface selbst auf der Border-Box — damit exakt derselbe Border-Radius
+  wie die Outline (keine Haarlinien mehr an den Ecken). Der Input-Fill-Layer wird
+  dafür transparent und erhält zusätzlich den konzentrischen Innenradius
+  (`r − 1px`).
+
+### Added
+- **Umlaufender Glow** („Travelling glow"): ein dezenter, akzentgefärbter
+  Lichtpunkt läuft um den Rand von Eingabefeld, Chips und Statusleiste — dieselbe
+  Technik (Mask-Ring + transform-animierter Verlauf), die Hermes bei laufenden
+  Session-Zeilen und im HUD-Composer verwendet. Modus „Immer" oder „Bei
+  Aktivität" (nur während die aktuelle Session denkt/schreibt/Tools ausführt),
+  Breite und Umlaufdauer einstellbar; respektiert `prefers-reduced-motion` und
+  pausiert mit dem App-weiten `data-renderer-animations-paused`.
+
 ## [1.2.0] — 2026-10-03
 
 ### Changed

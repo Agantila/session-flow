@@ -80,11 +80,17 @@ auf `<html>`** (`data-sf-glass="composer chips nograd …"`, `--sf-glass-*`). Da
 Stylesheet reagiert ausschließlich per Selektor auf diese Tokens — es wird nie
 CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
 
-- **Eingabefeld**: überschreibt `--composer-fill` auf `[data-slot='composer-root']`
-  (wirkt auch auf Dock-Karten) und legt den Verlauf als `::after` auf
-  `[data-slot='composer-surface']` (z-Index 0 → über der -z-10-Fill-Fläche,
-  unter dem z-1-Inhalt). Blur sitzt auf der stabilen Surface-Box, nicht auf dem
+- **Eingabefeld**: Fläche + Verlauf malt das **Surface selbst** (Border-Box →
+  exakt der Outline-Radius, keine Eck-Lücke). Der Input-Fill-Layer wird dafür
+  transparent + konzentrischer Innenradius (`calc(var(--radius-2xl) - 1px)`) und
+  trägt den **Glow-Ring** (Mask-Ring + transform-animierter Verlauf, Technik wie
+  `.arc-border` der App). Blur sitzt auf der stabilen Surface-Box, nicht auf dem
   editierbaren Kind.
+- **Glow-Ring (arc)**: Modus `always`/`busy`; `busy` nutzt `currentSessionBusy()`
+  ($activity + $liveMap + `host.state.focusedStoredSessionId`, Subscriptions in
+  register). Chips/Statusleiste nutzen einen Conic-Highlight via
+  `@property --sf-arc-turn`; reduced-motion stoppt, `data-renderer-animations-paused`
+  pausiert.
 - **Chips**: stabile App-Handles `[data-tour='model-pill']` (nur Primär-Chat)
   und `[data-testid='reasoning-pill']` (überall).
 - **Reduced transparency**: bewusst **kein `!important`** auf `backdrop-filter` —

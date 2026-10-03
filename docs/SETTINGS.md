@@ -86,6 +86,10 @@ greift weiterhin automatisch).
 | `glass.gradOpacity` | `12` | Stärke des Verlaufs in % (0–60). |
 | `glass.reach` | `72` | Position (in %), ab der der Verlauf vollständig transparent ist (20–100). |
 | `glass.ring` | `true` | Hauchdünne, akzentgefärbte Innenkontur um Chips (box-shadow, kein Layout-Shift). |
+| `glass.arc` | `true` | Umlaufender Glow-Ring um die Ränder (wie bei laufenden Sessions in Hermes). |
+| `glass.arcMode` | `always` | `always` (immer) oder `busy` (nur während die aktuelle Session arbeitet). |
+| `glass.arcWidth` | `1.5` | Dicke des Lichtpunkts in px (0.5–4). |
+| `glass.arcDuration` | `3.2` | Dauer eines Umlaufs in Sekunden (1–12). |
 | `glass.scopes.composer` | `true` | Eingabefeld (Composer-Oberfläche + Dock-Karten) inkl. Blur. |
 | `glass.scopes.chips` | `true` | Modell- und Reasoning-Pill im Composer. |
 | `glass.scopes.statusbar` | `false` | Einträge der Statusleiste. |
