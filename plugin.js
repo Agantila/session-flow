@@ -96,7 +96,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.4.0'
+const VERSION = '1.5.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1164,6 +1164,20 @@ const EN = {
   ageNow: 'now',
   paneCount: n => `${n} sessions`,
 
+  // Settings navigation + UI-tab presets
+  navChat: 'Chat',
+  navWheel: 'Ctrl+Scroll',
+  navSessions: 'Session list',
+  navGroups: 'Groups',
+  navUiTabs: 'UI tabs',
+  navGlass: 'Glass',
+  navAbout: 'About',
+  uiTabsPresets: 'Quick presets',
+  uiTabsPresetsDesc: 'One click to a known-good look — every option below stays adjustable.',
+  uiTabsPresetSidebar: 'Sidebar look',
+  uiTabsPresetMinimal: 'Minimal',
+  uiTabsPresetStock: 'Hermes stock',
+
   // UI tabs (content tab strip)
   secUiTabs: 'UI tabs (content strip)',
   secUiTabsDesc: 'How the content tab strip looks — sidebar-style chips, label and close behaviour.',
@@ -1422,6 +1436,20 @@ const DE = {
   errOpen: 'Session konnte nicht geöffnet werden',
   ageNow: 'jetzt',
   paneCount: n => `${n} Sessions`,
+
+  // Einstellungs-Navigation + UI-Tabs-Presets
+  navChat: 'Chat',
+  navWheel: 'Strg+Scroll',
+  navSessions: 'Session-Liste',
+  navGroups: 'Gruppen',
+  navUiTabs: 'UI-Tabs',
+  navGlass: 'Glass',
+  navAbout: 'Über',
+  uiTabsPresets: 'Schnellauswahl',
+  uiTabsPresetsDesc: 'Ein Klick zu einem stimmigen Look — jede Option darunter bleibt feinjustierbar.',
+  uiTabsPresetSidebar: 'Sidebar-Look',
+  uiTabsPresetMinimal: 'Minimal',
+  uiTabsPresetStock: 'Hermes-Standard',
 
   // UI-Tabs (Content-Leiste)
   secUiTabs: 'UI-Tabs (Tab-Leiste)',
@@ -1804,6 +1832,15 @@ const CSS = `
   :root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'][data-sf-tab-busy='true']::after{animation:none}
 }
 :root[data-renderer-animations-paused] [data-slot='pane-tab'][data-sf-tab-busy='true']::after{animation-play-state:paused}
+
+/* ── Einstellungs-Navigation: sticky Kategorie-Chips ─────────────────── */
+.sf-nav{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:3px;margin:0 -6px 2px;padding:6px;overflow-x:auto;background:color-mix(in srgb,var(--ui-editor-surface-background,var(--background)) 90%,transparent);border-bottom:1px solid var(--ui-stroke-tertiary);scrollbar-width:none;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.sf-nav::-webkit-scrollbar{display:none}
+.sf-nav-chip{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;height:24px;padding:0 9px;border:0;border-radius:999px;background:transparent;color:var(--ui-text-tertiary);font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background-color .12s ease,color .12s ease}
+.sf-nav-chip:hover{background:var(--ui-row-hover-background,color-mix(in srgb,var(--dt-foreground) 6%,transparent));color:var(--foreground)}
+.sf-nav-chip[data-active='true']{background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));color:var(--foreground)}
+.sf-settings section{scroll-margin-top:46px}
+.sf-preset-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 `
 
 function injectCss() {
@@ -3197,8 +3234,9 @@ function SessionsPane() {
 // UI — Einstellungs-Seite
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SettingsSection({ icon, title, description, children }) {
+function SettingsSection({ id, icon, title, description, children }) {
   return jsxs('section', {
+    id,
     children: [
       jsxs('div', {
         className: 'sf-section-title',
@@ -3208,6 +3246,130 @@ function SettingsSection({ icon, title, description, children }) {
       ...children
     ]
   })
+}
+
+// Kategorien der Einstellungsseite — Reihenfolge = Sektions-Reihenfolge.
+const SETTINGS_CATEGORIES = [
+  { id: 'sf-sec-chat', icon: 'sparkle', labelKey: 'navChat' },
+  { id: 'sf-sec-wheel', icon: 'arrow-both', labelKey: 'navWheel' },
+  { id: 'sf-sec-sessions', icon: 'window', labelKey: 'navSessions' },
+  { id: 'sf-sec-groups', icon: 'layers', labelKey: 'navGroups' },
+  { id: 'sf-sec-uitabs', icon: 'multiple-windows', labelKey: 'navUiTabs' },
+  { id: 'sf-sec-glass', icon: 'paintcan', labelKey: 'navGlass' },
+  { id: 'sf-sec-about', icon: 'info', labelKey: 'navAbout' }
+]
+
+/** Sticky Kategorie-Leiste: springt zur Sektion, markiert die aktuelle. */
+function SettingsNav() {
+  const t = usePluginI18n(ID)
+  const [active, setActive] = useState(SETTINGS_CATEGORIES[0].id)
+
+  useEffect(() => {
+    const els = SETTINGS_CATEGORIES.map(category => document.getElementById(category.id)).filter(Boolean)
+
+    if (!els.length || typeof IntersectionObserver !== 'function') {
+      return undefined
+    }
+
+    const io = new IntersectionObserver(
+      entries => {
+        const hit = entries
+          .filter(entry => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+
+        if (hit.length) {
+          setActive(hit[0].target.id)
+        }
+      },
+      { rootMargin: '-6% 0px -78% 0px', threshold: 0 }
+    )
+
+    els.forEach(el => io.observe(el))
+
+    return () => io.disconnect()
+  }, [])
+
+  return jsx('div', {
+    className: 'sf-nav',
+    role: 'navigation',
+    children: SETTINGS_CATEGORIES.map(category =>
+      jsx('button', {
+        'aria-current': active === category.id ? 'true' : undefined,
+        className: 'sf-nav-chip',
+        'data-active': active === category.id ? 'true' : undefined,
+        key: category.id,
+        onClick: () => {
+          setActive(category.id)
+          document.getElementById(category.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        },
+        type: 'button',
+        children: [
+          jsx(Codicon, { key: 'i', name: category.icon, size: '0.8125rem' }),
+          jsx('span', { key: 'l', children: t(category.labelKey) })
+        ]
+      })
+    )
+  })
+}
+
+// Ein-Klick-Presets für die UI-Tabs (alles bleibt feinjustierbar).
+const UI_TABS_PRESETS = {
+  sidebar: {
+    label: 'Sidebar-Look',
+    values: {
+      enabled: true,
+      radius: 4,
+      gap: 2,
+      insetY: 2,
+      separators: false,
+      activeStyle: 'sidebar',
+      labelCase: 'normal',
+      labelSize: 11,
+      showLead: true,
+      closeMode: 'hover',
+      closeWidth: 22,
+      closeHover: true,
+      arc: true
+    }
+  },
+  minimal: {
+    label: 'Minimal',
+    values: {
+      enabled: true,
+      radius: 2,
+      gap: 0,
+      insetY: 0,
+      separators: true,
+      activeStyle: 'underline',
+      labelCase: 'upper',
+      labelSize: 10,
+      showLead: false,
+      closeMode: 'hover',
+      closeWidth: 18,
+      closeHover: false,
+      arc: false
+    }
+  },
+  stock: {
+    label: 'Hermes-Standard',
+    values: { enabled: false }
+  }
+}
+
+function applyUiTabsPreset(name) {
+  const preset = UI_TABS_PRESETS[name]
+
+  if (!preset) {
+    return
+  }
+
+  patchSettings('uiTabs', preset.values)
+
+  try {
+    host.notify({ kind: 'info', message: `Session Flow: UI-Tabs-Look „${preset.label}" übernommen` })
+  } catch (error) {
+    console.warn(`[${ID}] preset notify failed`, error)
+  }
 }
 
 function SettingsPage() {
@@ -3236,9 +3398,12 @@ function SettingsPage() {
         ]
       }),
 
+      jsx(SettingsNav, {}),
+
       // ── Chat-Animation ─────────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'sparkle',
+        id: 'sf-sec-chat',
         title: t('secAnimation'),
         description: t('secAnimationDesc'),
         children: [
@@ -3347,6 +3512,7 @@ function SettingsPage() {
       // ── Strg+Scroll ────────────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'arrow-both',
+        id: 'sf-sec-wheel',
         title: t('secWheel'),
         description: t('secWheelDesc'),
         children: [
@@ -3438,6 +3604,7 @@ function SettingsPage() {
       // ── Tabs ───────────────────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'window',
+        id: 'sf-sec-sessions',
         title: t('secTabs'),
         description: t('secTabsDesc'),
         children: [
@@ -3548,6 +3715,7 @@ function SettingsPage() {
       // ── Gruppen ────────────────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'layers',
+        id: 'sf-sec-groups',
         title: t('secGroups'),
         description: t('secGroupsDesc'),
         children: [
@@ -3599,9 +3767,37 @@ function SettingsPage() {
       // ── UI-Tabs (Content-Bereich) ─────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'multiple-windows',
+        id: 'sf-sec-uitabs',
         title: t('secUiTabs'),
         description: t('secUiTabsDesc'),
         children: [
+          jsx(Row, {
+            title: t('uiTabsPresets'),
+            description: t('uiTabsPresetsDesc'),
+            action: jsxs('div', {
+              className: 'sf-preset-row',
+              children: [
+                jsx(Button, {
+                  onClick: () => applyUiTabsPreset('sidebar'),
+                  size: 'sm',
+                  variant: 'secondary',
+                  children: t('uiTabsPresetSidebar')
+                }),
+                jsx(Button, {
+                  onClick: () => applyUiTabsPreset('minimal'),
+                  size: 'sm',
+                  variant: 'ghost',
+                  children: t('uiTabsPresetMinimal')
+                }),
+                jsx(Button, {
+                  onClick: () => applyUiTabsPreset('stock'),
+                  size: 'sm',
+                  variant: 'ghost',
+                  children: t('uiTabsPresetStock')
+                })
+              ]
+            })
+          }),
           jsx(ToggleRow, {
             label: t('uiTabsEnabled'),
             description: t('uiTabsEnabledDesc'),
@@ -3736,6 +3932,7 @@ function SettingsPage() {
       // ── Glass & Lesbarkeit ─────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'paintcan',
+        id: 'sf-sec-glass',
         title: t('secGlass'),
         description: t('secGlassDesc'),
         children: [
@@ -3905,6 +4102,7 @@ function SettingsPage() {
       // ── Über ───────────────────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'info',
+        id: 'sf-sec-about',
         title: t('secAbout'),
         description: t('secAboutDesc'),
         children: [

@@ -4,6 +4,9 @@ Alle Einstellungen liegen unter `hermes.plugin.session-flow.settings.v1` (ctx.st
 und sind live: Änderungen greifen sofort. Erreichbar über die Seite
 `/session-flow` (Sidebar „Session Flow" oder ⌘K → „Session Flow: Einstellungen").
 
+Die Seite hat seit v1.5.0 eine **sticky Kategorie-Leiste** oben: ein Klick springt
+zur jeweiligen Sektion, die aktuelle wird beim Scrollen automatisch markiert.
+
 ## Chat-Animation
 
 | Key | Default | Wirkung |
@@ -90,6 +93,9 @@ Session-Tabs aus derselben Engine wie die Sidebar).
 
 Hinweise:
 
+- **Schnellauswahl**: Die Presets **„Sidebar-Look"** (empfohlen, Default),
+  **„Minimal"** (flach, ohne Status/Glow) und **„Hermes-Standard"** (App-Optik) setzen die
+  Sektion in einem Klick — jede Option darunter bleibt danach feinjustierbar.
 - Der Glow nutzt dieselben Tokens wie „Glass" (`--sf-arc-width`/-`duration`) und
   pausiert mit `prefers-reduced-motion` bzw. `data-renderer-animations-paused`.
 - Die Status-Infos kommen aus der Plugin-Aktivitäts-Engine (`$activity`/`$liveMap`,

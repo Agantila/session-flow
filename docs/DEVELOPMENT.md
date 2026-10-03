@@ -103,6 +103,12 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   Activity/Live-Änderungen; das CSS zeichnet darauf den Conic-Glow. Hinweis:
   DOM-Attribute, die React nie gesetzt hat, lässt React unangetastet — die
   Markierung überlebt Re-Renders und wird bei Remounts neu gesetzt.
+- **Einstellungs-Navigation**: `SettingsNav` rendert sticky Kategorie-Chips über
+  die Sektionen (`sf-sec-*`-IDs); Klick = `scrollIntoView({behavior:'smooth'})`,
+  Scroll-Spy via `IntersectionObserver` (rootMargin `-6%/-78%` → nur die oberste
+  sichtbare Sektion zählt); `scroll-margin-top: 46px` hält Titel unter der Leiste
+  frei. Presets (`UI_TABS_PRESETS` + `applyUiTabsPreset`) patchen die Sektion in
+  einem `patchSettings`-Call.
 - **Chips**: stabile App-Handles `[data-tour='model-pill']` (nur Primär-Chat)
   und `[data-testid='reasoning-pill']` (überall).
 - **Reduced transparency**: bewusst **kein `!important`** auf `backdrop-filter` —

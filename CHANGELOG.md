@@ -3,6 +3,20 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.5.0] — 2026-10-03
+
+### Added
+- **Überarbeitete Einstellungsseite**: sticky **Kategorie-Leiste** oben — ein
+  Klick springt zur Sektion (Chat, Strg+Scroll, Session-Liste, Gruppen, UI-Tabs,
+  Glass, Über); die aktuelle Kategorie wird beim Scrollen automatisch markiert.
+- **UI-Tabs-Schnellauswahl**: Ein-Klick-Presets **„Sidebar-Look"** (empfohlen),
+  **„Minimal"** und **„Hermes-Standard"** übernehmen einen kompletten Look — die
+  13 Feineinstellungen darunter bleiben jederzeit justierbar.
+
+### Changed
+- UI-Tabs-Sektion ausführlicher beschrieben (Sektionstext, Preset-Zeile mit
+  Subtext, Hinweise in den Docs).
+
 ## [1.4.0] — 2026-10-03
 
 ### Added

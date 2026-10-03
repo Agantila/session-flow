@@ -84,6 +84,10 @@ nicht das Repo).
 ## Einstellungen (Kurzüberblick)
 
 Volle Referenz inkl. Defaults: [docs/SETTINGS.md](docs/SETTINGS.md).
+Die Seite hat eine **sticky Kategorie-Leiste** (Chat · Strg+Scroll · Session-Liste ·
+Gruppen · UI-Tabs · Glass · Über) — Klick springt zur Sektion, Scrollen markiert
+die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
+(„Sidebar-Look", „Minimal", „Hermes-Standard").
 
 - **Chat-Animation**: an/aus, Kaskade beim Öffnen, Zeile-für-Zeile beim
   Streamen, Dauer, Versatz pro Zeile, max. Staffel-Schritte, Bewegung (px),
