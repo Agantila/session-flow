@@ -96,7 +96,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.3.1'
+const VERSION = '1.4.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -158,6 +158,21 @@ const DEFAULT_SETTINGS = {
     autoMode: 'off',
     stackStyle: 'spine',
     showUngrouped: true
+  },
+  uiTabs: {
+    enabled: true,
+    radius: 4,
+    gap: 2,
+    insetY: 2,
+    separators: false,
+    activeStyle: 'sidebar',
+    labelCase: 'normal',
+    labelSize: 11,
+    showLead: true,
+    closeMode: 'hover',
+    closeWidth: 22,
+    closeHover: true,
+    arc: true
   },
   glass: {
     enabled: true,
@@ -311,29 +326,30 @@ function applyGlass() {
   }
 }
 
-/** Arbeitet die aktuelle Session gerade (denkt/schreibt/Tool/arbeitet)? */
-function currentSessionBusy() {
-  let focused = null
-
-  try {
-    focused = host.state.focusedStoredSessionId.get() || null
-  } catch {
-    focused = null
-  }
-
-  if (!focused) {
+/** Arbeitet diese gespeicherte Session gerade (denkt/schreibt/Tool/arbeitet)? */
+function isSessionBusy(storedId) {
+  if (!storedId) {
     return false
   }
 
-  const detail = $activity.get()[focused]
+  const detail = $activity.get()[storedId]
 
   if (detail && ['thinking', 'streaming', 'tool', 'working'].includes(detail.kind)) {
     return true
   }
 
-  const live = Object.values($liveMap.get()).find(entry => entry.storedId === focused)
+  const live = Object.values($liveMap.get()).find(entry => entry.storedId === storedId)
 
   return Boolean(live && ['working', 'starting', 'resuming', 'streaming'].includes(live.status))
+}
+
+/** Arbeitet die gerade fokussierte Session? (für den Composer-Glow) */
+function currentSessionBusy() {
+  try {
+    return isSessionBusy(host.state.focusedStoredSessionId.get() || null)
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -389,6 +405,104 @@ function syncArc() {
   } catch (error) {
     console.warn(`[${ID}] arc sync failed`, error)
     root.removeAttribute('data-sf-arc')
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI-Tabs — Content-Tab-Leiste im Sidebar-Look (+ Live-Info aus der Engine)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SF_UITABS_VARS = [
+  '--sf-ui-tab-radius',
+  '--sf-ui-tab-gap',
+  '--sf-ui-tab-inset-y',
+  '--sf-ui-tab-label-size',
+  '--sf-ui-tab-close-w'
+]
+
+/** Räumt Tokens/Variablen + Tab-Markierungen restlos ab. */
+function clearUiTabs() {
+  const root = document.documentElement
+  root.removeAttribute('data-sf-ui-tabs')
+
+  for (const name of SF_UITABS_VARS) {
+    root.style.removeProperty(name)
+  }
+
+  try {
+    document.querySelectorAll("[data-slot='pane-tab'][data-sf-tab-busy]").forEach(tab => {
+      tab.removeAttribute('data-sf-tab-busy')
+    })
+  } catch {
+    /* DOM evtl. schon weg — egal */
+  }
+}
+
+/**
+ * Spiegelt die UI-Tabs-Einstellungen als Tokens + Variablen auf <html>.
+ * (Rein deklarativ: das Stylesheet reagiert per Selektor — nie CSS-Rebuild.)
+ */
+function applyUiTabs() {
+  const cfg = $settings.get().uiTabs || {}
+
+  try {
+    if (!cfg.enabled) {
+      clearUiTabs()
+      return
+    }
+
+    const root = document.documentElement
+    const tokens = ['on']
+
+    if (cfg.separators) tokens.push('sep')
+    if (!cfg.showLead) tokens.push('nolead')
+    tokens.push(
+      cfg.activeStyle === 'underline'
+        ? 'active-underline'
+        : cfg.activeStyle === 'both'
+          ? 'active-both'
+          : 'active-sidebar'
+    )
+    tokens.push(cfg.labelCase === 'upper' ? 'case-upper' : 'case-normal')
+    if (cfg.closeMode === 'always') tokens.push('close-always')
+    else if (cfg.closeMode === 'active') tokens.push('close-active')
+    if (!cfg.closeHover) tokens.push('noclosehover')
+    if (!cfg.arc) tokens.push('noarc')
+
+    root.setAttribute('data-sf-ui-tabs', tokens.join(' '))
+    root.style.setProperty('--sf-ui-tab-radius', `${clampNumber(cfg.radius, 0, 12, 4)}px`)
+    root.style.setProperty('--sf-ui-tab-gap', `${clampNumber(cfg.gap, 0, 10, 2)}px`)
+    root.style.setProperty('--sf-ui-tab-inset-y', `${clampNumber(cfg.insetY, 0, 8, 2)}px`)
+    root.style.setProperty('--sf-ui-tab-label-size', `${clampNumber(cfg.labelSize, 9, 14, 11)}px`)
+    root.style.setProperty('--sf-ui-tab-close-w', `${clampNumber(cfg.closeWidth, 14, 32, 22)}px`)
+    syncTabBusy()
+  } catch (error) {
+    console.warn(`[${ID}] ui tabs apply failed`, error)
+    clearUiTabs()
+  }
+}
+
+/**
+ * Markiert Session-Tabs arbeitender Sessions (denkt/schreibt/Tool/arbeitet) —
+ * dieselbe Live-Info, die auch die Sidebar (Status-Punkt/Arc) zeigt. Das CSS
+ * zeichnet darauf den umlaufenden Glow-Ring.
+ */
+function syncTabBusy() {
+  try {
+    const tabs = document.querySelectorAll("[data-slot='pane-tab'][data-tree-tab^='session-tile:']")
+
+    for (const tab of tabs) {
+      const paneId = tab.getAttribute('data-tree-tab') || ''
+      const busy = isSessionBusy(paneId.slice('session-tile:'.length))
+
+      if (busy && tab.getAttribute('data-sf-tab-busy') !== 'true') {
+        tab.setAttribute('data-sf-tab-busy', 'true')
+      } else if (!busy && tab.hasAttribute('data-sf-tab-busy')) {
+        tab.removeAttribute('data-sf-tab-busy')
+      }
+    }
+  } catch (error) {
+    console.warn(`[${ID}] tab busy sync failed`, error)
   }
 }
 
@@ -1050,6 +1164,45 @@ const EN = {
   ageNow: 'now',
   paneCount: n => `${n} sessions`,
 
+  // UI tabs (content tab strip)
+  secUiTabs: 'UI tabs (content strip)',
+  secUiTabsDesc: 'How the content tab strip looks — sidebar-style chips, label and close behaviour.',
+  uiTabsEnabled: 'Sidebar-style tabs',
+  uiTabsEnabledDesc: 'Restyled content tabs: rounded chips, calmer label, a friendlier close button.',
+  uiTabsRadius: 'Corner radius (px)',
+  uiTabsRadiusDesc: 'How round a tab is — 4 px reads like the sidebar rows.',
+  uiTabsGap: 'Gap between tabs (px)',
+  uiTabsGapDesc: 'Air between neighbouring tabs.',
+  uiTabsInset: 'Vertical inset (px)',
+  uiTabsInsetDesc: 'Lifts tabs off the strip edge — 0 fills the bar like stock.',
+  uiTabsSeparators: 'Divider lines',
+  uiTabsSeparatorsDesc: 'Keep the thin lines between tabs (off looks cleaner with rounded chips).',
+  uiTabsActive: 'Active tab',
+  uiTabsActiveDesc: 'Filled like a sidebar row, the app underline, or both.',
+  uiTabsActiveSidebar: 'Filled',
+  uiTabsActiveUnderline: 'Underline',
+  uiTabsActiveBoth: 'Both',
+  uiTabsLabelCase: 'Label case',
+  uiTabsLabelCaseDesc: 'As written, or the app uppercase.',
+  uiTabsCaseNormal: 'As written',
+  uiTabsCaseUpper: 'UPPERCASE',
+  uiTabsLabelSize: 'Label size (px)',
+  uiTabsLabelSizeDesc: 'Font size of the tab title.',
+  uiTabsShowLead: 'Session status dot',
+  uiTabsShowLeadDesc: 'The live status (and colour) dot from the sidebar, before the title.',
+  uiTabsCloseMode: 'Close button',
+  uiTabsCloseModeDesc: 'When the ✕ appears: on hover, always, or only on the active tab.',
+  uiTabsCloseOnHover: 'On hover',
+  uiTabsCloseAlways: 'Always',
+  uiTabsCloseActive: 'Active tab',
+  uiTabsCloseWidth: 'Close hit area (px)',
+  uiTabsCloseWidthDesc: 'Width of the clickable ✕ zone.',
+  uiTabsCloseHoverBg: 'Highlight on hover',
+  uiTabsCloseHoverBgDesc: 'A soft chip behind the ✕ while hovered.',
+  uiTabsArc: 'Glow on working tabs',
+  uiTabsArcDesc: 'Sessions that are thinking / writing / running tools get the travelling glow ring, as in the sidebar.',
+  uiTabsHint: 'Applies to the content tab strip (all panes). Status info comes from the same live engine as the sidebar.',
+
   // Glass & readability
   secGlass: 'Glass & readability',
   secGlassDesc: 'Optional frost plus an accent gradient behind chips and the input field.',
@@ -1269,6 +1422,45 @@ const DE = {
   errOpen: 'Session konnte nicht geöffnet werden',
   ageNow: 'jetzt',
   paneCount: n => `${n} Sessions`,
+
+  // UI-Tabs (Content-Leiste)
+  secUiTabs: 'UI-Tabs (Tab-Leiste)',
+  secUiTabsDesc: 'Wie die Content-Tab-Leiste aussieht — Sidebar-Chips, Label und Close-Verhalten.',
+  uiTabsEnabled: 'Sidebar-Optik für Tabs',
+  uiTabsEnabledDesc: 'Content-Tabs im Sidebar-Look: runde Chips, ruhigeres Label, freundlicherer Close-Button.',
+  uiTabsRadius: 'Ecken-Radius (px)',
+  uiTabsRadiusDesc: 'Wie rund ein Tab ist — 4 px wirkt wie die Sidebar-Zeilen.',
+  uiTabsGap: 'Abstand zwischen Tabs (px)',
+  uiTabsGapDesc: 'Luft zwischen benachbarten Tabs.',
+  uiTabsInset: 'Vertikaler Abstand (px)',
+  uiTabsInsetDesc: 'Hebt die Tabs von der Leistenkante ab — 0 füllt die Leiste wie bisher.',
+  uiTabsSeparators: 'Trennlinien',
+  uiTabsSeparatorsDesc: 'Die feinen Linien zwischen Tabs behalten (aus wirkt mit runden Chips aufgeräumter).',
+  uiTabsActive: 'Aktiver Tab',
+  uiTabsActiveDesc: 'Gefüllt wie eine Sidebar-Zeile, der App-Unterstrich oder beides.',
+  uiTabsActiveSidebar: 'Gefüllt',
+  uiTabsActiveUnderline: 'Unterstrich',
+  uiTabsActiveBoth: 'Beides',
+  uiTabsLabelCase: 'Schreibweise',
+  uiTabsLabelCaseDesc: 'Normale Schreibweise oder GROSSBUCHSTABEN der App.',
+  uiTabsCaseNormal: 'Wie getippt',
+  uiTabsCaseUpper: 'GROSS',
+  uiTabsLabelSize: 'Label-Größe (px)',
+  uiTabsLabelSizeDesc: 'Schriftgröße des Tab-Titels.',
+  uiTabsShowLead: 'Session-Status-Punkt',
+  uiTabsShowLeadDesc: 'Der Live-Status (inkl. Farbe) aus der Sidebar, vor dem Titel.',
+  uiTabsCloseMode: 'Close-Button',
+  uiTabsCloseModeDesc: 'Wann das ✕ erscheint: bei Hover, immer oder nur am aktiven Tab.',
+  uiTabsCloseOnHover: 'Bei Hover',
+  uiTabsCloseAlways: 'Immer',
+  uiTabsCloseActive: 'Aktiver Tab',
+  uiTabsCloseWidth: 'Klickfläche ✕ (px)',
+  uiTabsCloseWidthDesc: 'Breite der klickbaren ✕-Zone.',
+  uiTabsCloseHoverBg: 'Hover-Highlight',
+  uiTabsCloseHoverBgDesc: 'Ein weicher Chip hinter dem ✕ beim Überfahren.',
+  uiTabsArc: 'Glow an arbeitenden Tabs',
+  uiTabsArcDesc: 'Sessions, die denken / schreiben / Tools ausführen, bekommen den umlaufenden Glow-Ring — wie in der Sidebar.',
+  uiTabsHint: 'Gilt für die Content-Tab-Leiste (alle Panes). Die Status-Infos kommen aus derselben Live-Engine wie die Sidebar.',
 
   // Glass & Lesbarkeit
   secGlass: 'Glass & Lesbarkeit',
@@ -1523,6 +1715,95 @@ const CSS = `
 :root[data-renderer-animations-paused] [data-slot='composer-surface'] > [class~='-z-10']::before,
 :root[data-renderer-animations-paused] :is([data-tour='model-pill'],[data-testid='reasoning-pill'])::after,
 :root[data-renderer-animations-paused] [data-slot='statusbar'] :is(button,a)::after{animation-play-state:paused}
+
+/* ── UI-Tabs: Content-Tab-Leiste im Sidebar-Look (optional) ─────────────
+   Leicht abgerundete Chips statt eckiger Baender; Label, Close-Button und
+   aktiver Zustand einstellbar. Arbeitende Session-Tabs tragen den
+   umlaufenden Glow-Ring (Live-Info aus der Aktivitaets-Engine). */
+
+/* Grundform: leicht abgerundet, mit Abstand (Chip-Optik) */
+:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab']:not([data-vertical]){
+  height:auto;
+  margin-block:var(--sf-ui-tab-inset-y,2px);
+  border-radius:var(--sf-ui-tab-radius,4px);
+  transition:background-color .1s ease
+}
+:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab']:not([data-vertical]):not(:first-child){
+  margin-left:var(--sf-ui-tab-gap,2px)
+}
+/* Trennlinien standardmaessig aus (Token 'sep' behaelt sie) */
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='sep']) [data-slot='pane-tab']:not([data-vertical]):not(:first-child){
+  border-left-color:transparent
+}
+/* Hover: ruhige Flaeche statt Farbstich-Schatten */
+:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab']:not([data-vertical]):not([data-active='true']):hover{
+  background:var(--ui-row-hover-background,color-mix(in srgb,var(--dt-foreground) 6%,transparent));
+  box-shadow:none
+}
+/* Aktiver Tab: Sidebar-Optik (gefuellte Zeile), App-Unterstrich oder beides */
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='active-sidebar'] [data-slot='pane-tab'][data-active='true']{
+  background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));
+  box-shadow:none;
+  color:var(--foreground)
+}
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='active-both'] [data-slot='pane-tab'][data-active='true']{
+  background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));
+  color:var(--foreground)
+}
+/* Label: Groesse & Schreibweise */
+:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'] .pane-tab-content [class~='truncate']{
+  font-size:var(--sf-ui-tab-label-size,11px)
+}
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='case-normal'] [data-slot='pane-tab'] .pane-tab-content [class~='truncate']{
+  text-transform:none;
+  letter-spacing:normal
+}
+/* Session-Status (Punkt aus dem Sidepanel) optional ausblenden */
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='nolead'] [data-slot='pane-tab'] .pane-tab-content > span:first-child:has([class~='rounded-full']){
+  display:none
+}
+/* Close-Button: Klickflaeche, Radius, Hover-Chip */
+:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'][data-closeable]{
+  --pane-tab-close-width:var(--sf-ui-tab-close-w,22px)
+}
+:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'][data-closeable] > [class~='inset-y-0'] button{
+  border-radius:var(--sf-ui-tab-radius,4px);
+  margin-block:3px;
+  margin-right:3px
+}
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noclosehover']) [data-slot='pane-tab'][data-closeable] > [class~='inset-y-0'] button:hover{
+  background-color:var(--ui-control-active-background,color-mix(in srgb,var(--dt-foreground) 10%,transparent));
+  color:var(--foreground)
+}
+/* Sichtbarkeit: bei Hover (App-Standard), immer oder nur am aktiven Tab */
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] [data-slot='pane-tab'][data-closeable] > [class~='inset-y-0'],
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-active'] [data-slot='pane-tab'][data-closeable][data-active='true'] > [class~='inset-y-0']{
+  opacity:1;
+  pointer-events:auto
+}
+/* Label-Fade dauerhaft, wo der Close-Button steht */
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] [data-slot='pane-tab'][data-closeable] > .pane-tab-content,
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-active'] [data-slot='pane-tab'][data-closeable][data-active='true'] > .pane-tab-content{
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)));
+  mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)))
+}
+/* Arbeitende Session-Tabs: umlaufender Glow-Ring (Session-Info aus der Sidebar-Engine) */
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noarc']) [data-slot='pane-tab'][data-sf-tab-busy='true']{
+  position:relative
+}
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noarc']) [data-slot='pane-tab'][data-sf-tab-busy='true']::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  padding:var(--sf-arc-width,1.5px);
+  background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 232deg,color-mix(in srgb,var(--ui-accent) 40%,transparent) 285deg,var(--ui-accent) 330deg,transparent 360deg);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  animation:sf-arc-turn var(--sf-arc-duration,3.2s) linear infinite
+}
+@media (prefers-reduced-motion: reduce){
+  :root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'][data-sf-tab-busy='true']::after{animation:none}
+}
+:root[data-renderer-animations-paused] [data-slot='pane-tab'][data-sf-tab-busy='true']::after{animation-play-state:paused}
 `
 
 function injectCss() {
@@ -2940,6 +3221,7 @@ function SettingsPage() {
   const tabs = settings.tabs
   const groups = settings.groups
   const glass = settings.glass
+  const uiTabs = settings.uiTabs
 
   const patch = (section, key, value) => patchSettings(section, { [key]: value })
 
@@ -3314,6 +3596,143 @@ function SettingsPage() {
         ]
       }),
 
+      // ── UI-Tabs (Content-Bereich) ─────────────────────────────────────
+      jsxs(SettingsSection, {
+        icon: 'multiple-windows',
+        title: t('secUiTabs'),
+        description: t('secUiTabsDesc'),
+        children: [
+          jsx(ToggleRow, {
+            label: t('uiTabsEnabled'),
+            description: t('uiTabsEnabledDesc'),
+            checked: uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'enabled', value)
+          }),
+          jsx(Row, {
+            title: t('uiTabsRadius'),
+            description: t('uiTabsRadiusDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 12,
+              step: 1,
+              value: uiTabs.radius,
+              onChange: value => patch('uiTabs', 'radius', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsGap'),
+            description: t('uiTabsGapDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 10,
+              step: 1,
+              value: uiTabs.gap,
+              onChange: value => patch('uiTabs', 'gap', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsInset'),
+            description: t('uiTabsInsetDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 8,
+              step: 1,
+              value: uiTabs.insetY,
+              onChange: value => patch('uiTabs', 'insetY', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsSeparators'),
+            description: t('uiTabsSeparatorsDesc'),
+            checked: uiTabs.separators,
+            disabled: !uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'separators', value)
+          }),
+          jsx(Row, {
+            title: t('uiTabsActive'),
+            description: t('uiTabsActiveDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'sidebar', label: t('uiTabsActiveSidebar') },
+                { id: 'underline', label: t('uiTabsActiveUnderline') },
+                { id: 'both', label: t('uiTabsActiveBoth') }
+              ],
+              value: uiTabs.activeStyle,
+              onChange: value => patch('uiTabs', 'activeStyle', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsLabelCase'),
+            description: t('uiTabsLabelCaseDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'normal', label: t('uiTabsCaseNormal') },
+                { id: 'upper', label: t('uiTabsCaseUpper') }
+              ],
+              value: uiTabs.labelCase,
+              onChange: value => patch('uiTabs', 'labelCase', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsLabelSize'),
+            description: t('uiTabsLabelSizeDesc'),
+            action: jsx(NumberInput, {
+              min: 10,
+              max: 13,
+              step: 1,
+              value: uiTabs.labelSize,
+              onChange: value => patch('uiTabs', 'labelSize', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsShowLead'),
+            description: t('uiTabsShowLeadDesc'),
+            checked: uiTabs.showLead,
+            disabled: !uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'showLead', value)
+          }),
+          jsx(Row, {
+            title: t('uiTabsCloseMode'),
+            description: t('uiTabsCloseModeDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'hover', label: t('uiTabsCloseOnHover') },
+                { id: 'always', label: t('uiTabsCloseAlways') },
+                { id: 'active', label: t('uiTabsCloseActive') }
+              ],
+              value: uiTabs.closeMode,
+              onChange: value => patch('uiTabs', 'closeMode', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsCloseWidth'),
+            description: t('uiTabsCloseWidthDesc'),
+            action: jsx(NumberInput, {
+              min: 14,
+              max: 32,
+              step: 2,
+              value: uiTabs.closeWidth,
+              onChange: value => patch('uiTabs', 'closeWidth', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsCloseHoverBg'),
+            description: t('uiTabsCloseHoverBgDesc'),
+            checked: uiTabs.closeHover,
+            disabled: !uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'closeHover', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsArc'),
+            description: t('uiTabsArcDesc'),
+            checked: uiTabs.arc,
+            disabled: !uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'arc', value)
+          }),
+          jsx('p', { className: 'sf-hint', children: t('uiTabsHint') })
+        ]
+      }),
+
       // ── Glass & Lesbarkeit ─────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'paintcan',
@@ -3562,6 +3981,16 @@ export default {
       host.state.focusedStoredSessionId.listen(() => syncArc())
     ]
 
+    // 2d) UI-Tabs: Sidebar-Optik für die Content-Tab-Leiste + Live-Status.
+    applyUiTabs()
+    const stopUiTabsWatch = $settings.listen(() => applyUiTabs())
+    const stopTabBusyWatch = [
+      $activity.listen(() => syncTabBusy()),
+      $liveMap.listen(() => syncTabBusy())
+    ]
+
+    ctx.setInterval(() => syncTabBusy(), 2000)
+
     // Versions-Stempel: belegt im Plugin-Storage, welche Version zuletzt sauber
     // geladen wurde (Hilfe beim Debuggen nach Kopie/Hot-Reload).
     try {
@@ -3730,6 +4159,9 @@ export default {
       window.clearTimeout(refreshDebounce)
       try {
         for (const stop of stopArcWatch) stop()
+        for (const stop of stopTabBusyWatch) stop()
+        stopUiTabsWatch()
+        clearUiTabs()
         stopGlassWatch()
         clearGlass()
         removeCss()

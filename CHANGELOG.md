@@ -3,6 +3,19 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.4.0] — 2026-10-03
+
+### Added
+- **UI-Tabs (Content-Tab-Leiste im Sidebar-Look)**: Die Tabs des Content-Bereichs
+  orientieren sich jetzt am Design der Sidebar-Sessions — leicht abgerundete
+  Chips, ruhiger Hover/aktiver Zustand (gefüllt wie eine Sidebar-Zeile, App-
+  Unterstrich oder beides). Verbessertes Label (Schreibweise, Größe), verbesserter
+  Close-Button (Klickfläche, Hover-Chip, Sichtbarkeit bei Hover/immer/am aktiven
+  Tab) und **Live-Session-Infos aus der Sidebar-Engine**: arbeitende Sessions
+  (denkt/schreibt/Tools) bekommen den umlaufenden Glow-Ring auf ihrem Tab;
+  der Status-Punkt aus dem Sidepanel bleibt übernehmbar/ausblendbar.
+  13 Optionen + Subtexte, EN/DE.
+
 ## [1.3.1] — 2026-10-03
 
 ### Fixed

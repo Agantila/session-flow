@@ -95,6 +95,14 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   register). Chips/Statusleiste nutzen einen Conic-Highlight via
   `@property --sf-arc-turn`; reduced-motion stoppt, `data-renderer-animations-paused`
   pausiert.
+- **UI-Tabs**: `applyUiTabs()` spiegelt die Sektion als `data-sf-ui-tabs`-Tokens
+  (+ `--sf-ui-tab-*`-Variablen) auf `<html>`; CSS stylt `[data-slot='pane-tab']`
+  (Chip-Geometrie via `height:auto` + Margins, Close über `--pane-tab-close-width`,
+  Label über `[class~='truncate']`). `syncTabBusy()` markiert Session-Tabs
+  (`[data-tree-tab^='session-tile:']` → `data-sf-tab-busy`) alle 2 s + bei
+  Activity/Live-Änderungen; das CSS zeichnet darauf den Conic-Glow. Hinweis:
+  DOM-Attribute, die React nie gesetzt hat, lässt React unangetastet — die
+  Markierung überlebt Re-Renders und wird bei Remounts neu gesetzt.
 - **Chips**: stabile App-Handles `[data-tour='model-pill']` (nur Primär-Chat)
   und `[data-testid='reasoning-pill']` (überall).
 - **Reduced transparency**: bewusst **kein `!important`** auf `backdrop-filter` —

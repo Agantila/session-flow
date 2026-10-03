@@ -65,6 +65,36 @@ Animationen unabhängig von diesen Schaltern.
 Gruppen-Daten (Name, Farbe, Zuordnung, Collapse-Zustand) liegen separat unter
 `hermes.plugin.session-flow.groups.v1`.
 
+## UI-Tabs (Content-Tab-Leiste)
+
+Style-Verbesserungen für die Tabs des **Content-Bereichs** (alle Panes), im
+Design der Sidebar-Sessions. Läuft rein über CSS-Tokens auf `<html>`
+(`data-sf-ui-tabs`) + DOM-Markierung `data-sf-tab-busy` (Live-Status der
+Session-Tabs aus derselben Engine wie die Sidebar).
+
+| Key | Default | Wirkung |
+|---|---|---|
+| `uiTabs.enabled` | `true` | Master. Aus = App-Standard-Optik. |
+| `uiTabs.radius` | `4` | Ecken-Radius der Tabs in px (0–12). |
+| `uiTabs.gap` | `2` | Horizontaler Abstand zwischen Tabs in px (0–10). |
+| `uiTabs.insetY` | `2` | Vertikaler Abstand zur Leistenkante in px (0–8; 0 = volle Höhe). |
+| `uiTabs.separators` | `false` | Feine Trennlinien zwischen Tabs behalten. |
+| `uiTabs.activeStyle` | `sidebar` | `sidebar` (gefüllt wie Sidebar-Zeile), `underline` (App) oder `both`. |
+| `uiTabs.labelCase` | `normal` | `normal` (wie getippt) oder `upper` (App-Stil). |
+| `uiTabs.labelSize` | `11` | Schriftgröße des Tab-Titels in px (10–13). |
+| `uiTabs.showLead` | `true` | Status-Punkt (Live-State + Farbe aus der Sidebar) im Tab. |
+| `uiTabs.closeMode` | `hover` | Sichtbarkeit des ✕: `hover`, `always` oder `active` (nur aktiver Tab). |
+| `uiTabs.closeWidth` | `22` | Klickfläche des ✕ in px (14–32; setzt `--pane-tab-close-width`). |
+| `uiTabs.closeHover` | `true` | Weicher Hover-Chip hinter dem ✕. |
+| `uiTabs.arc` | `true` | Umlaufender Glow-Ring auf Tabs arbeitender Sessions (denkt/schreibt/Tools). |
+
+Hinweise:
+
+- Der Glow nutzt dieselben Tokens wie „Glass" (`--sf-arc-width`/-`duration`) und
+  pausiert mit `prefers-reduced-motion` bzw. `data-renderer-animations-paused`.
+- Die Status-Infos kommen aus der Plugin-Aktivitäts-Engine (`$activity`/`$liveMap`,
+  Gateway-Events) — dieselbe Quelle wie die Icons der Session-Flow-Pane.
+
 ## Glass & Lesbarkeit
 
 Optionaler Frost-Effekt, der Eingabefeld und Chips eine lesbare Fläche gibt
