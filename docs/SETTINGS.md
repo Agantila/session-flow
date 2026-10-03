@@ -59,6 +59,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.selBorder` | `false` | Kontur um die ausgewählte Zeile/Karte (in der Tönungsfarbe). |
 | `tabs.selShadow` | `off` | Schattenstufe für den Auswahl-Zustand: `off`/`subtle`/`medium`/`strong`. |
 | `tabs.rowLive` | `false` | Aktiv & Wartend hervorheben: Akzent-Glow + pulsierendes Status-Icon (Bildsprache wie im Tab-Design). |
+| `tabs.showContext` | `false` | Kontextfenster (kompakt): Prozent-Label je Zeile/Karte für **Live-Sessions** (read-only `session.context_breakdown`, kein Provider-Call). Ab 70 % bernstein, ab 90 % rot; Tooltip zeigt used/max. |
 | `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |
 | `tabs.showTime` | `true` | Alter der Session anzeigen. |
 | `tabs.showPreview` | `false` | Letzte Nachricht als Vorschau (cozy-Dichte). |

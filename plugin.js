@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.9.0'
+const VERSION = '1.10.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -176,6 +176,7 @@ const DEFAULT_SETTINGS = {
     gridLines: 2,
     gridPreview: true,
     infoDensity: 'auto',
+    showContext: false,
     rowGradOn: false,
     rowGradFrom: '#7c3aed',
     rowGradTo: '#00dbda',
@@ -1199,6 +1200,7 @@ async function refreshSessions() {
         .sort((a, b) => b.startedAt - a.startedAt)
       $sessions.set(rows)
       $sessionsError.set(null)
+      scheduleContextRefresh(1200)
     } catch (error) {
       $sessionsError.set(error instanceof Error ? error.message : String(error))
     } finally {
@@ -1215,6 +1217,77 @@ function scheduleSessionsRefresh(delay = 1500) {
   window.clearTimeout(refreshDebounce)
   refreshDebounce = window.setTimeout(() => {
     void refreshSessions()
+  }, delay)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kontextfenster-Info (reduziert): Prozent-Label je Zeile/Karte für LIVE-
+// Sessions über den read-only RPC `session.context_breakdown` (kein Provider-
+// Call, kein Prompt-Cache-Impact). Läuft nur bei eingeschalteter Option.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const $ctxInfo = atom({}) // storedId -> { used, max, percent, est, at }
+
+let ctxRefreshTimer = 0
+let ctxRefreshInFlight = false
+
+async function refreshContextInfo() {
+  if (ctxRefreshInFlight || !readSetting('tabs', 'showContext')) {
+    return
+  }
+
+  const live = $liveMap.get() || {}
+  const entries = Object.entries(live)
+    .map(([runtimeId, entry]) => ({ runtimeId, storedId: String((entry && entry.storedId) || '') }))
+    .filter(pair => pair.runtimeId && pair.storedId)
+    .slice(0, 10)
+
+  if (!entries.length) {
+    if (Object.keys($ctxInfo.get()).length) {
+      $ctxInfo.set({})
+    }
+
+    return
+  }
+
+  ctxRefreshInFlight = true
+
+  try {
+    const next = {}
+
+    for (const { runtimeId, storedId } of entries) {
+      try {
+        // Live-Doors (SessionParams) adressieren Sessions über ihre RUNTIME-ID;
+        // die durable Stored-ID lehnt das Gateway mit "session not found" ab.
+        const result = await host.request('session.context_breakdown', { session_id: runtimeId })
+        const max = Number(result?.context_max || 0)
+
+        if (max > 0) {
+          const used = Number(result?.context_used || 0)
+          const percentRaw = Number(result?.context_percent)
+          next[storedId] = {
+            used,
+            max,
+            percent: Number.isFinite(percentRaw) && percentRaw >= 0 ? Math.round(percentRaw) : Math.round((used / max) * 100),
+            est: Boolean(result?.context_estimated),
+            at: Date.now()
+          }
+        }
+      } catch {
+        /* Session nicht (mehr) live — Eintrag entfällt */
+      }
+    }
+
+    $ctxInfo.set(next)
+  } finally {
+    ctxRefreshInFlight = false
+  }
+}
+
+function scheduleContextRefresh(delay = 1500) {
+  window.clearTimeout(ctxRefreshTimer)
+  ctxRefreshTimer = window.setTimeout(() => {
+    void refreshContextInfo()
   }, delay)
 }
 
@@ -1679,6 +1752,9 @@ const EN = {
   tabsLiveHead: 'Live status',
   tabsRowLive: 'Highlight active & waiting',
   tabsRowLiveDesc: 'Sessions that are working or waiting get an accent glow and a pulsing status icon — the same visual language as the tab design.',
+  tabsShowContext: 'Context window (compact)',
+  tabsShowContextDesc: 'Compact percent label per row/card for live sessions (read-only context breakdown; no provider call). Turns amber above 70 % and red above 90 %.',
+  ctxTooltip: (used, max, pct) => `Context window: ${used} / ${max} (${pct} %)`,
 
   tabsShowTime: 'Show time',
   tabsShowTimeDesc: 'How long ago the session was last active.',
@@ -2080,6 +2156,9 @@ const DE = {
   tabsLiveHead: 'Live-Status',
   tabsRowLive: 'Aktiv & Wartend hervorheben',
   tabsRowLiveDesc: 'Arbeitende oder wartende Sessions erhalten einen Akzent-Glow und ein pulsierendes Status-Icon — die gleiche Bildsprache wie im Tab-Design.',
+  tabsShowContext: 'Kontextfenster (kompakt)',
+  tabsShowContextDesc: 'Kompaktes Prozent-Label je Zeile/Karte für Live-Sessions (read-only Context-Breakdown; kein Provider-Call). Ab 70 % bernstein, ab 90 % rot.',
+  ctxTooltip: (used, max, pct) => `Kontextfenster: ${used} / ${max} (${pct} %)`,
 
   tabsShowTime: 'Zeit anzeigen',
   tabsShowTimeDesc: 'Wie lange die letzte Aktivität der Session her ist.',
@@ -2383,6 +2462,9 @@ const CSS = `
 .sf-tab[data-active=true] .sf-tab-title{font-weight:600}
 .sf-tab-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:14px;color:var(--ui-text-quaternary)}
 .sf-tab-meta{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.sf-tab-ctx{flex-shrink:0;font-size:10px;line-height:14px;font-variant-numeric:tabular-nums;color:var(--ui-text-quaternary)}
+.sf-tab-ctx[data-level=warn]{color:#f59e0b}
+.sf-tab-ctx[data-level=high]{color:var(--destructive,#ef4444)}
 .sf-tab-time{font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-tab-badge{font-size:9.5px;padding:0 4px;border-radius:4px;background:var(--ui-bg-tertiary,rgba(127,127,127,.12));color:var(--ui-text-tertiary);line-height:14px}
 .sf-tab-count{font-size:10px;color:var(--ui-text-quaternary)}
@@ -2747,6 +2829,14 @@ html[data-sf-selshadow~=strong] .sf-tab[data-active=true]{box-shadow:0 4px 16px 
 `
 
 function injectCss() {
+  // Verwaiste Stylesheets früherer Instanzen entfernen (nach unvollständigem
+  // Dispose gestapelt) — sonst wirken Effekte doppelt.
+  try {
+    document.querySelectorAll('style[data-session-flow]').forEach(style => style.remove())
+  } catch {
+    /* egal */
+  }
+
   const style = document.createElement('style')
   style.textContent = CSS
   style.setAttribute('data-session-flow', '')
@@ -3716,6 +3806,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   const appDensity = useValue($appDensity)
   const activity = useValue($activity)
   const live = useValue($liveMap)
+  const ctxInfo = useValue($ctxInfo)
   const tabsCfg = settings.tabs
   const cozy = tabsCfg.density === 'cozy'
   const group = section.kind === 'manual' ? groupsState.groups.find(entry => entry.id === section.groupId) : null
@@ -3862,6 +3953,24 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         className: 'sf-tab-count',
         key: 'count',
         children: compactNumber ? compactNumber(row.messageCount) : String(row.messageCount)
+      })
+    )
+  }
+
+  const ctx = tabsCfg.showContext ? ctxInfo[row.id] : null
+
+  if (ctx) {
+    const ctxLevel = ctx.percent >= 90 ? 'high' : ctx.percent >= 70 ? 'warn' : 'ok'
+    const usedLabel = `${ctx.est ? '~' : ''}${compactNumber ? compactNumber(ctx.used) : String(ctx.used)}`
+    const maxLabel = compactNumber ? compactNumber(ctx.max) : String(ctx.max)
+
+    meta.push(
+      jsx('span', {
+        className: 'sf-tab-ctx',
+        'data-level': ctxLevel,
+        key: 'ctx',
+        title: t('ctxTooltip', usedLabel, maxLabel, String(ctx.percent)),
+        children: `${ctx.percent}%`
       })
     )
   }
@@ -5203,6 +5312,12 @@ function SettingsPage() {
               onChange: value => patch('tabs', 'infoDensity', value)
             })
           }),
+          jsx(ToggleRow, {
+            label: t('tabsShowContext'),
+            description: t('tabsShowContextDesc'),
+            checked: tabs.showContext,
+            onChange: value => patch('tabs', 'showContext', value)
+          }),
           jsx(Row, {
             title: t('tabsStatusStyle'),
             description: t('tabsStatusStyleDesc'),
@@ -6064,6 +6179,23 @@ export default {
     // 2b-4b) Row-Design: Verlauf, Schatten, Titel-Verlauf, Auswahl, Live-Status.
     applyRows()
     const stopRowsWatch = $settings.listen(() => applyRows())
+    // 2b-5) Info-Dichte „Wie Hermes": folgt der App-Einstellung live.
+    const stopAppDensityWatch = watchAppDensity()
+
+    // 2b-6) Kontextfenster-Info (reduziert): Prozent je LIVE-Session.
+    const stopCtxInfoWatch = $settings.listen(() => {
+      if (readSetting('tabs', 'showContext')) {
+        scheduleContextRefresh(400)
+      } else {
+        window.clearTimeout(ctxRefreshTimer)
+        $ctxInfo.set({})
+      }
+    })
+
+    if (readSetting('tabs', 'showContext')) {
+      scheduleContextRefresh(2500)
+    }
+
     // 2c) Umlaufender Glow-Ring folgt der Aktivität (Modus „busy").
     const stopArcWatch = [
       $activity.listen(() => syncArc()),
@@ -6261,6 +6393,8 @@ export default {
         stopRowsWatch()
         clearRows()
         stopAppDensityWatch()
+        stopCtxInfoWatch()
+        window.clearTimeout(ctxRefreshTimer)
         removeCss()
         disposeAnimation()
         wheelController.dispose()

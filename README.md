@@ -112,7 +112,8 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
 - **Ctrl+Scroll**: on/off, modifier key, threshold, cooldown, invert, wrap,
   HUD on/off + duration, ignore selectors (CSS).
 - **Session list**: density (compact/cozy), view (list/grid — columns, card
-  width, gap, title lines, preview, info density like Hermes), row/card design
+  width, gap, title lines, preview, info density like Hermes, compact
+  context-window % for live sessions), row/card design
   (gradient background, drop shadows, gradient titles, selected-state
   tint/outline/shadow, live active & waiting glow), status style
   (icon/dot/both), time, preview, message

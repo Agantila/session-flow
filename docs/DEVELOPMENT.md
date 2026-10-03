@@ -160,7 +160,12 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   (`busy`/`waiting`/`idle`) aus `activityFor`, das CSS reagiert per
   `[data-sf-seltint~=…]`-Tönung, `outline`-Kontur, `[data-live=…]`-Glow und
   `sf-live-pulse` (respektiert `prefers-reduced-motion` +
-  `[data-renderer-animations-paused]`).
+  `[data-renderer-animations-paused]`). **Kontextfenster** (`tabs.showContext`):
+  `refreshContextInfo()` fragt für jede LIVE-Session `session.context_breakdown`
+  ab — **immer über die Runtime-ID** (Key der Live-Map; die Stored-ID lehnt das
+  Gateway ab), Ergebnis wird unter der Stored-ID in `$ctxInfo` abgelegt und als
+  `.sf-tab-ctx`-Chip gerendert. Läuft nur bei aktiver Option, gedrosselt über
+  den regulären Refresh-Zyklus, max. 10 Sessions.
 - **Close-Button-Fix (v1.7)**: deckender Kontrast-Chip
   (`color-mix(foreground 9%, dt-card)`) statt gestapelter Transparenzen +
   Hover-Label-Mask für ALLE Tab-Varianten (die App maskiert nur

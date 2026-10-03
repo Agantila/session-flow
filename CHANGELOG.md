@@ -3,6 +3,27 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.10.0] — 2026-10-04
+
+### Neu
+- **Kontextfenster-Info (kompakt)**: Neue Option „Kontextfenster" — je Zeile/Karte
+  einer LIVE-Session zeigt ein reduziertes Prozent-Label die Auslastung des
+  Kontextfensters (read-only `session.context_breakdown`; kein Provider-Call,
+  kein Prompt-Cache-Impact). Farbstufen ab 70 % (bernstein) und 90 % (rot),
+  Tooltip mit `used / max`. Gilt für Liste **und** Grid, per Schalter an/aus.
+
+### Fixed
+- **Info-Dichte-Initialisierung wiederhergestellt**: Beim Aufräumen eines
+  Debug-Blocks wurde versehentlich der `watchAppDensity()`-Aufruf mitentfernt —
+  die Option „Wie Hermes" folgte der App-Dichte dadurch nicht mehr (und der
+  Dispose-Block brach an der Stelle ab). Beides repariert.
+- **`injectCss` räumt verwaiste Stylesheets früherer Instanzen auf** — nach
+  einem unvollständigen Dispose konnten sich sonst Effekte stapeln.
+
+### Intern
+- Kontextabfrage adressiert Sessions über die **Runtime-ID** (`SessionParams`
+  = Live-Doors; die durable Stored-ID antwortet mit `session not found`).
+
 ## [1.9.0] — 2026-10-04
 
 ### Neu

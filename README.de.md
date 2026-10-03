@@ -120,7 +120,8 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
   Schwelle, Sperrzeit, Richtung umkehren, Umlauf, HUD an/aus + Dauer,
   Ignorier-Selektoren (CSS).
 - **Session-Tabs**: Dichte (kompakt/bequem), Ansicht (Liste/Grid — Spalten,
-  Kartenbreite, Abstand, Titel-Zeilen, Vorschau, Info-Dichte wie Hermes),
+  Kartenbreite, Abstand, Titel-Zeilen, Vorschau, Info-Dichte wie Hermes,
+  kompakte Kontextfenster-Auslastung für Live-Sessions),
   Zeilen-/Karten-Design (Hintergrund-Verlauf, Schlagschatten, Titel-Verlauf,
   Auswahl-Tönung/-Kontur/-Schatten, Live-Glow für Aktiv & Wartend),
   Status-Darstellung (Icon/Punkt/beides),
