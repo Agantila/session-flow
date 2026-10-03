@@ -3,6 +3,19 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.5.1] — 2026-10-03
+
+### Fixed
+- **UI-Tabs greifen jetzt auch auf die Session-Tabs im Content-Bereich**: Diese
+  Tabs werden von der App in ein Kontextmenü gewrappt, wobei der Trigger das
+  Attribut `data-slot` überschreibt (`context-menu-trigger` statt `pane-tab`) —
+  der bisherige Selektor traf sie deshalb nicht (Radius 0 px, keine Chip-Optik,
+  kein Close-Verhalten, kein Busy-Glow). Das Styling hängt jetzt an strukturellen
+  Merkmalen (`role="tab"` + `.pane-tab-content`, JS-Marke `data-sf-ui-tab`;
+  Busy über `[data-tree-tab^='session-tile:']`), die auch hinter Wrappern
+  erhalten bleiben. Live verifiziert: alle 7 Tabs markiert, Session-Tabs im
+  Content-Bereich mit 4 px Radius + Chip-Höhe.
+
 ## [1.5.0] — 2026-10-03
 
 ### Added

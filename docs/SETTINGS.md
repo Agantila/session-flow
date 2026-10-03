@@ -96,6 +96,8 @@ Hinweise:
 - **Schnellauswahl**: Die Presets **„Sidebar-Look"** (empfohlen, Default),
   **„Minimal"** (flach, ohne Status/Glow) und **„Hermes-Standard"** (App-Optik) setzen die
   Sektion in einem Klick — jede Option darunter bleibt danach feinjustierbar.
+- Gilt für **alle** Tab-Leisten, einschließlich der gestapelten Session-Tabs im
+  Content-Bereich (auch hinter deren Kontextmenü-Wrapper).
 - Der Glow nutzt dieselben Tokens wie „Glass" (`--sf-arc-width`/-`duration`) und
   pausiert mit `prefers-reduced-motion` bzw. `data-renderer-animations-paused`.
 - Die Status-Infos kommen aus der Plugin-Aktivitäts-Engine (`$activity`/`$liveMap`,

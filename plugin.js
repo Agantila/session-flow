@@ -96,7 +96,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.5.0'
+const VERSION = '1.5.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -430,8 +430,9 @@ function clearUiTabs() {
   }
 
   try {
-    document.querySelectorAll("[data-slot='pane-tab'][data-sf-tab-busy]").forEach(tab => {
+    document.querySelectorAll('[data-sf-tab-busy],[data-sf-ui-tab]').forEach(tab => {
       tab.removeAttribute('data-sf-tab-busy')
+      tab.removeAttribute('data-sf-ui-tab')
     })
   } catch {
     /* DOM evtl. schon weg — egal */
@@ -489,9 +490,22 @@ function applyUiTabs() {
  */
 function syncTabBusy() {
   try {
-    const tabs = document.querySelectorAll("[data-slot='pane-tab'][data-tree-tab^='session-tile:']")
+    // Styling-Marke: strukurell über role=tab + .pane-tab-content — die in
+    // Kontextmenüs gewrappten Session-Tabs im Content-Bereich tragen NICHT
+    // data-slot='pane-tab' (der Trigger überschreibt das Attribut).
+    const roleTabs = document.querySelectorAll("[role='tab']")
 
-    for (const tab of tabs) {
+    for (const tab of roleTabs) {
+      if (tab.querySelector('[class~="pane-tab-content"]') && tab.getAttribute('data-sf-ui-tab') !== 'true') {
+        tab.setAttribute('data-sf-ui-tab', 'true')
+      }
+    }
+
+    // Live-Busy (Glow) für Session-Tabs — Selektor ohne data-slot, damit auch
+    // die gewrappten Tabs erfasst werden.
+    const sessionTabs = document.querySelectorAll("[data-tree-tab^='session-tile:']")
+
+    for (const tab of sessionTabs) {
       const paneId = tab.getAttribute('data-tree-tab') || ''
       const busy = isSessionBusy(paneId.slice('session-tile:'.length))
 
@@ -502,7 +516,7 @@ function syncTabBusy() {
       }
     }
   } catch (error) {
-    console.warn(`[${ID}] tab busy sync failed`, error)
+    console.warn(`[${ID}] tab sync failed`, error)
   }
 }
 
@@ -1750,76 +1764,76 @@ const CSS = `
    umlaufenden Glow-Ring (Live-Info aus der Aktivitaets-Engine). */
 
 /* Grundform: leicht abgerundet, mit Abstand (Chip-Optik) */
-:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab']:not([data-vertical]){
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]){
   height:auto;
   margin-block:var(--sf-ui-tab-inset-y,2px);
   border-radius:var(--sf-ui-tab-radius,4px);
   transition:background-color .1s ease
 }
-:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab']:not([data-vertical]):not(:first-child){
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]):not(:first-child){
   margin-left:var(--sf-ui-tab-gap,2px)
 }
 /* Trennlinien standardmaessig aus (Token 'sep' behaelt sie) */
-:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='sep']) [data-slot='pane-tab']:not([data-vertical]):not(:first-child){
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='sep']) :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]):not(:first-child){
   border-left-color:transparent
 }
 /* Hover: ruhige Flaeche statt Farbstich-Schatten */
-:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab']:not([data-vertical]):not([data-active='true']):hover{
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]):not([data-active='true']):hover{
   background:var(--ui-row-hover-background,color-mix(in srgb,var(--dt-foreground) 6%,transparent));
   box-shadow:none
 }
 /* Aktiver Tab: Sidebar-Optik (gefuellte Zeile), App-Unterstrich oder beides */
-:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='active-sidebar'] [data-slot='pane-tab'][data-active='true']{
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='active-sidebar'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-active='true']{
   background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));
   box-shadow:none;
   color:var(--foreground)
 }
-:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='active-both'] [data-slot='pane-tab'][data-active='true']{
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='active-both'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-active='true']{
   background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));
   color:var(--foreground)
 }
 /* Label: Groesse & Schreibweise */
-:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'] .pane-tab-content [class~='truncate']{
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content [class~='truncate']{
   font-size:var(--sf-ui-tab-label-size,11px)
 }
-:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='case-normal'] [data-slot='pane-tab'] .pane-tab-content [class~='truncate']{
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='case-normal'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content [class~='truncate']{
   text-transform:none;
   letter-spacing:normal
 }
 /* Session-Status (Punkt aus dem Sidepanel) optional ausblenden */
-:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='nolead'] [data-slot='pane-tab'] .pane-tab-content > span:first-child:has([class~='rounded-full']){
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='nolead'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content > span:first-child:has([class~='rounded-full']){
   display:none
 }
 /* Close-Button: Klickflaeche, Radius, Hover-Chip */
-:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'][data-closeable]{
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable]{
   --pane-tab-close-width:var(--sf-ui-tab-close-w,22px)
 }
-:root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'][data-closeable] > [class~='inset-y-0'] button{
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'] button{
   border-radius:var(--sf-ui-tab-radius,4px);
   margin-block:3px;
   margin-right:3px
 }
-:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noclosehover']) [data-slot='pane-tab'][data-closeable] > [class~='inset-y-0'] button:hover{
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noclosehover']) :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'] button:hover{
   background-color:var(--ui-control-active-background,color-mix(in srgb,var(--dt-foreground) 10%,transparent));
   color:var(--foreground)
 }
 /* Sichtbarkeit: bei Hover (App-Standard), immer oder nur am aktiven Tab */
-:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] [data-slot='pane-tab'][data-closeable] > [class~='inset-y-0'],
-:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-active'] [data-slot='pane-tab'][data-closeable][data-active='true'] > [class~='inset-y-0']{
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'],
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-active'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable][data-active='true'] > [class~='inset-y-0']{
   opacity:1;
   pointer-events:auto
 }
 /* Label-Fade dauerhaft, wo der Close-Button steht */
-:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] [data-slot='pane-tab'][data-closeable] > .pane-tab-content,
-:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-active'] [data-slot='pane-tab'][data-closeable][data-active='true'] > .pane-tab-content{
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > .pane-tab-content,
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-active'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable][data-active='true'] > .pane-tab-content{
   -webkit-mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)));
   mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)))
 }
 /* Arbeitende Session-Tabs: umlaufender Glow-Ring (Session-Info aus der Sidebar-Engine) */
-:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noarc']) [data-slot='pane-tab'][data-sf-tab-busy='true']{
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noarc']) :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']{
   position:relative
 }
-:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noarc']) [data-slot='pane-tab'][data-sf-tab-busy='true']::after{
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noarc']) :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']::after{
   content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   padding:var(--sf-arc-width,1.5px);
   background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 232deg,color-mix(in srgb,var(--ui-accent) 40%,transparent) 285deg,var(--ui-accent) 330deg,transparent 360deg);
@@ -1829,9 +1843,9 @@ const CSS = `
   animation:sf-arc-turn var(--sf-arc-duration,3.2s) linear infinite
 }
 @media (prefers-reduced-motion: reduce){
-  :root[data-sf-ui-tabs~='on'] [data-slot='pane-tab'][data-sf-tab-busy='true']::after{animation:none}
+  :root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']::after{animation:none}
 }
-:root[data-renderer-animations-paused] [data-slot='pane-tab'][data-sf-tab-busy='true']::after{animation-play-state:paused}
+:root[data-renderer-animations-paused] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']::after{animation-play-state:paused}
 
 /* ── Einstellungs-Navigation: sticky Kategorie-Chips ─────────────────── */
 .sf-nav{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:3px;margin:0 -6px 2px;padding:6px;overflow-x:auto;background:color-mix(in srgb,var(--ui-editor-surface-background,var(--background)) 90%,transparent);border-bottom:1px solid var(--ui-stroke-tertiary);scrollbar-width:none;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
@@ -4201,6 +4215,7 @@ export default {
 
     // Radius des Glow-Rings folgt live der echten Composer-Kontur (Theme-unabhängig).
     ctx.setInterval(() => measureComposerRadius(), 4000)
+
 
     // 3) Session-Daten: initial + bei Events + Polls.
     void refreshSessions()

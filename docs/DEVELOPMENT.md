@@ -96,13 +96,17 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   `@property --sf-arc-turn`; reduced-motion stoppt, `data-renderer-animations-paused`
   pausiert.
 - **UI-Tabs**: `applyUiTabs()` spiegelt die Sektion als `data-sf-ui-tabs`-Tokens
-  (+ `--sf-ui-tab-*`-Variablen) auf `<html>`; CSS stylt `[data-slot='pane-tab']`
+  (+ `--sf-ui-tab-*`-Variablen) auf `<html>`; CSS stylt die Tabs über
+  `:is([class~='group/tab'],[data-sf-ui-tab='true'])`
   (Chip-Geometrie via `height:auto` + Margins, Close über `--pane-tab-close-width`,
-  Label über `[class~='truncate']`). `syncTabBusy()` markiert Session-Tabs
-  (`[data-tree-tab^='session-tile:']` → `data-sf-tab-busy`) alle 2 s + bei
-  Activity/Live-Änderungen; das CSS zeichnet darauf den Conic-Glow. Hinweis:
-  DOM-Attribute, die React nie gesetzt hat, lässt React unangetastet — die
-  Markierung überlebt Re-Renders und wird bei Remounts neu gesetzt.
+  Label über `[class~='truncate']`).
+  **Wichtig:** Session-Tabs im Content-Bereich werden von der App in ein
+  Kontextmenü gewrappt — der Trigger ÜBERSCHREIBT `data-slot`
+  (`context-menu-trigger` statt `pane-tab`)! Nie auf `data-slot='pane-tab'`
+  selektieren; strukturell arbeiten: `role="tab"` + `.pane-tab-content`
+  (JS-Marke `data-sf-ui-tab`, alle 2 s) bzw. `[data-tree-tab^='session-tile:']`
+  für den Busy-Status. Die Marken überleben Re-Renders (React lässt fremde
+  Attribute in Ruhe) und werden bei Remounts neu gesetzt.
 - **Einstellungs-Navigation**: `SettingsNav` rendert sticky Kategorie-Chips über
   die Sektionen (`sf-sec-*`-IDs); Klick = `scrollIntoView({behavior:'smooth'})`,
   Scroll-Spy via `IntersectionObserver` (rootMargin `-6%/-78%` → nur die oberste
