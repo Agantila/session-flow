@@ -3,6 +3,14 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.2.0] — 2026-10-03
+
+### Changed
+- **Alle Optionen in den Einstellungen haben jetzt einen Subtext**: jede Zeile
+  (Animation, Strg+Scroll, Session-Tabs, Tab-Gruppen, Glass & Lesbarkeit sowie
+  der Über-Bereich) erklärt in einem kurzen Satz, was die Option tut — in
+  Englisch und Deutsch.
+
 ## [1.1.0] — 2026-10-03
 
 ### Added

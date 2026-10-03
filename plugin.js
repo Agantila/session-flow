@@ -96,7 +96,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.1.0'
+const VERSION = '1.2.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -824,6 +824,7 @@ const EN = {
 
   // Settings — animation
   secAnimation: 'Chat animation',
+  secAnimationDesc: 'How assistant answers appear — cascade on open, line by line while streaming.',
   animEnabled: 'Line animation enabled',
   animEnabledDesc: 'Assistant lines ease in instead of popping at once.',
   animHistoryCascade: 'Cascade history on open',
@@ -831,15 +832,21 @@ const EN = {
   animStreamReveal: 'Line-by-line while streaming',
   animStreamRevealDesc: 'Each line animates once as soon as it is fully written.',
   animDuration: 'Duration (ms)',
+  animDurationDesc: 'How long a single line takes to ease in.',
   animStagger: 'Stagger per line (ms)',
+  animStaggerDesc: 'Delay between consecutive lines of the cascade.',
   animMaxSteps: 'Max stagger steps',
   animMaxStepsDesc: 'Caps total cascade time on long answers.',
   animTravel: 'Travel (px)',
+  animTravelDesc: 'How far a line slides in — 0 is a pure fade.',
   animEasing: 'Easing',
+  animEasingDesc: 'Motion curve: soft/smooth/gentle are calm, springy adds a light overshoot.',
   animSkipReasoning: 'Skip thinking blocks',
   animSkipReasoningDesc: 'Show reasoning/thinking content without the line animation.',
   animIncludeCode: 'Animate code blocks',
+  animIncludeCodeDesc: 'Also animate fenced code blocks.',
   animIncludeLists: 'Animate list items individually',
+  animIncludeListsDesc: 'Animate each list item on its own.',
   easingSmooth: 'Smooth (expo)',
   easingSoft: 'Soft',
   easingGentle: 'Gentle',
@@ -847,9 +854,11 @@ const EN = {
 
   // Settings — Ctrl+Scroll
   secWheel: 'Ctrl+Scroll session cycling',
+  secWheelDesc: 'Cycle through your sessions with the wheel — without clicking.',
   wheelEnabled: 'Enabled',
   wheelEnabledDesc: 'Scroll through active sessions with a modifier key + wheel.',
   wheelModifier: 'Modifier key',
+  wheelModifierDesc: 'Key you hold while scrolling to cycle sessions.',
   wheelModCtrl: 'Ctrl',
   wheelModAlt: 'Alt',
   wheelModCtrlShift: 'Ctrl+Shift',
@@ -859,58 +868,81 @@ const EN = {
   wheelCooldown: 'Cooldown (ms)',
   wheelCooldownDesc: 'Minimum gap between two switches — prevents speed-running.',
   wheelInvert: 'Invert direction',
+  wheelInvertDesc: 'Reverse the direction — wheel up then goes forward.',
   wheelWrap: 'Wrap at the end',
+  wheelWrapDesc: 'After the last session, continue at the first.',
   wheelHud: 'Show HUD',
   wheelHudDesc: 'Briefly overlay the position and title of the session.',
   wheelHudMs: 'HUD duration (ms)',
+  wheelHudMsDesc: 'How long the HUD overlay stays visible.',
   wheelIgnore: 'Ignore selectors (CSS)',
   wheelIgnoreDesc: 'Zones where Ctrl+Scroll does not engage (comma separated). Default: images, Monaco, canvas.',
   wheelHint: 'Tip: zoom surfaces (image lightbox, code editor) keep their own Ctrl+Scroll behaviour.',
 
   // Settings — tabs
   secTabs: 'Session tabs',
+  secTabsDesc: 'What the session tabs show and how a click opens a session.',
   tabsDensity: 'Density',
+  tabsDensityDesc: 'Compact shows one line per tab; cozy adds the preview line.',
   tabsDensityCompact: 'Compact',
   tabsDensityCozy: 'Cozy',
   tabsStatusStyle: 'Status display',
+  tabsStatusStyleDesc: 'Activity marker per tab: icon, core status dot, or both.',
   tabsStatusGlyph: 'Icon',
   tabsStatusDot: 'Dot',
   tabsStatusBoth: 'Icon + dot',
   tabsShowTime: 'Show time',
+  tabsShowTimeDesc: 'How long ago the session was last active.',
   tabsShowPreview: 'Show preview',
+  tabsShowPreviewDesc: 'Last message as a second line (cozy density only).',
   tabsShowCounts: 'Show message count',
+  tabsShowCountsDesc: 'Message count next to the title.',
   tabsShowSource: 'Show source (Telegram, cron, …)',
+  tabsShowSourceDesc: 'Badge showing where the session came from.',
   tabsOpenIntent: 'Open as',
+  tabsOpenIntentDesc: 'What a click does: replace the open chat, stack beside it, or open a tab.',
   tabsOpenIntentInPlace: 'Replace',
   tabsOpenIntentStack: 'Stack',
   tabsOpenIntentTab: 'Tab',
   tabsMaxItems: 'Max sessions',
+  tabsMaxItemsDesc: 'Upper limit of sessions listed.',
   tabsHideCron: 'Hide cron sessions',
   tabsHideCronDesc: 'Cron runs would fill the list; the sidebar also shows them separately.',
   tabsLivePoll: 'Live status poll (s)',
+  tabsLivePollDesc: 'Interval of the live status check (thinking / writing / tool).',
   tabsRefresh: 'List refresh (s)',
+  tabsRefreshDesc: 'Interval at which the session list is re-read.',
 
   // Settings — groups
   secGroups: 'Tab groups',
+  secGroupsDesc: 'Bundle sessions into named, coloured groups — Firefox style.',
   groupsEnabled: 'Groups enabled',
   groupsEnabledDesc: 'Firefox-style groups with name, color, and collapse stack.',
   groupsAutoMode: 'Automatic grouping',
+  groupsAutoModeDesc: 'Group automatically by date or source; off keeps everything manual.',
   groupsAutoOff: 'Off (manual only)',
   groupsAutoDate: 'By date',
   groupsAutoSource: 'By source',
   groupsStackStyle: 'Stack style (collapsed)',
+  groupsStackStyleDesc: 'Look of a collapsed group: spine, fanned cards, or a pill.',
   stackSpine: 'Spine',
   stackFanned: 'Fanned',
   stackPill: 'Pill',
   groupsShowUngrouped: 'Show "Ungrouped" section',
+  groupsShowUngroupedDesc: 'Show the ungrouped bucket while automatic grouping is off.',
   groupsHint: 'Manage groups via right-click on a tab or a group header. Drag & drop moves sessions into groups.',
 
   // Settings — about
   secAbout: 'About',
+  secAboutDesc: 'Version, counters, and the reset actions.',
   aboutVersion: 'Version',
+  aboutVersionDesc: 'Version currently loaded by the app.',
   aboutStats: (sessions, groups) => `${sessions} sessions · ${groups} groups`,
+  aboutStatsDesc: 'Sessions and manual groups in the current list.',
   aboutResetSettings: 'Reset settings',
+  aboutResetSettingsDesc: 'Restore every option on this page to its default.',
   aboutResetGroups: 'Reset groups',
+  aboutResetGroupsDesc: 'Delete all manual groups — the sessions stay in the list.',
   aboutHint: 'Changes apply and persist immediately. File: desktop-plugins/session-flow/plugin.js',
 
   // Dialogs
@@ -927,23 +959,34 @@ const EN = {
 
   // Glass & readability
   secGlass: 'Glass & readability',
+  secGlassDesc: 'Optional frost plus an accent gradient behind chips and the input field.',
   glassEnabled: 'Glass effect',
   glassEnabledDesc:
     'Gives the input field and chips a soft frosted fill with a subtle accent gradient — labels stay readable even over busy backdrops.',
   glassBlur: 'Blur (px)',
+  glassBlurDesc: 'Frost strength in pixels — higher blurs more of the backdrop.',
   glassSaturate: 'Saturation (%)',
+  glassSaturateDesc: 'Colour richness of the frosted surface.',
   glassFill: 'Fill opacity (%)',
+  glassFillDesc: 'Opacity of the surface — higher is more solid, less see-through.',
   glassTint: 'Accent tint (%)',
+  glassTintDesc: 'How much of the Hermes accent colour mixes into the surface.',
   glassGradient: 'Accent gradient',
   glassGradientDesc: 'Linear gradient from the accent color fading to transparent, layered over the fill.',
   glassAngle: 'Gradient angle (°)',
+  glassAngleDesc: 'Direction of the gradient overlay.',
   glassGradOpacity: 'Gradient strength (%)',
+  glassGradOpacityDesc: 'Strength of the accent gradient.',
   glassReach: 'Gradient fades by (%)',
+  glassReachDesc: 'Point where the gradient has fully faded to transparent.',
   glassRing: 'Hairline outline',
   glassRingDesc: 'A fine accent-tinted outline around chips.',
   glassScopeComposer: 'Input field',
+  glassScopeComposerDesc: 'Input field plus the cards docked to it.',
   glassScopeChips: 'Chips (model / reasoning)',
+  glassScopeChipsDesc: 'Model and reasoning pills in the composer.',
   glassScopeStatusbar: 'Status bar items',
+  glassScopeStatusbarDesc: 'Items in the bar along the bottom edge.',
   glassHint:
     'Blur follows the system reduce-transparency preference automatically; zoom surfaces stay untouched. Blur on the input costs a little GPU while the transcript scrolls — lower it if it ever feels heavy.'
 }
@@ -995,6 +1038,7 @@ const DE = {
   stIdle: 'Inaktiv',
 
   secAnimation: 'Chat-Animation',
+  secAnimationDesc: 'Wie Antworten erscheinen — Kaskade beim Öffnen, Zeile für Zeile beim Streamen.',
   animEnabled: 'Zeilen-Animation aktiv',
   animEnabledDesc: 'Antwortzeilen werden mit Easing eingeblendet statt sofort zu erscheinen.',
   animHistoryCascade: 'Verlauf beim Öffnen kaskadieren',
@@ -1002,24 +1046,32 @@ const DE = {
   animStreamReveal: 'Beim Streamen Zeile für Zeile',
   animStreamRevealDesc: 'Jede Zeile blendet genau einmal ein, sobald sie fertig geschrieben ist.',
   animDuration: 'Dauer (ms)',
+  animDurationDesc: 'Wie lange eine einzelne Zeile zum Einblenden braucht.',
   animStagger: 'Versatz pro Zeile (ms)',
+  animStaggerDesc: 'Verzögerung zwischen aufeinanderfolgenden Zeilen der Kaskade.',
   animMaxSteps: 'Max. Staffel-Schritte',
   animMaxStepsDesc: 'Deckelt die Gesamtlaufzeit der Kaskade bei langen Antworten.',
   animTravel: 'Bewegung (px)',
+  animTravelDesc: 'Wie weit eine Zeile einfliegt — 0 bedeutet reines Einblenden.',
   animEasing: 'Easing',
+  animEasingDesc: 'Bewegungskurve: weich/sanft/ruhig sind ruhig, federnd schwingt leicht über.',
   animSkipReasoning: 'Thinking-Blöcke überspringen',
   animSkipReasoningDesc: 'Reasoning-/Thinking-Inhalte ohne Zeilen-Animation anzeigen.',
   animIncludeCode: 'Code-Blöcke mitanimieren',
+  animIncludeCodeDesc: 'Auch Code-Blöcke animieren.',
   animIncludeLists: 'Listenpunkte einzeln animieren',
+  animIncludeListsDesc: 'Jeden Listenpunkt einzeln animieren.',
   easingSmooth: 'Sanft (Expo)',
   easingSoft: 'Weich',
   easingGentle: 'Ruhig',
   easingBack: 'Federnd',
 
   secWheel: 'Strg+Scroll Sessionwechsel',
+  secWheelDesc: 'Mit dem Mausrad durch die Sessions wechseln — ohne Klicken.',
   wheelEnabled: 'Aktiviert',
   wheelEnabledDesc: 'Mit Zusatztaste + Mausrad durch die aktiven Sessions scrollen.',
   wheelModifier: 'Zusatztaste',
+  wheelModifierDesc: 'Taste, die beim Scrollen gehalten wird, um Sessions zu wechseln.',
   wheelModCtrl: 'Strg',
   wheelModAlt: 'Alt',
   wheelModCtrlShift: 'Strg+Umschalt',
@@ -1029,55 +1081,78 @@ const DE = {
   wheelCooldown: 'Sperrzeit (ms)',
   wheelCooldownDesc: 'Mindestabstand zwischen zwei Wechseln — verhindert Durchrasen.',
   wheelInvert: 'Richtung umkehren',
+  wheelInvertDesc: 'Richtung umkehren — Rad nach oben schaltet dann vorwärts.',
   wheelWrap: 'Am Ende umlaufen',
+  wheelWrapDesc: 'Nach der letzten Session wieder bei der ersten weiterlaufen.',
   wheelHud: 'HUD anzeigen',
   wheelHudDesc: 'Kurz ein Overlay mit Position und Titel der Session einblenden.',
   wheelHudMs: 'HUD-Dauer (ms)',
+  wheelHudMsDesc: 'Wie lange das HUD-Overlay sichtbar bleibt.',
   wheelIgnore: 'Ignorier-Selektoren (CSS)',
   wheelIgnoreDesc: 'Zonen, in denen Strg+Scroll nicht greift (kommasepariert). Standard: Bilder, Monaco, Canvas.',
   wheelHint: 'Tipp: Zoom-Flächen (Bild-Lightbox, Code-Editor) behalten ihr eigenes Strg+Scroll-Verhalten.',
 
   secTabs: 'Session-Tabs',
+  secTabsDesc: 'Was die Session-Tabs zeigen und wie ein Klick eine Session öffnet.',
   tabsDensity: 'Dichte',
+  tabsDensityDesc: 'Kompakt zeigt eine Zeile je Tab; bequem ergänzt die Vorschauzeile.',
   tabsDensityCompact: 'Kompakt',
   tabsDensityCozy: 'Bequem',
   tabsStatusStyle: 'Status-Darstellung',
+  tabsStatusStyleDesc: 'Aktivitäts-Marker je Tab: Icon, Core-Status-Punkt oder beides.',
   tabsStatusGlyph: 'Icon',
   tabsStatusDot: 'Punkt',
   tabsStatusBoth: 'Icon + Punkt',
   tabsShowTime: 'Zeit anzeigen',
+  tabsShowTimeDesc: 'Wie lange die letzte Aktivität der Session her ist.',
   tabsShowPreview: 'Vorschau anzeigen',
+  tabsShowPreviewDesc: 'Letzte Nachricht als zweite Zeile (nur bei Dichte bequem).',
   tabsShowCounts: 'Nachrichtenanzahl anzeigen',
+  tabsShowCountsDesc: 'Nachrichtenanzahl neben dem Titel.',
   tabsShowSource: 'Quelle anzeigen (Telegram, Cron, …)',
+  tabsShowSourceDesc: 'Kennzeichnung, woher die Session stammt.',
   tabsOpenIntent: 'Öffnen als',
+  tabsOpenIntentDesc: 'Was ein Klick tut: Chat ersetzen, daneben stapeln oder als Tab öffnen.',
   tabsOpenIntentInPlace: 'Ersetzen',
   tabsOpenIntentStack: 'Stapeln',
   tabsOpenIntentTab: 'Tab',
   tabsMaxItems: 'Max. Sessions',
+  tabsMaxItemsDesc: 'Obergrenze der aufgelisteten Sessions.',
   tabsHideCron: 'Cron-Sessions ausblenden',
   tabsHideCronDesc: 'Cron-Läufe füllen sonst die Liste; die Sidebar zeigt sie ebenfalls separat.',
   tabsLivePoll: 'Live-Status-Abfrage (s)',
+  tabsLivePollDesc: 'Intervall der Live-Status-Abfrage (denkt / schreibt / Tool).',
   tabsRefresh: 'Listen-Refresh (s)',
+  tabsRefreshDesc: 'Intervall, in dem die Session-Liste neu gelesen wird.',
 
   secGroups: 'Tab-Gruppen',
+  secGroupsDesc: 'Sessions in benannte, farbige Gruppen bündeln — im Firefox-Stil.',
   groupsEnabled: 'Gruppen aktiviert',
   groupsEnabledDesc: 'Firefox-artige Gruppen mit Name, Farbe und Collapse-Stapel.',
   groupsAutoMode: 'Automatische Gruppierung',
+  groupsAutoModeDesc: 'Automatisch nach Datum oder Quelle gruppieren; aus bedeutet nur manuelle Gruppen.',
   groupsAutoOff: 'Aus (nur manuell)',
   groupsAutoDate: 'Nach Datum',
   groupsAutoSource: 'Nach Quelle',
   groupsStackStyle: 'Stapel-Stil (eingeklappt)',
+  groupsStackStyleDesc: 'Optik einer eingeklappten Gruppe: Rücken, gefächerte Karten oder Pille.',
   stackSpine: 'Rücken',
   stackFanned: 'Gefächert',
   stackPill: 'Pille',
   groupsShowUngrouped: '„Nicht gruppiert"-Bereich zeigen',
+  groupsShowUngroupedDesc: 'Zeigt den Bereich „Nicht gruppiert", solange die Auto-Gruppierung aus ist.',
   groupsHint: 'Gruppen verwaltest du per Rechtsklick auf einen Tab oder die Gruppen-Überschrift. Ziehen & Ablegen sortiert Sessions ein.',
 
   secAbout: 'Über',
+  secAboutDesc: 'Version, Zähler und die Zurücksetzen-Aktionen.',
   aboutVersion: 'Version',
+  aboutVersionDesc: 'Version, die die App aktuell geladen hat.',
   aboutStats: (sessions, groups) => `${sessions} Sessions · ${groups} Gruppen`,
+  aboutStatsDesc: 'Sessions und manuelle Gruppen in der aktuellen Liste.',
   aboutResetSettings: 'Einstellungen zurücksetzen',
+  aboutResetSettingsDesc: 'Setzt alle Optionen dieser Seite auf ihre Standardwerte zurück.',
   aboutResetGroups: 'Gruppen zurücksetzen',
+  aboutResetGroupsDesc: 'Löscht alle manuellen Gruppen — die Sessions bleiben in der Liste.',
   aboutHint: 'Änderungen werden sofort wirksam und gespeichert. Datei: desktop-plugins/session-flow/plugin.js',
 
   groupName: 'Gruppenname',
@@ -1094,23 +1169,34 @@ const DE = {
 
   // Glass & Lesbarkeit
   secGlass: 'Glass & Lesbarkeit',
+  secGlassDesc: 'Optionaler Frost plus Akzent-Verlauf hinter Chips und Eingabefeld.',
   glassEnabled: 'Glass-Effekt',
   glassEnabledDesc:
     'Gibt Eingabefeld und Chips eine weiche Frost-Fläche mit dezentem Akzent-Verlauf — Beschriftungen bleiben auch über unruhigem Hintergrund gut lesbar.',
   glassBlur: 'Blur (px)',
+  glassBlurDesc: 'Frost-Stärke in Pixeln — höher verwischt den Hintergrund stärker.',
   glassSaturate: 'Sättigung (%)',
+  glassSaturateDesc: 'Farbintensität der Frost-Fläche.',
   glassFill: 'Flächen-Deckkraft (%)',
+  glassFillDesc: 'Deckkraft der Fläche — höher ist fester und weniger durchsichtig.',
   glassTint: 'Akzent-Tönung (%)',
+  glassTintDesc: 'Wie stark die Hermes-Akzentfarbe in die Fläche einfließt.',
   glassGradient: 'Akzent-Verlauf',
   glassGradientDesc: 'Linearer Verlauf von der Akzentfarbe ins Transparente, über der Fläche.',
   glassAngle: 'Verlaufs-Winkel (°)',
+  glassAngleDesc: 'Richtung des Verlaufs-Overlays.',
   glassGradOpacity: 'Verlaufs-Stärke (%)',
+  glassGradOpacityDesc: 'Stärke des Akzent-Verlaufs.',
   glassReach: 'Verlauf endet bei (%)',
+  glassReachDesc: 'Punkt, ab dem der Verlauf vollständig transparent ist.',
   glassRing: 'Feine Kontur',
   glassRingDesc: 'Hauchdünner, akzentgefärbter Rand um die Chips.',
   glassScopeComposer: 'Eingabefeld',
+  glassScopeComposerDesc: 'Eingabefeld samt der angedockten Karten.',
   glassScopeChips: 'Chips (Modell / Reasoning)',
+  glassScopeChipsDesc: 'Modell- und Reasoning-Pills im Eingabebereich.',
   glassScopeStatusbar: 'Statusleisten-Einträge',
+  glassScopeStatusbarDesc: 'Einträge in der Leiste am unteren Rand.',
   glassHint:
     'Der Blur folgt automatisch der System-Einstellung „Transparenz reduzieren"; Zoom-Flächen bleiben unberührt. Blur auf dem Eingabefeld kostet beim Scrollen etwas GPU — bei Bedarf einfach senken.'
 }
@@ -1183,6 +1269,7 @@ const CSS = `
 .sf-settings-sub{font-size:12px;color:var(--ui-text-tertiary);margin-top:3px}
 .sf-section-title{display:flex;align-items:center;gap:6px;margin:22px 0 4px;font-size:12px;font-weight:600;color:var(--foreground)}
 .sf-section-title:first-of-type{margin-top:8px}
+.sf-section-desc{font-size:11px;line-height:1.5;color:var(--ui-text-tertiary);margin:1px 0 2px}
 .sf-hint{font-size:11px;line-height:1.55;color:var(--ui-text-quaternary);margin:6px 0 0}
 .sf-wide{width:16rem}
 .sf-dialog{max-width:24rem}
@@ -2648,13 +2735,14 @@ function SessionsPane() {
 // UI — Einstellungs-Seite
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SettingsSection({ icon, title, children }) {
+function SettingsSection({ icon, title, description, children }) {
   return jsxs('section', {
     children: [
       jsxs('div', {
         className: 'sf-section-title',
         children: [jsx(Codicon, { name: icon, size: '0.9rem' }), jsx('span', { children: title })]
       }),
+      description ? jsx('div', { className: 'sf-section-desc', children: description }) : null,
       ...children
     ]
   })
@@ -2689,6 +2777,7 @@ function SettingsPage() {
       jsxs(SettingsSection, {
         icon: 'sparkle',
         title: t('secAnimation'),
+        description: t('secAnimationDesc'),
         children: [
           jsx(ToggleRow, {
             label: t('animEnabled'),
@@ -2712,6 +2801,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('animDuration'),
+            description: t('animDurationDesc'),
             action: jsx(NumberInput, {
               min: 80,
               max: 2000,
@@ -2722,6 +2812,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('animStagger'),
+            description: t('animStaggerDesc'),
             action: jsx(NumberInput, {
               min: 0,
               max: 500,
@@ -2743,6 +2834,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('animTravel'),
+            description: t('animTravelDesc'),
             action: jsx(NumberInput, {
               min: 0,
               max: 64,
@@ -2753,6 +2845,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('animEasing'),
+            description: t('animEasingDesc'),
             action: jsx(Segment, {
               options: [
                 { id: 'soft', label: t('easingSoft') },
@@ -2773,12 +2866,14 @@ function SettingsPage() {
           }),
           jsx(ToggleRow, {
             label: t('animIncludeCode'),
+            description: t('animIncludeCodeDesc'),
             checked: animation.includeCode,
             disabled: !animation.enabled,
             onChange: value => patch('animation', 'includeCode', value)
           }),
           jsx(ToggleRow, {
             label: t('animIncludeLists'),
+            description: t('animIncludeListsDesc'),
             checked: animation.includeLists,
             disabled: !animation.enabled,
             onChange: value => patch('animation', 'includeLists', value)
@@ -2790,6 +2885,7 @@ function SettingsPage() {
       jsxs(SettingsSection, {
         icon: 'arrow-both',
         title: t('secWheel'),
+        description: t('secWheelDesc'),
         children: [
           jsx(ToggleRow, {
             label: t('wheelEnabled'),
@@ -2799,6 +2895,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('wheelModifier'),
+            description: t('wheelModifierDesc'),
             action: jsx(Segment, {
               options: [
                 { id: 'ctrl', label: t('wheelModCtrl') },
@@ -2834,11 +2931,13 @@ function SettingsPage() {
           }),
           jsx(ToggleRow, {
             label: t('wheelInvert'),
+            description: t('wheelInvertDesc'),
             checked: wheel.invert,
             onChange: value => patch('wheel', 'invert', value)
           }),
           jsx(ToggleRow, {
             label: t('wheelWrap'),
+            description: t('wheelWrapDesc'),
             checked: wheel.wrap,
             onChange: value => patch('wheel', 'wrap', value)
           }),
@@ -2850,6 +2949,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('wheelHudMs'),
+            description: t('wheelHudMsDesc'),
             action: jsx(NumberInput, {
               min: 300,
               max: 5000,
@@ -2876,9 +2976,11 @@ function SettingsPage() {
       jsxs(SettingsSection, {
         icon: 'window',
         title: t('secTabs'),
+        description: t('secTabsDesc'),
         children: [
           jsx(Row, {
             title: t('tabsDensity'),
+            description: t('tabsDensityDesc'),
             action: jsx(Segment, {
               options: [
                 { id: 'compact', label: t('tabsDensityCompact') },
@@ -2890,6 +2992,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('tabsStatusStyle'),
+            description: t('tabsStatusStyleDesc'),
             action: jsx(Segment, {
               options: [
                 { id: 'glyph', label: t('tabsStatusGlyph') },
@@ -2902,26 +3005,31 @@ function SettingsPage() {
           }),
           jsx(ToggleRow, {
             label: t('tabsShowTime'),
+            description: t('tabsShowTimeDesc'),
             checked: tabs.showTime,
             onChange: value => patch('tabs', 'showTime', value)
           }),
           jsx(ToggleRow, {
             label: t('tabsShowPreview'),
+            description: t('tabsShowPreviewDesc'),
             checked: tabs.showPreview,
             onChange: value => patch('tabs', 'showPreview', value)
           }),
           jsx(ToggleRow, {
             label: t('tabsShowCounts'),
+            description: t('tabsShowCountsDesc'),
             checked: tabs.showCounts,
             onChange: value => patch('tabs', 'showCounts', value)
           }),
           jsx(ToggleRow, {
             label: t('tabsShowSource'),
+            description: t('tabsShowSourceDesc'),
             checked: tabs.showSource,
             onChange: value => patch('tabs', 'showSource', value)
           }),
           jsx(Row, {
             title: t('tabsOpenIntent'),
+            description: t('tabsOpenIntentDesc'),
             action: jsx(Segment, {
               options: [
                 { id: 'in-place', label: t('tabsOpenIntentInPlace') },
@@ -2934,6 +3042,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('tabsMaxItems'),
+            description: t('tabsMaxItemsDesc'),
             action: jsx(NumberInput, {
               min: 10,
               max: 200,
@@ -2950,6 +3059,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('tabsLivePoll'),
+            description: t('tabsLivePollDesc'),
             action: jsx(NumberInput, {
               min: 10,
               max: 300,
@@ -2960,6 +3070,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('tabsRefresh'),
+            description: t('tabsRefreshDesc'),
             action: jsx(NumberInput, {
               min: 15,
               max: 600,
@@ -2975,6 +3086,7 @@ function SettingsPage() {
       jsxs(SettingsSection, {
         icon: 'layers',
         title: t('secGroups'),
+        description: t('secGroupsDesc'),
         children: [
           jsx(ToggleRow, {
             label: t('groupsEnabled'),
@@ -2984,6 +3096,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('groupsAutoMode'),
+            description: t('groupsAutoModeDesc'),
             action: jsx(Segment, {
               options: [
                 { id: 'off', label: t('groupsAutoOff') },
@@ -2997,6 +3110,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('groupsStackStyle'),
+            description: t('groupsStackStyleDesc'),
             action: jsx(Segment, {
               options: [
                 { id: 'spine', label: t('stackSpine') },
@@ -3010,6 +3124,7 @@ function SettingsPage() {
           }),
           jsx(ToggleRow, {
             label: t('groupsShowUngrouped'),
+            description: t('groupsShowUngroupedDesc'),
             checked: groups.showUngrouped,
             disabled: !groups.enabled,
             onChange: value => patch('groups', 'showUngrouped', value)
@@ -3022,6 +3137,7 @@ function SettingsPage() {
       jsxs(SettingsSection, {
         icon: 'paintcan',
         title: t('secGlass'),
+        description: t('secGlassDesc'),
         children: [
           jsx(ToggleRow, {
             label: t('glassEnabled'),
@@ -3031,6 +3147,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('glassBlur'),
+            description: t('glassBlurDesc'),
             action: jsx(NumberInput, {
               min: 0,
               max: 40,
@@ -3041,6 +3158,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('glassSaturate'),
+            description: t('glassSaturateDesc'),
             action: jsx(NumberInput, {
               min: 100,
               max: 200,
@@ -3051,6 +3169,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('glassFill'),
+            description: t('glassFillDesc'),
             action: jsx(NumberInput, {
               min: 50,
               max: 94,
@@ -3061,6 +3180,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('glassTint'),
+            description: t('glassTintDesc'),
             action: jsx(NumberInput, {
               min: 0,
               max: 40,
@@ -3078,6 +3198,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('glassAngle'),
+            description: t('glassAngleDesc'),
             action: jsx(NumberInput, {
               min: 0,
               max: 360,
@@ -3088,6 +3209,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('glassGradOpacity'),
+            description: t('glassGradOpacityDesc'),
             action: jsx(NumberInput, {
               min: 0,
               max: 60,
@@ -3098,6 +3220,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('glassReach'),
+            description: t('glassReachDesc'),
             action: jsx(NumberInput, {
               min: 20,
               max: 100,
@@ -3115,18 +3238,21 @@ function SettingsPage() {
           }),
           jsx(ToggleRow, {
             label: t('glassScopeComposer'),
+            description: t('glassScopeComposerDesc'),
             checked: glass.scopes.composer,
             disabled: !glass.enabled,
             onChange: value => patch('glass', 'scopes', { ...glass.scopes, composer: value })
           }),
           jsx(ToggleRow, {
             label: t('glassScopeChips'),
+            description: t('glassScopeChipsDesc'),
             checked: glass.scopes.chips,
             disabled: !glass.enabled,
             onChange: value => patch('glass', 'scopes', { ...glass.scopes, chips: value })
           }),
           jsx(ToggleRow, {
             label: t('glassScopeStatusbar'),
+            description: t('glassScopeStatusbarDesc'),
             checked: glass.scopes.statusbar,
             disabled: !glass.enabled,
             onChange: value => patch('glass', 'scopes', { ...glass.scopes, statusbar: value })
@@ -3139,17 +3265,21 @@ function SettingsPage() {
       jsxs(SettingsSection, {
         icon: 'info',
         title: t('secAbout'),
+        description: t('secAboutDesc'),
         children: [
           jsx(Row, {
             title: t('aboutVersion'),
+            description: t('aboutVersionDesc'),
             action: jsx('span', { className: 'sf-row-desc', children: VERSION })
           }),
           jsx(Row, {
             title: t('aboutStats', rows.length, groupsState.groups.length),
+            description: t('aboutStatsDesc'),
             action: null
           }),
           jsx(Row, {
             title: t('aboutResetSettings'),
+            description: t('aboutResetSettingsDesc'),
             action: jsx(Button, {
               onClick: () => resetSettings(),
               size: 'sm',
@@ -3159,6 +3289,7 @@ function SettingsPage() {
           }),
           jsx(Row, {
             title: t('aboutResetGroups'),
+            description: t('aboutResetGroupsDesc'),
             action: jsx(Button, {
               onClick: () => resetGroups(),
               size: 'sm',
