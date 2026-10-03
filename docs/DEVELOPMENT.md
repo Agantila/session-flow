@@ -73,6 +73,24 @@ Ein einziger `wheel`-Listener auf `window` (bubble, `passive: false`):
 Wichtig (SDK-Regel): State immer imperativ lesen (`$settings.get()` im Handler),
 nie aus Render-Closures.
 
+### Glass & Lesbarkeit (deklarativ)
+
+`applyGlass()` spiegelt die Glass-Settings als **Attribute + Custom Properties
+auf `<html>`** (`data-sf-glass="composer chips nograd …"`, `--sf-glass-*`). Das
+Stylesheet reagiert ausschließlich per Selektor auf diese Tokens — es wird nie
+CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
+
+- **Eingabefeld**: überschreibt `--composer-fill` auf `[data-slot='composer-root']`
+  (wirkt auch auf Dock-Karten) und legt den Verlauf als `::after` auf
+  `[data-slot='composer-surface']` (z-Index 0 → über der -z-10-Fill-Fläche,
+  unter dem z-1-Inhalt). Blur sitzt auf der stabilen Surface-Box, nicht auf dem
+  editierbaren Kind.
+- **Chips**: stabile App-Handles `[data-tour='model-pill']` (nur Primär-Chat)
+  und `[data-testid='reasoning-pill']` (überall).
+- **Reduced transparency**: bewusst **kein `!important`** auf `backdrop-filter` —
+  der app-weite Gate (styles.css) nullt dann global; die Flächen/Fills bleiben.
+- **Dispose**: `clearGlass()` entfernt Attribut + Variablen restlos.
+
 ### Session-Liste & Aktivität
 
 - `session.list` (Gateway-RPC) liefert die gespeicherten Sessions des aktiven
@@ -110,6 +128,8 @@ schlägt `npm run check` an.
 |---|---|
 | Toast „Plugin session-flow failed to load" | Syntaxfehler im letzten Save → `npm run check`, dann speichern |
 | Plugin taucht nicht auf | Ordnername ≠ `session-flow`? Datei unter `~/.hermes/desktop-plugins/session-flow/plugin.js`? ⌘K → Reload |
+| Hot-Reload belegen (Erfolg ist still) | Temporär `console.error(...)` in `register()` setzen + speichern → erscheint als `[renderer console:main] [session-flow] …` in `~/.hermes/logs/desktop.log` (nur Fehler-Level wird geloggt). Alternativ: `_meta`-Stempel im Plugin-Storage (`hermes.plugin.session-flow._meta`) — nach ~1 min im leveldb sichtbar: `strings *.ldb *.log \| grep hermes.plugin` |
+| Glass-Effekt fehlt | `glass.enabled`? Bereichs-Toggles? System-„Transparenz reduzieren" aktiv (Blur wird dann global genullt)? Modell-Pill gibt es nur im Primär-Chat |
 | Animation passiert nichts | `prefers-reduced-motion` aktiv? Animation in den Einstellungen aus? Nur Assistant-Nachrichten werden animiert |
 | Strg+Scroll reagiert nicht | Fokus in Zoom-Fläche (Bild/Editor)? Andere App-Sektion? `wheel.enabled`? |
 | Rahmen: „duplicate id" | Zweite Kopie unter anderem Ordner mit gleicher id (z.B. Unified-Package) — nur eine Installation behalten |

@@ -3202,6 +3202,16 @@ export default {
     applyGlass()
     const stopGlassWatch = $settings.listen(() => applyGlass())
 
+    // Versions-Stempel: belegt im Plugin-Storage, welche Version zuletzt sauber
+    // geladen wurde (Hilfe beim Debuggen nach Kopie/Hot-Reload).
+    try {
+      ctx.storage.set('_meta', { loadedAt: Date.now(), version: VERSION })
+    } catch (error) {
+      console.warn(`[${ID}] meta write failed`, error)
+    }
+
+    console.info(`[${ID}] v${VERSION} loaded (glass: ${readSetting('glass', 'enabled') ? 'on' : 'off'})`)
+
     // 3) Session-Daten: initial + bei Events + Polls.
     void refreshSessions()
     void pollLiveSessions()
