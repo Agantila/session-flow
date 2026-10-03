@@ -1,10 +1,11 @@
 {
   "name": "session-flow",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Hermes Desktop plugin — smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style session tab groups, glass readability for chips and the input field, and sidebar-style content tabs. Live-configurable settings page included.",
   "type": "module",
   "private": true,
   "license": "MIT",
+  "author": "AGANTILA — Deniz Yilmaz (https://agantila.com)",
   "keywords": [
     "hermes",
     "hermes-desktop",

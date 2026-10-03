@@ -11,6 +11,8 @@ Einstellungsseite konfigurierbar.
 Entwickelt und im Einsatz unter Linux (Wayland/KDE) mit Hermes Desktop und dem
 Plugin-SDK (`~/.hermes/desktop-plugins/`).
 
+Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
+
 ## Features
 
 1. **Chat-Animation (Zeile für Zeile)** — Antworten werden mit Easing weich
@@ -194,4 +196,5 @@ Meldungen bitte über GitHub.
 
 ## Lizenz
 
-MIT — siehe [LICENSE](LICENSE).
+MIT (Open Source) — © 2026 **AGANTILA — Deniz Yilmaz**
+([agantila.com](https://agantila.com)). Siehe [LICENSE](LICENSE).

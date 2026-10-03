@@ -10,6 +10,8 @@ built-in settings page.
 Developed and used on Linux (Wayland/KDE) with Hermes Desktop and its plugin
 SDK (`~/.hermes/desktop-plugins/`). No build step, no dependencies, one file.
 
+A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
+
 ## Features
 
 1. **Line-by-line chat animation** — Assistant answers ease in instead of
@@ -187,4 +189,5 @@ issues via GitHub.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT (open source) — © 2026 **AGANTILA — Deniz Yilmaz**
+([agantila.com](https://agantila.com)). See [LICENSE](LICENSE).

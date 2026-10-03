@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.5.2] — 2026-10-03
+
+### Geändert
+- **Entwickler- & Lizenzangaben**: Das Projekt ist durchgängig als Open-Source-
+  Projekt von **AGANTILA — Deniz Yilmaz** (agantila.com) ausgewiesen — LICENSE-
+  Copyright, `package.json` (Autor), README/README.de (Entwickler-Zeile +
+  Lizenzabschnitt), Plugin-Header sowie zwei neue „Über"-Zeilen in den
+  Einstellungen (Entwickler & Lizenzhinweis, EN/DE).
+
 ## [1.5.1] — 2026-10-03
 
 ### Fixed

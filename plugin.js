@@ -38,7 +38,8 @@
  *  - Alle Timers/Listener/Avatare laufen über `ctx` (Dispose-sicher); DOM-
  *    Observer + injizierte Styles werden über `ctx.onDispose` abgeräumt.
  *
- * Lizenz: MIT. Siehe README.md im Repo.
+ * Entwickler & Lizenzinhaber: AGANTILA — Deniz Yilmaz (https://agantila.com)
+ * Lizenz: MIT (Open Source). Siehe LICENSE im Repo.
  */
 
 import * as SDK from '@hermes/plugin-sdk'
@@ -96,7 +97,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.5.1'
+const VERSION = '1.5.2'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1158,6 +1159,10 @@ const EN = {
   secAboutDesc: 'Version, counters, and the reset actions.',
   aboutVersion: 'Version',
   aboutVersionDesc: 'Version currently loaded by the app.',
+  aboutDeveloper: 'Developer & license holder',
+  aboutDeveloperDesc: 'Session Flow is an open-source project by AGANTILA — Deniz Yilmaz.',
+  aboutLicense: 'License',
+  aboutLicenseDesc: 'MIT — free to use, modify, and share (see LICENSE in the repo).',
   aboutStats: (sessions, groups) => `${sessions} sessions · ${groups} groups`,
   aboutStatsDesc: 'Sessions and manual groups in the current list.',
   aboutResetSettings: 'Reset settings',
@@ -1431,6 +1436,10 @@ const DE = {
   secAboutDesc: 'Version, Zähler und die Zurücksetzen-Aktionen.',
   aboutVersion: 'Version',
   aboutVersionDesc: 'Version, die die App aktuell geladen hat.',
+  aboutDeveloper: 'Entwickler & Lizenzinhaber',
+  aboutDeveloperDesc: 'Session Flow ist ein Open-Source-Projekt von AGANTILA — Deniz Yilmaz (agantila.com).',
+  aboutLicense: 'Lizenz',
+  aboutLicenseDesc: 'MIT — frei nutzbar, veränderbar und teilbar (siehe LICENSE im Repo).',
   aboutStats: (sessions, groups) => `${sessions} Sessions · ${groups} Gruppen`,
   aboutStatsDesc: 'Sessions und manuelle Gruppen in der aktuellen Liste.',
   aboutResetSettings: 'Einstellungen zurücksetzen',
@@ -4124,6 +4133,16 @@ function SettingsPage() {
             title: t('aboutVersion'),
             description: t('aboutVersionDesc'),
             action: jsx('span', { className: 'sf-row-desc', children: VERSION })
+          }),
+          jsx(Row, {
+            title: t('aboutDeveloper'),
+            description: t('aboutDeveloperDesc'),
+            action: jsx('span', { className: 'sf-row-desc', children: 'AGANTILA — Deniz Yilmaz' })
+          }),
+          jsx(Row, {
+            title: t('aboutLicense'),
+            description: t('aboutLicenseDesc'),
+            action: jsx('span', { className: 'sf-row-desc', children: 'MIT (Open Source)' })
           }),
           jsx(Row, {
             title: t('aboutStats', rows.length, groupsState.groups.length),

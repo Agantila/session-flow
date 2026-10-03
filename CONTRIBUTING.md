@@ -90,3 +90,4 @@ Empfehlungen für das Repo:
 
 Mit dem Einreichen eines Beitrags stimmst du zu, dass dein Beitrag unter der
 [MIT-Lizenz](LICENSE) des Projekts veröffentlicht wird.
+Lizenzinhaber: **AGANTILA — Deniz Yilmaz** ([agantila.com](https://agantila.com)).

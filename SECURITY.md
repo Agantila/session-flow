@@ -25,7 +25,8 @@ Bitte **nicht** öffentlich als Issue mit Ausnutzungsdetails posten. Nutze
 stattdessen:
 
 - GitHub → **Security → Report a vulnerability** (privater Kanal), oder
-- eine kurze Issue ohne Reproduktionsschritte mit der Bitte um Kontakt.
+- eine kurze Issue ohne Reproduktionsschritte mit der Bitte um Kontakt, oder
+- E-Mail an **hallo@agantila.com** (Betreff: „Session Flow Security").
 
 Bitte angeben:
 

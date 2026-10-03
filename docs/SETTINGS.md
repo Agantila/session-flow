@@ -150,3 +150,12 @@ Hinweise:
 - **Session-Farbe**: Rechtsklick auf einen Tab → „Session-Farbe". Diese Farbe
   setzt `host.sessions.setColor` und erscheint damit auch auf der
   Core-Sidebar-Zeile (gleiche Quelle).
+
+## Über
+
+- **Version**: die aktuell von der App geladene Plugin-Version.
+- **Entwickler & Lizenzinhaber**: AGANTILA — Deniz Yilmaz (agantila.com).
+- **Lizenz**: MIT (Open Source) — frei nutzbar, veränderbar und teilbar.
+- **Zähler**: Sessions und manuelle Gruppen in der aktuellen Liste.
+- **Zurücksetzen**: „Einstellungen zurücksetzen" und „Gruppen zurücksetzen"
+  stellen den Auslieferungszustand wieder her.
