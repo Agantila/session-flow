@@ -3,6 +3,18 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.3.1] — 2026-10-03
+
+### Fixed
+- **Glow-Ring liegt jetzt exakt auf der Composer-Kontur**: Der Ring-Radius wird
+  zur Laufzeit am echten Surface gemessen (`--sf-arc-radius` = berechnetes
+  `border-radius` − 1px Border, alle 4 s aktualisiert) statt aus Theme-Variablen
+  gerechnet — Tailwind v4 kompiliert die Radius-Skala inline, `--radius-2xl`
+  existiert zur Laufzeit nicht. Damit passt der Ring in jedem Theme exakt zur
+  vorhandenen Outline (z. B. Radius-Skalar 0.2: Kontur 4.8px → Ring 3.8px).
+- (intern) Backtick-Falle in CSS-Kommentaren entschärft: Backticks innerhalb des
+  Stylesheet-Templates beenden das Template-Literal und brechen das Plugin.
+
 ## [1.3.0] — 2026-10-03
 
 ### Fixed

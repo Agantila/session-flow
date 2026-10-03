@@ -96,7 +96,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.3.0'
+const VERSION = '1.3.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -258,7 +258,8 @@ const SF_GLASS_VARS = [
   '--sf-glass-grad',
   '--sf-glass-reach',
   '--sf-arc-width',
-  '--sf-arc-duration'
+  '--sf-arc-duration',
+  '--sf-arc-radius'
 ]
 
 function clampNumber(value, min, max, fallback) {
@@ -302,6 +303,7 @@ function applyGlass() {
     root.style.setProperty('--sf-glass-reach', `${clampNumber(glass.reach, 20, 100, 72)}%`)
     root.style.setProperty('--sf-arc-width', `${clampNumber(glass.arcWidth, 0.5, 4, 1.5)}px`)
     root.style.setProperty('--sf-arc-duration', `${clampNumber(glass.arcDuration, 1, 12, 3.2)}s`)
+    measureComposerRadius()
     syncArc()
   } catch (error) {
     console.warn(`[${ID}] glass apply failed`, error)
@@ -332,6 +334,36 @@ function currentSessionBusy() {
   const live = Object.values($liveMap.get()).find(entry => entry.storedId === focused)
 
   return Boolean(live && ['working', 'starting', 'resuming', 'streaming'].includes(live.status))
+}
+
+/**
+ * Misst den ECHTEN Radius des Composer-Surfaces und leitet daraus den
+ * konzentrischen Innenradius des Glow-Rings ab (r − 1px Border).
+ *
+ * Warum messen statt rechnen? Der Radius folgt dem Theme-Skalar
+ * (`rounded-2xl` = calc(--radius-scalar × 1.5rem)) — Tailwind v4 inlined die
+ * Theme-Variablen aber, `--radius-2xl` existiert zur Laufzeit nicht. Nur der
+ * gemessene Wert trifft die vorhandene Kontur exakt (Theme-unabhängig).
+ */
+function measureComposerRadius() {
+  try {
+    const surface = document.querySelector("[data-slot='composer-surface']")
+
+    if (!surface) {
+      return
+    }
+
+    const raw = getComputedStyle(surface).borderTopLeftRadius || ''
+    const value = raw.split(' ')[0].trim()
+
+    if (!value || value.endsWith('%')) {
+      return
+    }
+
+    document.documentElement.style.setProperty('--sf-arc-radius', `max(0px, calc(${value} - 1px))`)
+  } catch (error) {
+    console.warn(`[${ID}] radius measure failed`, error)
+  }
 }
 
 /**
@@ -1396,10 +1428,11 @@ const CSS = `
   background-image:linear-gradient(var(--sf-glass-angle,165deg),color-mix(in srgb,var(--ui-accent) var(--sf-glass-grad,12%),transparent),transparent var(--sf-glass-reach,72%))
 }
 /* Fill-Layer: transparent + konzentrischer Radius (r − 1px = Innenkante des
-   Borders) — sonst bleibt an den Ecken je ein Haarlinien-Spalt. */
+   Borders). Der Ring-Radius wird zur Laufzeit am echten Surface gemessen
+   (Theme-unabhängig); der Fallback rechnet mit dem Theme-Skalar. */
 :root[data-sf-glass~='composer'] [data-slot='composer-surface'] > [class~='-z-10']{
   background-color:transparent;
-  border-radius:calc(var(--radius-2xl,1.5rem) - 1px)
+  border-radius:var(--sf-arc-radius,max(0px,calc(var(--radius-scalar,1) * 1.5rem - 1px)))
 }
 /* Umlaufender Glow-Ring — gleiche Technik wie .arc-border der App (Mask-Ring
    + per transform animierter Verlaufs-Layer, rein auf dem Compositor). */
@@ -3538,6 +3571,9 @@ export default {
     }
 
     console.info(`[${ID}] v${VERSION} loaded (glass: ${readSetting('glass', 'enabled') ? 'on' : 'off'})`)
+
+    // Radius des Glow-Rings folgt live der echten Composer-Kontur (Theme-unabhängig).
+    ctx.setInterval(() => measureComposerRadius(), 4000)
 
     // 3) Session-Daten: initial + bei Events + Polls.
     void refreshSessions()

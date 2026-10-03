@@ -82,10 +82,14 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
 
 - **Eingabefeld**: Fläche + Verlauf malt das **Surface selbst** (Border-Box →
   exakt der Outline-Radius, keine Eck-Lücke). Der Input-Fill-Layer wird dafür
-  transparent + konzentrischer Innenradius (`calc(var(--radius-2xl) - 1px)`) und
-  trägt den **Glow-Ring** (Mask-Ring + transform-animierter Verlauf, Technik wie
-  `.arc-border` der App). Blur sitzt auf der stabilen Surface-Box, nicht auf dem
-  editierbaren Kind.
+  transparent und trägt den **Glow-Ring** (Mask-Ring + transform-animierter
+  Verlauf, Technik wie `.arc-border` der App). Sein Radius ist **konzentrisch
+  gemessen**: `measureComposerRadius()` liest alle 4 s das berechnete
+  `border-radius` des Surfaces und setzt `--sf-arc-radius` = r − 1px (Border).
+  Warum messen? Tailwind v4 inlined die Theme-Radius-Skala — `--radius-2xl`
+  existiert zur Laufzeit nicht (belegt: `getPropertyValue('--radius-2xl')` = ""),
+  der Radius folgt `--radius-scalar` (hier 0.2 → 4.8px Kontur). Blur sitzt auf
+  der stabilen Surface-Box, nicht auf dem editierbaren Kind.
 - **Glow-Ring (arc)**: Modus `always`/`busy`; `busy` nutzt `currentSessionBusy()`
   ($activity + $liveMap + `host.state.focusedStoredSessionId`, Subscriptions in
   register). Chips/Statusleiste nutzen einen Conic-Highlight via
