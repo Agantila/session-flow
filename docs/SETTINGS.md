@@ -156,10 +156,16 @@ spiegelt die Projekt-Baumstruktur von Hermes Desktop:
 
 - **Label**: Treffer in `projects.list` liefert den Projektnamen; sonst der
   Ordnername der CWD. Sessions ohne CWD landen in „Kein Projekt".
-- **Header-Optik**: Ordner-Icon (offen/geschlossen je Collapse-Zustand) statt
-  Farbpunkt; der Ein-/Ausklapp-Caret ist wie unter „Projekte" erst beim
-  Überfahren sichtbar. Ein Hover-„+" startet eine neue Session direkt mit
-  dieser CWD (`session.create` + `cwd_explicit`).
+- **Identität (Icon/Farbe)**: Trägt das Hermes-Projekt ein eigenes Icon
+  (`project.icon`), zeigt der Header genau dieses Icon — optional in der
+  Projektfarbe (`project.color`) eingefärbt. Nur eine Farbe ohne eigenes
+  Icon ergibt einen Farbpunkt wie bei manuellen Gruppen. Ohne beides bleibt
+  es beim Ordner-Icon (offen/geschlossen je Collapse-Zustand). Projekte ohne
+  `primary_path` (Mehrordner-Setups) werden über ihren ersten Ordner
+  gefunden.
+- **Header-Optik**: der Ein-/Ausklapp-Caret ist wie unter „Projekte" erst
+  beim Überfahren sichtbar. Ein Hover-„+" startet eine neue Session direkt
+  mit dieser CWD (`session.create` + `cwd_explicit`).
 - **Drag & Drop**: Einen Tab auf einen Projekt-Header gezogen verschiebt die
   Session wirklich dorthin (`session.workspace.move`) — keine reine
   Listen-Umsortierung. Während des Ziehens markiert sich Header **und**

@@ -935,5 +935,91 @@ try {
   check('v1.15.1-Tests durchgelaufen', false, error && error.message)
 }
 
+// 20) v1.16.0: Projekt-Gruppierung übernimmt Name/Farbe/Icon aus projects.list
+try {
+  // .sf-group-dot wird auch in der Zeilen-"Farbe setzen"-Untermenü benutzt
+  // (TabRow-Kontextmenü, PROFILE_SWATCHES) — die landet im Walk IMMER mit,
+  // unabhängig von der Sichtbarkeit. Darum hier gezielt die direkten Kinder
+  // des Kopf-<div> selbst prüfen (rawKids/rawHas), nicht die ganze Pane.
+  const rawKids20 = p => {
+    const c = p ? p.children : null
+    if (Array.isArray(c)) return c.filter(x => x !== null && x !== undefined && x !== false)
+    return c === null || c === undefined || c === false ? [] : [c]
+  }
+  const rawHas20 = (n, cls) =>
+    Boolean(n && n.p && typeof n.p.className === 'string' && n.p.className.split(/\s+/).includes(cls))
+
+  // a) Nur Farbe, kein eigenes Icon → Farbpunkt wie bei manuellen Gruppen.
+  mod.$sessions.set([
+    {
+      id: 'c1',
+      title: 'Colored',
+      preview: '',
+      cwd: '/tmp/colored-project',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 1000,
+      messageCount: 1,
+      live: 0
+    }
+  ])
+  mod.$projectsList.set([{ id: 'proj-c', name: 'Colored', path: '/tmp/colored-project', color: '#ff0066', icon: null }])
+  mod.patchSettings('groups', { autoMode: 'project', headerDensity: 'comfortable' })
+  stub.__resetSlots()
+  let out20 = { el: [], text: [] }
+  walk(pane.render(), out20)
+  let head20 = out20.el.find(e => e.cls.includes('sf-group-head') && e.cls.includes('sf-group-project'))
+  let headKids20 = rawKids20(head20 && head20.props)
+  let headDot20 = headKids20.find(n => rawHas20(n, 'sf-group-dot'))
+  check(
+    'v1.16.0: Projekt mit Farbe (ohne Icon) zeigt einen Farbpunkt im Kopf',
+    Boolean(head20) && Boolean(headDot20) && headDot20.p.style && headDot20.p.style.background === '#ff0066'
+  )
+  check(
+    'v1.16.0: Farbpunkt-Fall — Kopf trägt kein zusätzliches Lead-Icon',
+    !headKids20.some(n => rawHas20(n, 'sf-group-lead-icon'))
+  )
+
+  // b) Eigenes Icon + Farbe → Icon statt Punkt, eingefärbt.
+  mod.$projectsList.set([{ id: 'proj-c', name: 'Colored', path: '/tmp/colored-project', color: '#ff0066', icon: 'rocket' }])
+  stub.__resetSlots()
+  out20 = { el: [], text: [] }
+  walk(pane.render(), out20)
+  head20 = out20.el.find(e => e.cls.includes('sf-group-head') && e.cls.includes('sf-group-project'))
+  headKids20 = rawKids20(head20 && head20.props)
+  const headLeadIcon20 = headKids20.find(n => rawHas20(n, 'sf-group-lead-icon'))
+  check(
+    'v1.16.0: Projekt mit eigenem Icon zeigt das Lead-Icon statt Farbpunkt',
+    Boolean(headLeadIcon20) && headLeadIcon20.p.style && headLeadIcon20.p.style.color === '#ff0066'
+  )
+  check(
+    'v1.16.0: Icon-Fall — Kopf trägt keinen Farbpunkt',
+    !headKids20.some(n => rawHas20(n, 'sf-group-dot'))
+  )
+
+  // c) Weder Icon noch Farbe → Fallback bleibt der Ordner-Icon-Wechsel.
+  mod.$projectsList.set([{ id: 'proj-p', name: 'Plain', path: '/tmp/colored-project', color: null, icon: null }])
+  stub.__resetSlots()
+  out20 = { el: [], text: [] }
+  walk(pane.render(), out20)
+  head20 = out20.el.find(e => e.cls.includes('sf-group-head') && e.cls.includes('sf-group-project'))
+  headKids20 = rawKids20(head20 && head20.props)
+  const plainLead20 = headKids20.find(n => rawHas20(n, 'sf-group-lead-icon'))
+  check(
+    'v1.16.0: Projekt ohne Icon/Farbe behält das Ordner-Icon (kein Punkt, keine Einfärbung)',
+    Boolean(plainLead20) &&
+      !(plainLead20.p && plainLead20.p.style) &&
+      !headKids20.some(n => rawHas20(n, 'sf-group-dot'))
+  )
+
+  mod.$projectsList.set([])
+  mod.patchSettings('groups', { autoMode: 'off', headerDensity: 'comfortable' })
+} catch (error) {
+  check('v1.16.0-Tests durchgelaufen', false, error && error.message)
+}
+
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)
