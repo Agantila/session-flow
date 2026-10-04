@@ -88,7 +88,8 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | Im Terminal öffnen | `window.hermesDesktop.openSessionInTerminal(id)` (IPC) | stored-id ok (tui resume); Rückgabe `{ok}` prüfen |
 | ID kopieren | `window.hermesDesktop.writeClipboard(text)` (IPC) | Feature-Detect |
 | Info-Dichte folgen | SDK `host.settings.get/subscribe('sessionListDensity')` | Werte `compact`/`comfortable`/`detailed`; App-persistiert unter localStorage `hermes.desktop.sessionListDensity` (Fallback-Lesepfad) |
-| Kontextfenster lesen | RPC `session.context_breakdown {session_id: runtimeId}` | **Nur LIVE — Runtime-ID Pflicht** (stored-ID ⇒ „session not found“); read-only (chars/4, kein Provider-Call, kein Cache-Impact); Ergebnis `{context_used, context_max, context_percent, context_estimated}`; `context_max: 0` = Agent nicht gebaut → überspringen (v1.10) |
+| Live-Kennzahlen für die Dichte | RPC `session.active_list` (ohnehin gepollt) | Items liefern zusätzlich `model` und `last_active` (Epoch-Sekunden) — seit v1.14.0 für „zuletzt aktiv“/Modell in der Komfortabel-Detail-Zeile genutzt, kein Extra-Call |
+| Kontextfenster lesen | RPC `session.context_breakdown {session_id: runtimeId}` | **Nur LIVE — Runtime-ID Pflicht** (stored-ID ⇒ „session not found“); read-only (chars/4, kein Provider-Call, kein Cache-Impact); Ergebnis `{context_used, context_max, context_percent, context_estimated}`; `context_max: 0` = Agent nicht gebaut → überspringen (v1.10); seit v1.14.0 läuft der Fetch auch ohne `showContext` bei Dichte `detailed` (Stats-Zeile „Kontext %“, Gate `contextInfoNeeded()`) |
 | Nicht verfügbar | gelesen/ungelesen, Export | App-lokale Stores bzw. Renderer-Bibliothek ohne Plugin-Door |
 
 Hinweis: `host.setPersistedSessionHidden` ist ein **REST**-Door und 404t für
@@ -122,5 +123,5 @@ Live-Doors (`SessionParams`: `session.title`, `session.usage`,
    neuen/geänderten Optionen aktualisieren.
 5. Neues Feature? Erst einen Plan unter `docs/plans/` anlegen (Template in
    `docs/PLANNING.md`), danach umsetzen, Plan als „Done" abschließen und in
-   `CHANGELOG.md`/`docs/ROADMAP.md` verlinken — siehe `AGENTS.md` für den
+   `CHANGELOG.md`/`docs/ROADMAP.md` verlinken — siehe `docs/AGENT-GUIDE.md` für den
    vollständigen Ablauf.

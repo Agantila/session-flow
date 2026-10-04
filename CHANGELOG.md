@@ -40,7 +40,7 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   Vorschau-Zeile und (nur wenn der Kontext-Donut aus ist) eine Stats-Zeile mit
   der Kontext-Auslastung als Text an. In Detailreich brechen Detail- und
   Vorschau-Zeile außerdem auf bis zu zwei Zeilen um (Line-Clamp 2) statt
-  einzeilig abzuschneiden.
+  einzeilig abzuschneiden. (Plan: `docs/plans/2026-10-04-info-dichte-abstufung.md`)
 - **Datenlage-Befund:** `session.list` liefert derzeit nur
   id/title/preview/started_at/message_count/source. `git_branch`, `model` und
   `tool_call_count` erreichen das Plugin nicht — Branch und Tool-Zähler zeigen
@@ -58,7 +58,7 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   Detailreich, einzeilig bei Komfortabel.
 - Neuer Store `$projectsList` (Projekt-Cache aus `projects.list`, 60-s-Poll)
   als Grundlage der Projekt-Gruppierung.
-- Dokumentations-/Planungssystem eingeführt: `AGENTS.md` (Einstiegspunkt für
+- Dokumentations-/Planungssystem eingeführt: `docs/AGENT-GUIDE.md` (Einstiegspunkt für
   Mensch & Agent), `docs/PLANNING.md` (Plan-Prozess + Template) und
   `docs/plans/` (abgeschlossene/offene Einzelpläne) — siehe dort für den
   vollständigen Plan dieser Version.

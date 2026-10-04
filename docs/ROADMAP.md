@@ -16,8 +16,10 @@ zugesagt.
 - **Tab-Selektor-Modus** (v1.14.0): `tabs.asTabSelector` blendet die native
   Content-Tab-Leiste für Session-Tabs aus (`:has()`-Selektor), wenn
   Liste/Grid dieselbe Navigation schon abdecken.
-- **Info-Dichte klarer abgestuft** (v1.14.0): größerer Titel + reichere
-  Detail-/Stats-Zeile in Komfortabel/Detailreich (siehe CHANGELOG).
+- **Info-Dichte klarer abgestuft** (v1.14.0): größerer Titel, lockerere
+  Abstände und reichere Detail-/Stats-Zeile in Komfortabel/Detailreich
+  (Modell/„zuletzt aktiv“ live, Kontext-Stats); Beschreibungen in
+  Detailreich zweizeilig. Plan: `docs/plans/2026-10-04-info-dichte-abstufung.md`.
 - **Liste/Grid-Parität** (v1.12.0): Ein Design-Satz trifft beide Ansichten
   (Flächen via `:where()` null-spezifisch); Auswahl-Tönung und Live-Zustand
   liegen als **Layer über** dem Zeilen-Verlauf.
@@ -31,12 +33,17 @@ zugesagt.
   (die App erwartet den `spinning`-Prop) — das Icon rendert sonst 0×0 und ist
   unsichtbar.
 
-Vollständiger Plan zu v1.14.0: `docs/plans/2026-10-04-grouping-filter-dnd-tab-selector.md`.
+Vollständige Pläne zu v1.14.0: `docs/plans/2026-10-04-grouping-filter-dnd-tab-selector.md`
+und docs/plans/2026-10-04-info-dichte-abstufung.md.
 
 ## Geplant / Ideen
 
 - **Donut-Feinschliff**: Ringdicke/Lochgröße als Option, einstellbare
   Warnschwellen (statt fix 70/90 %) und alternatives Label (`used/max`).
+- **Session-Kennzahlen in der Info-Dichte (Tokens/Kosten)**: Der Gateway
+  liefert sie dem Plugin derzeit nicht (`session.usage`-Zähler unzuverlässig,
+  App-REST nicht für Plugins erreichbar) — bräuchte ein Plugin-Backend
+  (`plugin_api.py`) oder erweiterte Doors (Plan: `docs/plans/2026-10-04-info-dichte-abstufung.md`).
 - **Status-Glyphen wählbar**: Icon je Status selbst festlegen (statt fester
   Zuordnung in `ACTIVITY_GLYPHS`).
 - **Presets für weitere Sektionen**: Ein-Klick-Looks auch für „Glass" und
@@ -90,4 +97,5 @@ Vollständiger Plan zu v1.14.0: `docs/plans/2026-10-04-grouping-filter-dnd-tab-s
 | Projekt-Label | Kommt aus `projects.list` (60-s-Cache) — ein frisch angelegtes Projekt kann bis zu 60 s als Ordnername statt Projektname erscheinen. |
 | Tab-Selektor-Modus | `tabs.asTabSelector` blendet **jeden** Streifen mit Session-Tabs aus — auch gestapelte Tabs im Content-Bereich (`tabs.openIntent: 'stack'`/`'tab'`) verlieren damit ihre eigene Leiste; bewusster Trade-off laut Anforderung. |
 | Filter-Leiste | Rein clientseitig, nicht persistiert; filtert nur die bereits geladenen Sessions (`tabs.maxItems`), kein Server-Side-Search. |
+| `session.list`-Payload | Liefert dem Plugin nur `id/title/preview/started_at/message_count/source` — Branch/`tool_call_count` fehlen (Modell + „zuletzt aktiv“ werden für Live-Sessions aus `session.active_list` nachgereicht). |
 
