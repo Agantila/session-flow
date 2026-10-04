@@ -45,13 +45,19 @@ stehen in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) und
 
 ## Änderungen einreichen
 
-1. Fork bzw. Branch anlegen: `feat/…`, `fix/…`, `docs/…`.
-2. `npm run check` **und** `npm test` müssen grün sein.
-3. Wenn möglich: live verifizieren (Dev-Loop + Log-Check, siehe unten) und das
+1. **Neues Feature oder größerer Umbau?** Erst einen Plan unter
+   `docs/plans/<datum>-<slug>.md` anlegen (Vorlage: `docs/plans/TEMPLATE.md`,
+   Prozess: `docs/PLANNING.md`). Für Typos/Ein-Zeilen-Fixes nicht nötig.
+2. Fork bzw. Branch anlegen: `feat/…`, `fix/…`, `docs/…`.
+3. `npm run check` **und** `npm test` müssen grün sein.
+4. Wenn möglich: live verifizieren (Dev-Loop + Log-Check, siehe unten) und das
    Ergebnis in der PR-Beschreibung nennen.
-4. PR öffnen; das Template führt durch die Checkliste.
-5. **CHANGELOG.md** aktualisieren (Keep-a-Changelog-Stil, Version + Datum).
-6. Version in `package.json` und `const VERSION` in `plugin.js` angleichen.
+5. PR öffnen; das Template führt durch die Checkliste.
+6. **CHANGELOG.md** aktualisieren (Keep-a-Changelog-Stil, Version + Datum).
+7. Version in `package.json` und `const VERSION` in `plugin.js` angleichen.
+8. Plan (falls angelegt) auf Status `Done` setzen und Verifikations-Belege
+   eintragen — siehe `docs/PLANNING.md` für die vollständige Checkliste
+   (SETTINGS.md/ROADMAP.md/APP-INTEGRATION.md nachziehen).
 
 ## Live verifizieren (Kurzfassung)
 
@@ -83,6 +89,9 @@ Empfehlungen für das Repo:
 | Pfad | Inhalt |
 |---|---|
 | `plugin.js` | Der gesamte Plugin-Code. |
+| `docs/AGENT-GUIDE.md` | Einstiegspunkt für Mensch & Agent — Lesereihenfolge, Plan-Prozess, Regeln. |
+| `docs/PLANNING.md` | Plan-Prozess im Detail (wann, Lebenszyklus, Pflege-Checkliste). |
+| `docs/plans/` | Einzelpläne je Vorhaben (`TEMPLATE.md` = Vorlage). |
 | `docs/SETTINGS.md` | Optionen-Referenz (bei neuen Optionen pflegen!). |
 | `docs/DEVELOPMENT.md` | Architektur, Dev-Workflow, Troubleshooting. |
 | `docs/APP-INTEGRATION.md` | App-Hooks & fragile Selektoren + Verifikation. |

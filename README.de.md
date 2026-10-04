@@ -30,11 +30,18 @@ Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    Tool läuft / wartet auf Antwort / fertig / Fehler). Sessions lassen sich in
    benannte, farbige **Gruppen** legen (Rechtsklick oder Drag & Drop), Gruppen
    klappen zu einem **Stapel** zusammen (spine / fanned / pill). Optional
-   automatische Gruppierung nach Datum oder Quelle. Jede Zeile/Karte trägt ein
+   automatische Gruppierung nach Datum, Quelle oder **Projekt-Ordner** (im
+   Look der Hermes-Desktop-„Projekte"-Baumstruktur — Ordner-Icon, Hover-Caret,
+   Hover-„+" für eine neue Session genau dort; ein Tab auf einen
+   Projekt-Header gezogen verschiebt ihn wirklich, mit Ziel-Hervorhebung und
+   „Gelandet"-Flash). Eine **Such- & Schnellfilter-Leiste** (alle / angepinnt /
+   aktiv) grenzt die Liste live ein. Jede Zeile/Karte trägt ein
    **More-Menü (⋯)** — Öffnen-Varianten, Terminal, Umbenennen, Farbe, Anpinnen,
    Zweig, In Projekt verschieben, Archivieren, Löschen, ID kopieren — und das
    Toolbar-＋ startet eine **neue Session im zuletzt gewählten Projekt**. Die
-   Pane rendert als **Liste oder Grid** (Karten-Optionen in den Einstellungen).
+   Pane rendert als **Liste oder Grid** (Karten-Optionen in den Einstellungen)
+   und kann optional die **native Tab-Leiste ersetzen** (`tabs.asTabSelector`),
+   sobald sie das Umschalten zwischen Sessions schon abdeckt.
 4. **Glass & Lesbarkeit** — Optionaler Frost-Effekt für **Eingabefeld** und
    **UI-Chips**: eine weiche Blur-Fläche mit dezentem, aus der Hermes-Akzent-
    farbe gefärbtem **Verlaufs-Overlay** (transparent auslaufend), damit Texte
@@ -156,6 +163,9 @@ session-flow/
 │   └── render-test.mjs          # Headless-Render-Smoketest (Pane + Einstellungen)
 ├── docs/
 │   ├── README.md                # Doku-Index
+│   ├── AGENT-GUIDE.md           # Einstiegspunkt für Mitwirkende/Agenten
+│   ├── PLANNING.md              # Plan-Prozess: Lebenszyklus, Template, Checkliste
+│   ├── plans/                   # Ein Dokument pro nicht-trivialem Vorhaben (TEMPLATE.md = Vorlage)
 │   ├── SETTINGS.md              # Alle Optionen erklärt
 │   ├── DEVELOPMENT.md           # Architektur & Dev-Workflow
 │   ├── APP-INTEGRATION.md       # App-Hooks, auf die wir uns stützen + Verifikation
@@ -196,7 +206,10 @@ Konventionen, die man nicht brechen darf (sonst lädt das Plugin nicht):
 
 Mehr Details zur Architektur (Controller-Design, Animations-Dedupe, Stores,
 Verifikations-Rezepte): [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) ·
-App-Hooks & fragile Selektoren: [docs/APP-INTEGRATION.md](docs/APP-INTEGRATION.md).
+App-Hooks & fragile Selektoren: [docs/APP-INTEGRATION.md](docs/APP-INTEGRATION.md) ·
+Ein Feature planen? Einstieg bei [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) —
+dem Einstiegspunkt des Plan-/Dokumentationssystems unter
+[docs/plans/](docs/plans/).
 
 ## Bekannte Grenzen
 

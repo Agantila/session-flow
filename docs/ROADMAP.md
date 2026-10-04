@@ -1,10 +1,23 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.13.4 (2026-10-04). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.14.0 (2026-10-04). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Projekt-Ordner-Gruppierung + Drag&Drop-Verschieben** (v1.14.0):
+  `groups.autoMode: 'project'` gruppiert nach CWD, Header im
+  Hermes-„Projekte"-Look (Ordner-Icon, Hover-Caret, Hover-„+"). Ziehen eines
+  Tabs auf einen Projekt-Header ruft `session.workspace.move` auf — echte
+  Verschiebung, nicht nur Anzeige. Hover-Hervorhebung + Inline-Zielhinweis +
+  „Gelandet"-Flash machen den DnD-Ausgang vorab und danach sichtbar.
+- **Filter-Leiste** (v1.14.0): Textsuche + Schnellfilter (Alle/Angepinnt/
+  Aktiv) über der Liste, clientseitig, eigener Leerzustand bei 0 Treffern.
+- **Tab-Selektor-Modus** (v1.14.0): `tabs.asTabSelector` blendet die native
+  Content-Tab-Leiste für Session-Tabs aus (`:has()`-Selektor), wenn
+  Liste/Grid dieselbe Navigation schon abdecken.
+- **Info-Dichte klarer abgestuft** (v1.14.0): größerer Titel + reichere
+  Detail-/Stats-Zeile in Komfortabel/Detailreich (siehe CHANGELOG).
 - **Liste/Grid-Parität** (v1.12.0): Ein Design-Satz trifft beide Ansichten
   (Flächen via `:where()` null-spezifisch); Auswahl-Tönung und Live-Zustand
   liegen als **Layer über** dem Zeilen-Verlauf.
@@ -18,6 +31,8 @@ zugesagt.
   (die App erwartet den `spinning`-Prop) — das Icon rendert sonst 0×0 und ist
   unsichtbar.
 
+Vollständiger Plan zu v1.14.0: `docs/plans/2026-10-04-grouping-filter-dnd-tab-selector.md`.
+
 ## Geplant / Ideen
 
 - **Donut-Feinschliff**: Ringdicke/Lochgröße als Option, einstellbare
@@ -30,8 +45,12 @@ zugesagt.
   zum Teilen von Setups zwischen Rechnern/Profilen.
 - **Multi-Profil-Ansicht**: Session-Liste über alle Profile
   (`profiles.list` + Fan-out über `session.list`).
-- **Freies Umsortieren**: Gruppen und Tabs per DnD in eigene Reihenfolge
-  (aktuell: Erstellungsreihenfolge).
+- **Freies Umsortieren innerhalb einer Gruppe**: Tabs per DnD in eigene
+  Reihenfolge bringen (aktuell: Erstellungsreihenfolge). DnD AUF einen
+  Projekt-Header verschiebt bereits ins Projekt (v1.14.0) — das hier ist die
+  Fein-Sortierung *innerhalb* einer Gruppe/eines Projekts.
+- **Filter-Leiste persistieren (optional)**: aktuell bewusst ephemeral wie im
+  Hermes-Vorbild; ggf. ein Setting für „letzten Filter merken" anbieten.
 - **Animation-Feinschliff**: Presets pro Elementtyp (Überschriften anders als
   Code-Blöcke), Kaskade auch für Tool-Karten (opt-in).
 - **Glow-Feintuning**: optionaler Halo/Weichzeichner am Ring, Preset-Farben
@@ -51,6 +70,8 @@ zugesagt.
   Live-Glow (gleiche Engine wie die Sidebar).
 - **Kein `!important` auf `backdrop-filter`.** Der systemweite
   „Transparenz reduzieren"-Gate der App muss gewinnen.
+- **Filter-Leiste ephemeral.** Bewusst nicht persistiert (siehe Hermes-Vorbild)
+  — ein Pane-Besuch startet immer ungefiltert.
 - **Ein Datei-Plugin.** Kein Build, keine Abhängigkeiten — dafür bewusst alles
   in `plugin.js`.
 
@@ -66,3 +87,7 @@ zugesagt.
 | Status-Icons | Namen/Farben sind an die Status-Vokabel der App gekoppelt (`--ui-accent`, `--destructive`, `--ui-success`). |
 | Pane-Anker | `[data-pane-host]` tragen nur Keep-Alive-Panes (u. a. Plugin-Panes). Chat/Arbeitsbereich hängen an `[data-chat-surface]` bzw. `[data-tree-group]` — pane-weite Regeln dort verankern. |
 | Kontext-Donut | Der Wert sitzt im Loch; bei drei Stellen (100 %) berührt er den Ring (Text-Schatten hält ihn lesbar). |
+| Projekt-Label | Kommt aus `projects.list` (60-s-Cache) — ein frisch angelegtes Projekt kann bis zu 60 s als Ordnername statt Projektname erscheinen. |
+| Tab-Selektor-Modus | `tabs.asTabSelector` blendet **jeden** Streifen mit Session-Tabs aus — auch gestapelte Tabs im Content-Bereich (`tabs.openIntent: 'stack'`/`'tab'`) verlieren damit ihre eigene Leiste; bewusster Trade-off laut Anforderung. |
+| Filter-Leiste | Rein clientseitig, nicht persistiert; filtert nur die bereits geladenen Sessions (`tabs.maxItems`), kein Server-Side-Search. |
+

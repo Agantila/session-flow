@@ -27,11 +27,17 @@ A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    compact tab with an **activity icon** (thinking / writing / tool running /
    waiting / done / error). Sessions go into named, coloured **groups** (drag &
    drop or right-click), groups collapse into a **stack** (spine / fanned /
-   pill); optional auto-grouping by date or source. Every row/card carries a
-   **More (⋯) actions menu** — open variants, terminal, rename, colour, pin,
-   branch, move to project, archive, delete, copy ID — and the toolbar **＋
-   starts a new session in your last chosen project**. The pane renders as a
-   **list or a grid** (card options in the settings).
+   pill); optional auto-grouping by date, source, or **project folder**
+   (mirrors Hermes Desktop's own Projects tree — folder icon, hover caret,
+   hover "+" to start a session right there; dropping a tab on a project
+   header really moves it, with live drop-target highlighting and a landing
+   flash). A **search + quick filter bar** (all / pinned / active) narrows the
+   list on the fly. Every row/card carries a **More (⋯) actions menu** — open
+   variants, terminal, rename, colour, pin, branch, move to project, archive,
+   delete, copy ID — and the toolbar **＋ starts a new session in your last
+   chosen project**. The pane renders as a **list or a grid** (card options in
+   the settings), and can optionally **replace the native tab strip**
+   (`tabs.asTabSelector`) once it already covers switching between sessions.
 4. **Glass & readability** — An optional frost effect for the **input field**
    and **UI chips**: a soft blur with a subtle **accent-tinted gradient overlay
    fading to transparent**, so labels stay readable even without their own
@@ -145,6 +151,9 @@ session-flow/
 │   └── render-test.mjs          # Headless render smoke test (pane + settings)
 ├── docs/
 │   ├── README.md                # Docs index
+│   ├── AGENT-GUIDE.md           # Entry point for contributors/agents (German)
+│   ├── PLANNING.md              # Plan process: lifecycle, template, checklist (German)
+│   ├── plans/                   # One doc per non-trivial feature (TEMPLATE.md = template)
 │   ├── SETTINGS.md              # Every option explained (German)
 │   ├── DEVELOPMENT.md           # Architecture & dev workflow (German)
 │   ├── APP-INTEGRATION.md       # App hooks we depend on + verification recipes
@@ -186,7 +195,10 @@ House rules that must not be broken (otherwise the plugin refuses to load):
 
 Architecture (controllers, animation dedupe, stores, verification recipes):
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) ·
-App hooks & fragile selectors: [docs/APP-INTEGRATION.md](docs/APP-INTEGRATION.md).
+App hooks & fragile selectors: [docs/APP-INTEGRATION.md](docs/APP-INTEGRATION.md) ·
+Planning a feature? Start at [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) —
+the entry point for the plan/documentation system under
+[docs/plans/](docs/plans/).
 
 ## Known limits
 

@@ -26,6 +26,7 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | `[data-hud-shell]` | HUD-Modus: dort bewusst keine eigenen Filter (App nullt global mit `!important`) | stabil |
 | `[data-pane-host]` | Pane-Container für Content-Shell (Radius/Schatten) + Hintergrund-Layer | **Anchor-positioniert mit Inline-Styles** — CSS darf hier NIE Geometrie/overflow ändern, nur additiv färben/runden; Overlays über `[data-pane-overlay]` ausnehmen |
 | `[data-pane-hidden]` | inaktiver Keep-Alive-Tab (gleiche Rect wie der sichtbare!) | Video-Gating: nur sichtbare Panes dekodieren lassen |
+| `div:has(> [role='tablist'] [data-tree-tab^='session-tile:'])` | **Tab-Selektor-Modus** (`tabs.asTabSelector`): blendet NUR Streifen mit mind. einem Session-Tile-Tab aus | `:has()` ist bereits anderswo im Plugin in Gebrauch (siehe `nolead`-Regel); trifft **jede** Pane mit Session-Tabs (auch gestapelte im Content-Bereich) — Terminal/Dateien ohne Session-Tabs bleiben unberührt. Risiko: strukturelle Regel, kein `data-slot` — bei App-Refactor hier zuerst nachsehen. |
 | `window.hermesDesktop.selectPaths` | nativer Datei-Picker (IPC `hermes:selectPaths`, Optionen `{ title, filters, multiple }`) → absolute Pfade | vor Nutzung auf Existenz prüfen; App-APIs können sich ändern |
 
 ## Theme-Tokens (CSS-Variablen)
@@ -81,7 +82,7 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | Neue Session in Projekt | `projects.list` (→ `active_id`, `primary_path`) + `localStorage['hermes.desktop.projectScope']` + `session.create` | Params wie die App: `{cols:96, source:'desktop', cwd?, cwd_explicit?, profile?}`; Scope-Werte: `__all_projects__` = Übersicht, `__no_project__` = Home (abgekoppelt) |
 | Umbenennen | `session.title {session_id, title}` | **Nur live/geladen** (Runtime-ID aus `$liveMap` bevorzugen; stored-ID ⇒ „session not found“). Die App nutzt für persistierte Zeilen REST — kein Plugin-Door |
 | Zweig erstellen | `session.branch_stored {parent_session_id, cols, source, cwd?, idempotency_key}` | Lehnt leere Sessions ab („nothing to branch — send a message first“); Antwort: `stored_session_id` |
-| In Projekt verschieben | `session.workspace.move {session_key, cwd}` | cwd = `primary_path` des Zielprojekts |
+| In Projekt verschieben | `session.workspace.move {session_key, cwd}` | cwd = `primary_path` des Zielprojekts; seit v1.14.0 auch per Drag & Drop auf einen Projekt-Ordner-Header (Projekt-Gruppierung) |
 | Archivieren | `session.archive {session_id, archived}` | akzeptiert stored-id/-key/-title; Runtime-ID first |
 | Löschen | `session.delete {session_id}` | **verweigert laufende Sessions (4023)** → vorher `session.close {session_id: runtimeId}` |
 | Im Terminal öffnen | `window.hermesDesktop.openSessionInTerminal(id)` (IPC) | stored-id ok (tui resume); Rückgabe `{ok}` prüfen |
@@ -119,3 +120,7 @@ Live-Doors (`SessionParams`: `session.title`, `session.usage`,
    greifen die entsprechenden Dok-Abschnitte (Risiko-Spalte).
 4. `docs/DEVELOPMENT.md` → Troubleshooting-Tabelle; `docs/SETTINGS.md` bei
    neuen/geänderten Optionen aktualisieren.
+5. Neues Feature? Erst einen Plan unter `docs/plans/` anlegen (Template in
+   `docs/PLANNING.md`), danach umsetzen, Plan als „Done" abschließen und in
+   `CHANGELOG.md`/`docs/ROADMAP.md` verlinken — siehe `AGENTS.md` für den
+   vollständigen Ablauf.

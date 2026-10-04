@@ -7,7 +7,9 @@
 //     "Grid zeigte das konfigurierte Design nicht", Spezifitäts-Bug :where()),
 //   • Auswahl-Tönung als Layer ÜBER dem Zeilen-Verlauf (Verlauf bleibt sichtbar),
 //   • Alpha in Verläufen (#RRGGBBAA → rgba mit Alpha),
-//   • selHover-Stufen (off/soft/strong).
+//   • selHover-Stufen (off/soft/strong),
+//   • Info-Dichte: Detail-/Vorschau-Zeile zweizeilig bei Detailreich
+//     (Line-Clamp 2), einzeilig bei Komfortabel; Stats-Zeile bleibt einzeilig.
 //
 // Die CSS wird direkt aus plugin.js extrahiert (die echte, injizierte Quelle)
 // und in eine minimale Test-Seite mit .sf-items[data-view=list|grid]-Struktur
@@ -87,6 +89,11 @@ const tokens = [
 const row = (id, label, extra = '') =>
   `<div class="sf-tab" id="${id}"${extra}><span class="sf-tab-lead"></span><span class="sf-tab-main"><span class="sf-tab-title">${label}</span><span class="sf-tab-preview">preview</span></span><span class="sf-tab-meta"><span class="sf-tab-ctx" data-level="warn" style="--sf-ctx-pct:56%">56%</span><span class="sf-tab-time">now</span></span></div>`
 
+// Info-Dichte-Zeilen mit langem Text — macht den Umbruch (Line-Clamp) messbar.
+// Struktur wie in der echten Pane: .sf-tab-main und die Textzeilen sind divs.
+const densityRow = (id, level) =>
+  `<div class="sf-tab" id="${id}" data-density="${level}"><span class="sf-tab-lead"></span><div class="sf-tab-main"><div class="sf-tab-title">Dichte ${level}</div><div class="sf-tab-details">deepseek-flash · 152 Nachrichten · 45 Tool-Aufrufe · zuletzt aktiv 11m · Branch main · Projekt Session-Flow</div><div class="sf-tab-preview">Die Einstellungen für die Info Dichte komfortabel und detailreich anpassen — ein längerer Vorschautext für den Umbruchtest.</div><div class="sf-tab-stats">Kontext 22%</div></div><span class="sf-tab-meta"><span class="sf-tab-time">now</span></span></div>`
+
 const html = `<!doctype html>
 <html lang="de"
   data-sf-rowgrad="on" data-sf-rowshadow="medium" data-sf-titlegrad="on"
@@ -114,6 +121,18 @@ const html = `<!doctype html>
         ${row('g1', 'Grid normal')}
         ${row('g2', 'Grid aktiv', ' data-active="true"')}
         ${row('g3', 'Grid busy', ' data-live="busy"')}
+      </div>
+    </div>
+    <div class="sf-section">
+      <h4 style="color:#9ca3af;font:600 11px/1 system-ui;margin:14px 4px 6px">Info-Dichte</h4>
+      <div style="width:300px">
+        <div class="sf-items" data-view="list">
+          ${densityRow('dc', 'comfortable')}
+          ${densityRow('dd', 'detailed')}
+        </div>
+        <div class="sf-items" data-view="grid">
+          ${densityRow('dg', 'detailed')}
+        </div>
       </div>
     </div>
     <h4 style="color:#9ca3af;font:600 11px/1 system-ui;margin:14px 4px 6px">Content-Abgrenzung (entfernt)</h4>
@@ -177,6 +196,29 @@ const probeExpr = `(() => {
 })()`
 
 const read = () => page.evaluate(probeExpr)
+
+// Dichte-Probe: Computed Styles + Höhen der Beschreibungszeilen.
+const densityProbeExpr = `(() => {
+  const readPart = (rootId, partSel) => {
+    const root = document.getElementById(rootId)
+    const el = root ? root.querySelector(partSel) : null
+    if (!el) return null
+    const cs = getComputedStyle(el)
+    return {
+      whiteSpace: cs.whiteSpace,
+      clamp: cs.webkitLineClamp || cs.lineClamp || 'none',
+      display: cs.display,
+      height: el.offsetHeight
+    }
+  }
+  const mk = id => ({
+    details: readPart(id, '.sf-tab-details'),
+    preview: readPart(id, '.sf-tab-preview'),
+    stats: readPart(id, '.sf-tab-stats')
+  })
+  return { dc: mk('dc'), dd: mk('dd'), dg: mk('dg') }
+})()`
+const readDensity = () => page.evaluate(densityProbeExpr)
 // .sf-tab transitioniert transform/box-shadow/background-color (130 ms) — nach
 // einem Zustandswechsel liefert getComputedStyle sonst den START-Wert der
 // laufenden Transition. Vor jeder Messung kurz auslaufen lassen.
@@ -378,6 +420,38 @@ try {
   })
   check('Hintergrund: Layer liegt hinter dem Inhalt (z-index -1)', wallpaper.z === '-1' && wallpaper.pointer === 'none', `${wallpaper.z}/${wallpaper.pointer}`)
   check('Hintergrund: Scope=alle macht die Zonenfläche transparent', wallpaper.zoneBg === 'rgba(0, 0, 0, 0)', wallpaper.zoneBg)
+  // ── 13) Info-Dichte: Detailreich bricht Beschreibungen zweizeilig um ─────
+  const D = await readDensity()
+  check(
+    'Dichte komfortabel: Detail-Zeile einzeilig (nowrap, kein Clamp)',
+    D.dc.details && D.dc.details.whiteSpace === 'nowrap' && D.dc.details.clamp === 'none' && D.dc.details.height <= 14,
+    JSON.stringify(D.dc.details)
+  )
+  check(
+    'Dichte detailreich: Detail-Zeile zweizeilig (Line-Clamp 2, Wrap erlaubt)',
+    D.dd.details && D.dd.details.whiteSpace === 'normal' && D.dd.details.clamp === '2',
+    JSON.stringify(D.dd.details)
+  )
+  check(
+    'Dichte detailreich: Detail-Zeile rendert zwei Zeilen (Höhe 28 px)',
+    D.dd.details && D.dd.details.height >= 26 && D.dd.details.height <= 30 && D.dc.details.height === 14,
+    `detailreich=${D.dd.details && D.dd.details.height}px komfortabel=${D.dc.details && D.dc.details.height}px`
+  )
+  check(
+    'Dichte detailreich: Vorschau-Zeile zweizeilig (Clamp 2)',
+    D.dd.preview && D.dd.preview.whiteSpace === 'normal' && D.dd.preview.clamp === '2',
+    JSON.stringify(D.dd.preview)
+  )
+  check(
+    'Dichte detailreich: Stats-Zeile bleibt einzeilig',
+    D.dd.stats && D.dd.stats.whiteSpace === 'nowrap' && D.dd.stats.clamp === 'none',
+    JSON.stringify(D.dd.stats)
+  )
+  check(
+    'Dichte Grid: Detail-Zeile bei Detailreich ebenfalls zweizeilig',
+    D.dg.details && D.dg.details.whiteSpace === 'normal' && D.dg.details.clamp === '2',
+    JSON.stringify(D.dg.details)
+  )
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }

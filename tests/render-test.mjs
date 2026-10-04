@@ -345,7 +345,9 @@ const rewritten = src
   .replace("from 'react/jsx-runtime'", `from '${stubUrl}'`)
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
-  .concat('\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead }\n')
+  .concat(
+    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions }\n'
+  )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
 
@@ -648,6 +650,125 @@ check(
 )
 const waitingGlyph = glyphOf(leadEl('waiting', 'waiting'))
 check('v1.13.4: Wartend-Icon (bell) intakt', waitingGlyph && waitingGlyph.p.name === 'bell' && !waitingGlyph.p.spinning, waitingGlyph && String(waitingGlyph.p.name))
+
+// 17) Info-Dichte-Abstufung: data-density, reichere Detail-Zeile, Stats bei Detailreich
+try {
+  // Live-Eintrag für s2 (Modell/„zuletzt aktiv" kommen aus session.active_list).
+  hostStub.request = async method => {
+    if (method === 'session.list') return { sessions }
+    if (method === 'session.active_list') {
+      return {
+        sessions: [
+          {
+            id: 'rt-live-2',
+            session_key: 's2',
+            status: 'idle',
+            model: 'live/model-x',
+            last_active: Math.floor(Date.now() / 1000) - 300
+          }
+        ]
+      }
+    }
+    if (method === 'session.context_breakdown') return {}
+    return {}
+  }
+  await mod.pollLiveSessions()
+
+  const renderEls = () => {
+    stub.__resetSlots()
+    globalThis.__SF__.tCalls.length = 0
+    const out = { el: [], text: [] }
+    walk(pane.render(), out)
+    return out.el
+  }
+
+  mod.patchSettings('tabs', { infoDensity: 'compact', view: 'list', maxVisible: 0, showPreview: false, showContext: false, density: 'compact' })
+  const rowsCompact = renderEls().filter(e => e.cls.includes('sf-tab'))
+  check(
+    'Dichte: data-density=compact an allen Zeilen',
+    rowsCompact.length === 30 && rowsCompact.every(e => e.props['data-density'] === 'compact'),
+    `rows=${rowsCompact.length}`
+  )
+  check(
+    'Dichte kompakt: keine Detail-/Stats-Zeile',
+    !renderEls().some(e => e.cls.includes('sf-tab-details') || e.cls.includes('sf-tab-stats'))
+  )
+
+  mod.patchSettings('tabs', { infoDensity: 'comfortable' })
+  let els = renderEls()
+  check(
+    'Dichte: data-density=comfortable an allen Zeilen',
+    els.filter(e => e.cls.includes('sf-tab')).every(e => e.props['data-density'] === 'comfortable')
+  )
+  check(
+    'Dichte komfortabel: Detail-Zeile vorhanden, keine Stats',
+    els.some(e => e.cls.includes('sf-tab-details')) && !els.some(e => e.cls.includes('sf-tab-stats'))
+  )
+  const lastActiveCalls = globalThis.__SF__.tCalls.filter(([k]) => k === 'metaLastActive')
+  check(
+    'Dichte komfortabel: „zuletzt aktiv" nur für die Live-Session',
+    lastActiveCalls.length === 1 && lastActiveCalls[0][1] === '5m',
+    JSON.stringify(lastActiveCalls)
+  )
+  check(
+    'Dichte komfortabel: Detail-Zeile mit Modell + Live-Recency',
+    els.some(
+      e =>
+        e.cls.includes('sf-tab-details') &&
+        String(e.props.children).includes('model') &&
+        String(e.props.children).includes('metaLastActive')
+    )
+  )
+
+  mod.patchSettings('tabs', { infoDensity: 'detailed', showContext: false })
+  mod.$ctxInfo.set({ s3: { used: 22, max: 100, percent: 22, est: false, at: Date.now() } })
+  els = renderEls()
+  check(
+    'Dichte: data-density=detailed an allen Zeilen',
+    els.filter(e => e.cls.includes('sf-tab')).every(e => e.props['data-density'] === 'detailed')
+  )
+  const statsEls = els.filter(e => e.cls.includes('sf-tab-stats'))
+  check('Dichte detailreich: genau eine Stats-Zeile (Kontext %)', statsEls.length === 1, `stats=${statsEls.length}`)
+  check(
+    'Dichte detailreich: Stats zeigt Kontext-Prozent',
+    globalThis.__SF__.tCalls.some(([k, v]) => k === 'metaContextShort' && v === '22')
+  )
+  check('Dichte detailreich: Vorschau-Zeile vorhanden', els.some(e => e.cls.includes('sf-tab-preview')))
+
+  mod.patchSettings('tabs', { showContext: true })
+  els = renderEls()
+  check('Dichte detailreich + Donut an: Stats-Zeile entfällt (kein Doppel)', !els.some(e => e.cls.includes('sf-tab-stats')))
+  mod.patchSettings('tabs', { showContext: false, infoDensity: 'auto' })
+} catch (error) {
+  check('Info-Dichte-Tests durchgelaufen', false, error && error.message)
+}
+
+// 17) v1.14.0: Projekt-Gruppierung, Projekt-Ordner-Header, Tab-Selektor-Option
+try {
+  mod.patchSettings('groups', { autoMode: 'project' })
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out17 = { el: [], text: [] }
+  walk(pane.render(), out17)
+  const projectHeads = out17.el.filter(e => e.cls.includes('sf-group-head') && e.cls.includes('sf-group-project'))
+  check('v1.14.0: Projekt-Gruppierung rendert einen Projekt-Header', projectHeads.length >= 1, `heads=${projectHeads.length}`)
+  check('v1.14.0: Pane zeigt die Filter-Leiste', out17.el.some(e => e.cls.includes('sf-filterbar')))
+  check('v1.14.0: Filter-Suchfeld vorhanden', out17.el.some(e => e.cls.includes('sf-filter-search')))
+  mod.patchSettings('groups', { autoMode: 'off' })
+
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out14 = { el: [], text: [] }
+  walk(settingsPage.render(), out14)
+  const keys14 = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  check('v1.14.0: Einstellungen enthalten groupsAutoProject-Option', keys14.has('groupsAutoProject'))
+  check(
+    'v1.14.0: Einstellungen enthalten tabsAsTabSelector-Zeile',
+    keys14.has('tabsAsTabSelector') && keys14.has('tabsAsTabSelectorDesc')
+  )
+} catch (error) {
+  check('v1.14.0-Tests durchgelaufen', false, error && error.message)
+}
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)

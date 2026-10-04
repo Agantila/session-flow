@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.13.4'
+const VERSION = '1.14.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -196,7 +196,8 @@ const DEFAULT_SETTINGS = {
     selHover: 'soft',
     rowLive: false,
     liveFrame: 'glow',
-    maxVisible: 0
+    maxVisible: 0,
+    asTabSelector: false
   },
   groups: {
     enabled: true,
@@ -320,6 +321,11 @@ function patchSettings(section, patch) {
   const current = $settings.get()
   $settings.set({ ...current, [section]: { ...current[section], ...patch } })
   scheduleSettingsSave()
+
+  // Ein Dichte-Wechsel kann die Kontext-Daten nötig machen (Stats-Zeile bei Detailreich).
+  if (section === 'tabs' && patch && 'infoDensity' in patch) {
+    scheduleContextRefresh(600)
+  }
 }
 
 function resetSettings() {
@@ -893,6 +899,37 @@ function applyUiTabs() {
 }
 
 /**
+ * Räumt die "Liste/Grid als Tab-Selektor"-Markierung ab (tabs.asTabSelector).
+ */
+function clearTabSelectorMode() {
+  document.documentElement.removeAttribute('data-sf-hide-tabstrip')
+}
+
+/**
+ * Blendet die native Content-Tab-Leiste für Session-Tabs aus, wenn die
+ * List/Grid-Pane dieselbe Funktion schon abdeckt (tabs.asTabSelector).
+ * Zielt strukturell auf den Streifen, der mindestens einen Session-Tile-Tab
+ * trägt (":has()" — im Plugin bereits an anderer Stelle in Gebrauch, siehe
+ * `data-sf-ui-tabs~='nolead'`-Regel) — Terminal-/Dateien-/sonstige
+ * Pane-Tab-Leisten ohne Session-Tabs bleiben unberührt.
+ */
+function applyTabSelectorMode() {
+  const cfg = $settings.get().tabs || {}
+
+  try {
+    if (!cfg.asTabSelector) {
+      clearTabSelectorMode()
+      return
+    }
+
+    document.documentElement.setAttribute('data-sf-hide-tabstrip', 'on')
+  } catch (error) {
+    console.warn(`[${ID}] tab-selector apply failed`, error)
+    clearTabSelectorMode()
+  }
+}
+
+/**
  * Markiert Session-Tabs arbeitender Sessions (denkt/schreibt/Tool/arbeitet) —
  * dieselbe Live-Info, die auch die Sidebar (Status-Punkt/Arc) zeigt. Das CSS
  * zeichnet darauf den umlaufenden Glow-Ring.
@@ -1044,6 +1081,58 @@ const $sessionsError = atom(null)
 const $liveMap = atom({}) // runtimeId -> { storedId, status, at }
 const $activity = atom({}) // storedId -> { kind, name, at }
 const $appDensity = atom('compact') // App-Einstellung "Dichte der Session-Liste" (sessionListDensity)
+const $projectsList = atom([]) // [{ id, name, path }] — für die Projekt-Gruppierung (Label + Tooltip)
+
+let projectsListInFlight = null
+
+/** Projekt-Cache (projects.list) neu laden — Grundlage der Projekt-Gruppierung. */
+async function refreshProjectsList() {
+  if (projectsListInFlight) {
+    return projectsListInFlight
+  }
+
+  projectsListInFlight = (async () => {
+    try {
+      const payload = await host.request('projects.list', {})
+      const projects = Array.isArray(payload?.projects) ? payload.projects : []
+
+      $projectsList.set(
+        projects
+          .map(entry => ({
+            id: String(entry?.id || '').trim(),
+            name: String(entry?.name || '').trim(),
+            path: String(entry?.primary_path || '').trim()
+          }))
+          .filter(entry => entry.path)
+      )
+    } catch {
+      // Älteres Backend ohne projects.* — Gruppierung fällt auf den Ordnernamen zurück.
+    } finally {
+      projectsListInFlight = null
+    }
+  })()
+
+  return projectsListInFlight
+}
+
+/** Projekt-Anzeigename für eine Session-CWD: projects.list-Treffer, sonst Ordnername. */
+function projectLabelForCwd(cwd) {
+  const trimmed = String(cwd || '').trim()
+
+  if (!trimmed) {
+    return ''
+  }
+
+  const hit = $projectsList.get().find(entry => entry.path === trimmed || trimmed.startsWith(`${entry.path}/`))
+
+  if (hit?.name) {
+    return hit.name
+  }
+
+  const base = trimmed.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
+
+  return base || trimmed
+}
 
 /** Folgt der App-Einstellung zur Session-Listen-Dichte (Feature-Detect). */
 function watchAppDensity() {
@@ -1063,6 +1152,7 @@ function watchAppDensity() {
     if (typeof settingsApi.subscribe === 'function') {
       return settingsApi.subscribe('sessionListDensity', value => {
         $appDensity.set(String(value || 'compact'))
+        scheduleContextRefresh(800)
       })
     }
   } catch {
@@ -1136,10 +1226,19 @@ async function resolveNewProjectSessionCwd() {
 async function startNewProjectSession() {
   try {
     const target = await resolveNewProjectSessionCwd()
+    await startNewSessionInCwd(target.cwd, target.label)
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('newSession') || 'Neue Session')
+  }
+}
+
+/** Neue Session explizit in `cwd` starten — Projekt-Header-"+"-Button. */
+async function startNewSessionInCwd(cwd, label) {
+  try {
     const params = { cols: 96, source: 'desktop' }
 
-    if (target.cwd) {
-      params.cwd = target.cwd
+    if (cwd) {
+      params.cwd = cwd
       params.cwd_explicit = true
     }
 
@@ -1164,7 +1263,7 @@ async function startNewProjectSession() {
     scheduleSessionsRefresh(1500)
     host.notify({
       kind: 'success',
-      message: `${CTX?.i18n?.t('newSession') || 'Neue Session'}${target.label ? ` · ${target.label}` : ''}`
+      message: `${CTX?.i18n?.t('newSession') || 'Neue Session'}${label ? ` · ${label}` : ''}`
     })
   } catch (error) {
     host.notifyError(error, CTX?.i18n?.t('newSession') || 'Neue Session')
@@ -1253,8 +1352,23 @@ const $ctxInfo = atom({}) // storedId -> { used, max, percent, est, at }
 let ctxRefreshTimer = 0
 let ctxRefreshInFlight = false
 
+/** Effektive Info-Dichte: 'auto' folgt der App-Einstellung (sessionListDensity). */
+function effectiveInfoDensity() {
+  const configured = String(readSetting('tabs', 'infoDensity') || 'auto')
+  return configured === 'auto' ? String($appDensity.get() || 'compact') : configured
+}
+
+/** Kontext-Daten holen, wenn der Donut sie zeigt ODER die Dichte sie als Text nutzt. */
+function contextInfoNeeded() {
+  if (readSetting('tabs', 'showContext')) {
+    return true
+  }
+
+  return effectiveInfoDensity() === 'detailed'
+}
+
 async function refreshContextInfo() {
-  if (ctxRefreshInFlight || !readSetting('tabs', 'showContext')) {
+  if (ctxRefreshInFlight || !contextInfoNeeded()) {
     return
   }
 
@@ -1326,7 +1440,13 @@ async function pollLiveSessions() {
       const status = String(item?.status || 'idle')
 
       if (runtimeId && storedId) {
-        next[runtimeId] = { storedId, status, at: now }
+        next[runtimeId] = {
+          storedId,
+          status,
+          at: now,
+          model: String(item?.model || ''),
+          lastActive: Number(item?.last_active || 0) * 1000
+        }
       }
     }
 
@@ -1591,6 +1711,43 @@ function buildSections() {
         items: bySource.get(source)
       })
     }
+  } else if (groupsCfg.enabled && groupsCfg.autoMode === 'project' && rest.length) {
+    // Spiegelt die Projekt-Baumstruktur von Hermes Desktop: Sessions werden
+    // nach ihrer CWD gruppiert, der Ordner-Header übernimmt deren Projekte-Optik
+    // (Ordner-Icon, Hover-Caret, Hover-"+" für eine neue Session genau dort).
+    const byCwd = new Map()
+
+    for (const row of rest) {
+      const cwd = String(row.cwd || '').trim()
+      const bucketKey = cwd || '__no_project__'
+
+      if (!byCwd.has(bucketKey)) {
+        byCwd.set(bucketKey, [])
+      }
+
+      byCwd.get(bucketKey).push(row)
+    }
+
+    const buckets = [...byCwd.entries()].sort(([a], [b]) => {
+      if (a === '__no_project__') return 1
+      if (b === '__no_project__') return -1
+      return projectLabelForCwd(a).localeCompare(projectLabelForCwd(b))
+    })
+
+    for (const [bucketKey, items] of buckets) {
+      const isNoProject = bucketKey === '__no_project__'
+      const key = `auto:project:${bucketKey}`
+      sections.push({
+        key,
+        kind: 'project',
+        title: isNoProject ? null : projectLabelForCwd(bucketKey),
+        titleKey: isNoProject ? 'noProject' : null,
+        color: null,
+        cwd: isNoProject ? '' : bucketKey,
+        collapsed: Boolean(groupsState.collapsed[key]),
+        items
+      })
+    }
   } else if (rest.length && (groupsCfg.showUngrouped || sections.length === 0)) {
     sections.push({
       key: 'ungrouped',
@@ -1812,6 +1969,8 @@ const EN = {
   tabsOpenIntentInPlace: 'Replace',
   tabsOpenIntentStack: 'Stack',
   tabsOpenIntentTab: 'Tab',
+  tabsAsTabSelector: 'Use list/grid as the tab selector',
+  tabsAsTabSelectorDesc: 'Hides the native session tab strip in the content area — the list/grid already covers switching between open sessions. Affects every pane that carries session tabs.',
   tabsMaxItems: 'Max sessions',
   tabsMaxItemsDesc: 'Upper limit of sessions listed.',
   tabsMaxVisible: 'Max visible entries',
@@ -1833,6 +1992,7 @@ const EN = {
   groupsAutoOff: 'Off (manual only)',
   groupsAutoDate: 'By date',
   groupsAutoSource: 'By source',
+  groupsAutoProject: 'By project folder',
   groupsStackStyle: 'Stack style (collapsed)',
   groupsStackStyleDesc: 'Look of a collapsed group: spine, fanned cards, or a pill.',
   stackSpine: 'Spine',
@@ -1841,6 +2001,9 @@ const EN = {
   groupsShowUngrouped: 'Show "Ungrouped" section',
   groupsShowUngroupedDesc: 'Show the ungrouped bucket while automatic grouping is off.',
   groupsHint: 'Manage groups via right-click on a tab or a group header. Drag & drop moves sessions into groups.',
+  noProject: 'No project',
+  newSessionHere: 'New session in this project',
+  dropHereHint: label => `→ Move to "${label}"`,
 
   // Settings — about
   secAbout: 'About',
@@ -1870,8 +2033,16 @@ const EN = {
   errOpen: 'Could not open the session',
   ageNow: 'now',
   paneCount: n => `${n} sessions`,
+  paneCountFiltered: (n, shown) => `${shown} / ${n} sessions`,
   showMore: n => `Show more (${n})`,
   showLess: 'Show less',
+  filterPlaceholder: 'Search sessions…',
+  filterClear: 'Clear search',
+  filterAll: 'All',
+  filterPinned: 'Pinned',
+  filterActive: 'Active',
+  filterEmpty: 'No sessions match this filter',
+  filterEmptyHint: 'Try a different search term or quick filter.',
 
   // Settings navigation + UI-tab presets
   navChat: 'Chat',
@@ -2000,13 +2171,15 @@ const EN = {
   tabsGridColsDesc: 'Fixed column count, or automatic based on card width.',
   tabsGridColsAuto: 'Auto',
   tabsInfoDensity: 'Info density',
-  tabsInfoDensityDesc: 'How much context each entry shows — like Hermes Desktop. Comfortable adds branch/model/counters, Detailed also the preview line. Follow Hermes mirrors the app setting live.',
+  tabsInfoDensityDesc: 'How much context each entry shows — like Hermes Desktop. Comfortable: bigger title, more air, plus model and last-active when known. Detailed: also the preview line and context usage. Follow Hermes mirrors the app setting live.',
   infoDensityAuto: 'Follow Hermes',
   infoDensityCompact: 'Compact',
   infoDensityComfortable: 'Comfortable',
   infoDensityDetailed: 'Detailed',
   metaMessages: n => `${n} messages`,
   metaToolCalls: n => `${n} tool calls`,
+  metaLastActive: age => `last active ${age}`,
+  metaContextShort: pct => `context ${pct}%`,
   unpin: 'Unpin',
   navPersonal: 'Personal',
   secPersonal: 'Personalization',
@@ -2235,6 +2408,8 @@ const DE = {
   tabsOpenIntentInPlace: 'Ersetzen',
   tabsOpenIntentStack: 'Stapeln',
   tabsOpenIntentTab: 'Tab',
+  tabsAsTabSelector: 'Liste/Grid als Tab-Selektor nutzen',
+  tabsAsTabSelectorDesc: 'Blendet die native Session-Tab-Leiste im Content-Bereich aus — die Liste/das Grid deckt das Umschalten zwischen offenen Sessions schon ab. Betrifft jede Pane, die Session-Tabs trägt.',
   tabsMaxItems: 'Max. Sessions',
   tabsMaxItemsDesc: 'Obergrenze der aufgelisteten Sessions.',
   tabsMaxVisible: 'Max. sichtbare Einträge',
@@ -2255,6 +2430,7 @@ const DE = {
   groupsAutoOff: 'Aus (nur manuell)',
   groupsAutoDate: 'Nach Datum',
   groupsAutoSource: 'Nach Quelle',
+  groupsAutoProject: 'Nach Projekt-Ordner',
   groupsStackStyle: 'Stapel-Stil (eingeklappt)',
   groupsStackStyleDesc: 'Optik einer eingeklappten Gruppe: Rücken, gefächerte Karten oder Pille.',
   stackSpine: 'Rücken',
@@ -2263,6 +2439,9 @@ const DE = {
   groupsShowUngrouped: '„Nicht gruppiert"-Bereich zeigen',
   groupsShowUngroupedDesc: 'Zeigt den Bereich „Nicht gruppiert", solange die Auto-Gruppierung aus ist.',
   groupsHint: 'Gruppen verwaltest du per Rechtsklick auf einen Tab oder die Gruppen-Überschrift. Ziehen & Ablegen sortiert Sessions ein.',
+  noProject: 'Kein Projekt',
+  newSessionHere: 'Neue Session in diesem Projekt',
+  dropHereHint: label => `→ Nach „${label}" verschieben`,
 
   secAbout: 'Über',
   secAboutDesc: 'Version, Zähler und die Zurücksetzen-Aktionen.',
@@ -2291,8 +2470,16 @@ const DE = {
   errOpen: 'Session konnte nicht geöffnet werden',
   ageNow: 'jetzt',
   paneCount: n => `${n} Sessions`,
+  paneCountFiltered: (n, shown) => `${shown} / ${n} Sessions`,
   showMore: n => `Mehr anzeigen (${n})`,
   showLess: 'Weniger anzeigen',
+  filterPlaceholder: 'Sessions durchsuchen…',
+  filterClear: 'Suche löschen',
+  filterAll: 'Alle',
+  filterPinned: 'Angepinnt',
+  filterActive: 'Aktiv',
+  filterEmpty: 'Keine Sessions passen zu diesem Filter',
+  filterEmptyHint: 'Anderen Suchbegriff oder Schnellfilter versuchen.',
 
   // Einstellungs-Navigation + UI-Tabs-Presets
   navChat: 'Chat',
@@ -2421,13 +2608,15 @@ const DE = {
   tabsGridColsDesc: 'Feste Spaltenzahl oder automatisch nach Kartenbreite.',
   tabsGridColsAuto: 'Auto',
   tabsInfoDensity: 'Info-Dichte',
-  tabsInfoDensityDesc: 'Wie viel Kontext jeder Eintrag zeigt — wie in Hermes Desktop. Komfortabel ergänzt Branch/Modell/Zähler, Detailreich zusätzlich die Vorschau-Zeile. „Wie Hermes“ übernimmt die App-Einstellung live.',
+  tabsInfoDensityDesc: 'Wie viel Kontext jeder Eintrag zeigt — wie in Hermes Desktop. Komfortabel: größerer Titel, mehr Luft, dazu Modell und „zuletzt aktiv“ (wenn bekannt). Detailreich: zusätzlich Vorschau-Zeile und Kontext-Auslastung. „Wie Hermes“ übernimmt die App-Einstellung live.',
   infoDensityAuto: 'Wie Hermes',
   infoDensityCompact: 'Kompakt',
   infoDensityComfortable: 'Komfortabel',
   infoDensityDetailed: 'Detailreich',
   metaMessages: n => `${n} Nachrichten`,
   metaToolCalls: n => `${n} Tool-Aufrufe`,
+  metaLastActive: age => `zuletzt aktiv ${age}`,
+  metaContextShort: pct => `Kontext ${pct}%`,
   unpin: 'Anpinnen aufheben',
   navPersonal: 'Individuell',
   secPersonal: 'Individualisierung',
@@ -2483,16 +2672,26 @@ const CSS = `
 .sf-toolbar{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary);color:var(--ui-text-tertiary)}
 .sf-toolbar-count{flex:1;min-width:0;padding-left:2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ui-text-quaternary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sf-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 4px 12px}
-.sf-section{margin-bottom:6px}
-.sf-group-head{display:flex;align-items:center;gap:4px;height:24px;padding:0 4px 0 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none}
+.sf-group-head{display:flex;align-items:center;gap:4px;height:24px;padding:0 4px 0 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none;transition:background-color .12s ease,box-shadow .12s ease}
 .sf-group-head:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
+.sf-group-head[data-drop=true]{background:color-mix(in srgb,var(--ui-accent) 14%,transparent);box-shadow:inset 0 0 0 1px var(--ui-accent)}
 .sf-group-caret{display:flex;align-items:center;justify-content:center;width:14px;flex-shrink:0;color:var(--ui-text-quaternary)}
 .sf-group-dot{width:8px;height:8px;border-radius:3px;flex-shrink:0}
+.sf-group-lead-icon{display:flex;align-items:center;justify-content:center;width:14px;flex-shrink:0;color:var(--ui-text-tertiary)}
 .sf-group-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;letter-spacing:.01em}
 .sf-group-count{flex-shrink:0;font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
+.sf-group-drophint{flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:600;color:var(--ui-accent)}
 .sf-group-actions{display:flex;align-items:center;opacity:0;flex-shrink:0}
 .sf-group-head:hover .sf-group-actions,.sf-group-head:focus-within .sf-group-actions{opacity:1}
 .sf-group-unassigned .sf-group-name{font-weight:500;color:var(--ui-text-tertiary)}
+/* Projekt-Ordner-Header (wie "Projekte" in Hermes Desktop): Caret erst beim
+   Überfahren sichtbar — der Ordner-Icon-Kopf bleibt sonst ruhig. */
+.sf-group-project .sf-group-caret{opacity:0;transition:opacity .12s ease}
+.sf-group-project:hover .sf-group-caret,.sf-group-project:focus-within .sf-group-caret{opacity:1}
+.sf-group-project .sf-group-name{font-weight:500}
+/* Section-Rahmen beim Drag-over — klarer Hinweis, was ein Loslassen bewirkt. */
+.sf-section{margin-bottom:6px;border-radius:8px;transition:background-color .12s ease}
+.sf-section[data-drop=true]{background:color-mix(in srgb,var(--ui-accent) 6%,transparent)}
 .sf-stack{position:relative;height:12px;margin:0 4px 3px}
 .sf-stack i{position:absolute;left:0;right:0;height:7px;border-radius:5px;border:1px solid color-mix(in srgb,var(--sf-accent,var(--ui-accent)) 22%,transparent);background:color-mix(in srgb,var(--sf-accent,var(--ui-accent)) 10%,transparent)}
 .sf-stack[data-style=spine] i:nth-child(1){left:0;right:0;top:0;opacity:.85}
@@ -2509,7 +2708,18 @@ const CSS = `
 .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
 .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12));color:var(--foreground)}
 .sf-tab[data-drop=true]{box-shadow:inset 0 0 0 1px var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 10%,transparent)}
-.sf-tab[data-dragging=true]{opacity:.45}
+.sf-tab[data-dragging=true]{opacity:.5;transform:scale(.97);box-shadow:0 2px 10px rgba(0,0,0,.35);outline:1px dashed color-mix(in srgb,var(--ui-accent) 55%,transparent);outline-offset:-1px;cursor:grabbing;transition:transform .12s ease,opacity .12s ease,box-shadow .12s ease}
+@media (prefers-reduced-motion:reduce){.sf-tab[data-dragging=true]{transition:none}}
+@keyframes sf-just-moved{0%{background-color:color-mix(in srgb,var(--ui-accent) 32%,transparent);box-shadow:inset 0 0 0 1px var(--ui-accent)}100%{background-color:transparent;box-shadow:none}}
+.sf-tab[data-just-moved=true]{animation:sf-just-moved .6s ease-out}
+@media (prefers-reduced-motion:reduce){.sf-tab[data-just-moved=true]{animation:none;background-color:color-mix(in srgb,var(--ui-accent) 20%,transparent)}}
+html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-play-state:paused}
+.sf-filterbar{display:flex;align-items:center;gap:6px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary)}
+.sf-filter-search{position:relative;display:flex;align-items:center;gap:4px;flex:1;min-width:0;height:22px;padding:0 6px;border-radius:6px;background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--ui-text-quaternary)}
+.sf-filter-search input{flex:1;min-width:0;height:100%;border:0;background:transparent;color:var(--foreground);font-size:11px;padding:0}
+.sf-filter-search input:focus{outline:none}
+.sf-filter-clear{display:flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;padding:0;border:0;background:transparent;color:var(--ui-text-quaternary);cursor:pointer;border-radius:3px}
+.sf-filter-clear:hover{background:var(--ui-control-hover-background,rgba(127,127,127,.14));color:var(--foreground)}
 .sf-tab-lead{display:flex;align-items:center;justify-content:center;width:16px;flex-shrink:0;color:var(--ui-text-tertiary)}
 .sf-tab-lead[data-kind=thinking],.sf-tab-lead[data-kind=streaming],.sf-tab-lead[data-kind=working]{color:var(--ui-accent)}
 .sf-tab-lead[data-kind=tool]{color:var(--ui-accent)}
@@ -2552,6 +2762,17 @@ html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destr
 .sf-items[data-view=grid] .sf-tab-title{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--sf-grid-lines,2);overflow:hidden;overflow-wrap:anywhere}
 .sf-items[data-view=grid] .sf-tab-preview{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .sf-tab-details{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:14px;color:var(--ui-text-tertiary)}
+/* Info-Dichte-Abstufung: Komfortabel+ zeigt den größeren Titel; in der Liste
+   werden die Abstände lockerer, Detailreich ergänzt die Stats-Zeile. Die
+   Grid-Karten behalten ihren eigenen Rhythmus (gap) ohne Extra-Margins. */
+.sf-tab[data-density=comfortable] .sf-tab-title,.sf-tab[data-density=detailed] .sf-tab-title{font-size:13px;line-height:18px}
+.sf-items[data-view=list] .sf-tab[data-density=comfortable] .sf-tab-details,.sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-details{margin-top:4px}
+.sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-preview{margin-top:3px}
+/* Detailreich: die Beschreibungen (Detail- und Vorschau-Zeile) brechen auf
+   bis zu zwei Zeilen um statt einzeilig mit Ellipse abzuschneiden. */
+.sf-tab[data-density=detailed] .sf-tab-details,.sf-tab[data-density=detailed] .sf-tab-preview{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+.sf-tab-stats{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:14px;color:var(--ui-text-quaternary)}
+.sf-items[data-view=list] .sf-tab-stats{margin-top:3px}
 .sf-items[data-view=grid] .sf-tab-meta{margin-top:auto;flex-wrap:wrap;row-gap:2px}
 /* More-Button (List- und Grid-Ansicht): dezent, erscheint bei Hover/Fokus */
 .sf-more{display:grid;place-items:center;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--ui-text-tertiary);cursor:pointer;opacity:0;transition:opacity .12s ease;flex-shrink:0}
@@ -2830,6 +3051,15 @@ html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destr
 }
 :root[data-renderer-animations-paused] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']::after{animation-play-state:paused}
 
+/* "Liste/Grid als Tab-Selektor" (tabs.asTabSelector) — blendet NUR die
+   Streifen aus, die mindestens einen Session-Tile-Tab tragen (strukturell
+   über :has(), siehe DEVELOPMENT.md); Terminal-/Dateien-/sonstige
+   Pane-Tab-Leisten ohne Session-Tabs bleiben unberührt. Unabhängig vom
+   UI-Tabs-Master (data-sf-ui-tabs) — eigener Schalter. */
+html[data-sf-hide-tabstrip='on'] div:has(> [role='tablist'] [data-tree-tab^='session-tile:']){
+  display:none
+}
+
 /* ── Einstellungs-Navigation: sticky Kategorie-Chips ─────────────────── */
 /* ── Individualisierung: Akzent-Tönung · Content-Shell · Hintergrund-Layer ──
    Der .sf-bg-layer wird per JS in die Pane-Hosts gesetzt; hier nur die
@@ -2900,7 +3130,7 @@ html[data-sf-aligntop~=on] .sf-items[data-view=grid] .sf-tab-meta{padding-top:0}
 /* Hover-Anhebung (App-Kachel-Optik): leicht anheben, Schlagschatten tiefer. */
 html[data-sf-hoverlift~=on] .sf-tab{transition:transform .13s ease,box-shadow .13s ease,background-color .13s ease}
 html[data-sf-hoverlift~=on] .sf-tab:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.42)}
-html[data-sf-hoverlift~=on] .sf-tab[data-dragging=true]:hover{transform:none;box-shadow:none}
+html[data-sf-hoverlift~=on] .sf-tab[data-dragging=true]:hover{transform:scale(.97);box-shadow:0 2px 10px rgba(0,0,0,.35)}
 html[data-sf-titlegrad~=on] .sf-tab-title{background-image:linear-gradient(var(--sf-title-angle,90deg),var(--sf-title-from,#e4e4e7),var(--sf-title-to,#8b8b93));-webkit-background-clip:text;background-clip:text;color:transparent}
 html[data-sf-rowlive~=on] .sf-tab[data-live=busy]{background:linear-gradient(color-mix(in srgb,var(--ui-accent) 9%,transparent),color-mix(in srgb,var(--ui-accent) 9%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 28%,transparent)}
 html[data-sf-rowlive~=on] .sf-tab[data-live=waiting]{background:linear-gradient(color-mix(in srgb,#f59e0b 9%,transparent),color-mix(in srgb,#f59e0b 9%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,#f59e0b 30%,transparent)}
@@ -3903,15 +4133,31 @@ function Caret({ open }) {
 // UI — Sessions-Pane (Tabs + Gruppen)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionHeader({ section, t, onToggle, onEdit }) {
+function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive }) {
   const open = !section.collapsed
   const color = section.color || null
+  const isProject = section.kind === 'project'
   const title = section.titleKey ? t(section.titleKey) : section.title || t('ungrouped')
   const collapsible = section.kind !== 'ungrouped'
   const editable = section.kind === 'manual'
 
+  const lead = isProject
+    ? jsx('span', {
+        className: 'sf-group-lead-icon',
+        children: jsx(Codicon, { name: open ? 'folder-opened' : 'folder', size: '0.8rem' })
+      })
+    : color
+      ? jsx('span', { className: 'sf-group-dot', style: { background: color } })
+      : section.kind === 'ungrouped'
+        ? null
+        : jsx('span', {
+            className: 'sf-group-dot',
+            style: { background: 'var(--ui-text-quaternary)', opacity: 0.5 }
+          })
+
   return jsxs('div', {
-    className: cn('sf-group-head', section.kind === 'ungrouped' && 'sf-group-unassigned'),
+    className: cn('sf-group-head', section.kind === 'ungrouped' && 'sf-group-unassigned', isProject && 'sf-group-project'),
+    'data-drop': dropActive ? 'true' : undefined,
     onClick: collapsible ? () => onToggle() : undefined,
     onContextMenu: editable
       ? event => {
@@ -3922,28 +4168,34 @@ function SectionHeader({ section, t, onToggle, onEdit }) {
     onDoubleClick: editable ? () => onEdit() : undefined,
     role: collapsible ? 'button' : undefined,
     'aria-expanded': collapsible ? open : undefined,
-    title: editable ? t('editGroup') : open ? t('collapse') : t('expand'),
+    title: isProject ? section.cwd || title : editable ? t('editGroup') : open ? t('collapse') : t('expand'),
     children: [
       jsx('span', { className: 'sf-group-caret', children: jsx(Caret, { open }) }),
-      color
-        ? jsx('span', { className: 'sf-group-dot', style: { background: color } })
-        : section.kind === 'ungrouped'
-          ? null
-          : jsx('span', {
-              className: 'sf-group-dot',
-              style: { background: 'var(--ui-text-quaternary)', opacity: 0.5 }
-            }),
+      lead,
       jsx('span', { className: 'sf-group-name', children: title }),
-      editable
+      dropActive
+        ? jsx('span', { className: 'sf-group-drophint', children: t('dropHereHint', title) })
+        : null,
+      isProject && onNewHere
         ? jsx('span', {
             className: 'sf-group-actions',
             onClick: event => {
               event.stopPropagation()
-              onEdit()
+              onNewHere(section)
             },
-            children: jsx(Codicon, { name: 'edit', size: '0.75rem' })
+            title: t('newSessionHere'),
+            children: jsx(Codicon, { name: 'add', size: '0.75rem' })
           })
-        : null,
+        : editable
+          ? jsx('span', {
+              className: 'sf-group-actions',
+              onClick: event => {
+                event.stopPropagation()
+                onEdit()
+              },
+              children: jsx(Codicon, { name: 'edit', size: '0.75rem' })
+            })
+          : null,
       jsx('span', { className: 'sf-group-count', children: String(section.items.length) })
     ]
   })
@@ -3958,7 +4210,7 @@ function StackLayers({ style, color }) {
   })
 }
 
-function rowDetailsLine(row, t) {
+function rowDetailsLine(row, t, liveEntry) {
   const parts = []
   const branch = String(row.branch || '').trim()
 
@@ -3966,7 +4218,10 @@ function rowDetailsLine(row, t) {
     parts.push(branch)
   }
 
-  const model = String(row.model || '').split('/').pop()?.trim()
+  // Modell: die Listen-Zeile liefert es nicht immer; laufende Sessions kennen
+  // es über die Live-Liste (session.active_list).
+  const liveModel = liveEntry && liveEntry.model ? String(liveEntry.model) : ''
+  const model = String(row.model || liveModel).split('/').pop()?.trim()
 
   if (model) {
     parts.push(model)
@@ -3982,10 +4237,22 @@ function rowDetailsLine(row, t) {
     parts.push(t('metaToolCalls', count))
   }
 
+  // Zuletzt aktiv: nur für laufende Sessions bekannt — die wichtigste
+  // Scan-Information neben dem Titel selbst.
+  const lastActive = Number(liveEntry && liveEntry.lastActive) || 0
+
+  if (lastActive > 0) {
+    const age = fmtAge(lastActive, t)
+
+    if (age) {
+      parts.push(t('metaLastActive', age))
+    }
+  }
+
   return parts.join(' · ')
 }
 
-function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign, dragging, setDragging }) {
+function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign, dragging, setDragging, justMoved }) {
   const settings = useValue($settings)
   const appDensity = useValue($appDensity)
   const activity = useValue($activity)
@@ -3993,6 +4260,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   const ctxInfo = useValue($ctxInfo)
   const tabsCfg = settings.tabs
   const cozy = tabsCfg.density === 'cozy'
+  const liveEntry = Object.values(live).find(entry => entry && entry.storedId === row.id) || null
   const group = section.kind === 'manual' ? groupsState.groups.find(entry => entry.id === section.groupId) : null
 
   const menuItems = []
@@ -4123,7 +4391,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   // Info-Dichte (wie Hermes Desktop): kompakt = Basis, komfortabel = + Details-
   // Zeile (Branch · Modell · Zähler), detailreich = + Vorschau-Zeile.
   const infoDensity = tabsCfg.infoDensity === 'auto' ? appDensity : tabsCfg.infoDensity
-  const detailsLine = infoDensity !== 'compact' ? rowDetailsLine(row, t) : ''
+  const detailsLine = infoDensity !== 'compact' ? rowDetailsLine(row, t, liveEntry) : ''
 
   const meta = []
 
@@ -4158,6 +4426,14 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
       children: `${ctx.percent}%`
     })
   }
+
+  // Detailreich-Zusatz: Kontext-Auslastung als Text, wenn der Donut sie nicht ohnehin zeigt.
+  const ctxData = ctxInfo[row.id]
+  const ctxPct = ctxData ? Number(ctxData.percent) : NaN
+  const statsLine =
+    infoDensity === 'detailed' && !tabsCfg.showContext && Number.isFinite(ctxPct)
+      ? t('metaContextShort', String(Math.round(ctxPct)))
+      : ''
 
   const timeNode = tabsCfg.showTime
     ? jsx('span', { className: 'sf-tab-time', key: 'time', children: fmtAge(row.startedAt, t) })
@@ -4237,6 +4513,8 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     'data-active': active,
     'data-live': liveBucket,
     'data-dragging': dragging === row.id,
+    'data-just-moved': justMoved ? 'true' : undefined,
+    'data-density': infoDensity,
     draggable: true,
     onClick: () => onOpen(row, null),
     onDragStart: event => {
@@ -4261,7 +4539,8 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
           (((cozy && tabsCfg.showPreview) || (tabsCfg.view === 'grid' && tabsCfg.gridPreview) || infoDensity === 'detailed') &&
           row.preview)
             ? jsx('div', { className: 'sf-tab-preview', children: row.preview })
-            : null
+            : null,
+          statsLine ? jsx('div', { className: 'sf-tab-stats', children: statsLine }) : null
         ]
       }),
       meta.length ? jsx('div', { className: 'sf-tab-meta', children: meta }) : null,
@@ -4797,10 +5076,52 @@ function SessionsPane() {
   const [rowDialog, setRowDialog] = useState(null)
   const [dragging, setDragging] = useState(null)
   const [showAllSections, setShowAllSections] = useState(() => new Set())
+  const [dragOverKey, setDragOverKey] = useState(null)
+  const [justMovedId, setJustMovedId] = useState(null)
+  const [filterText, setFilterText] = useState('')
+  const [filterMode, setFilterMode] = useState('all')
 
   const sections = useMemo(() => buildSections(), [rows, groupsState, settings])
   const totalCount = sections.reduce((sum, section) => sum + section.items.length, 0)
   const maxVisible = Math.floor(clampNumber(settings.tabs.maxVisible, 0, 200, 0))
+
+  // Filter-Leiste (wie die Hermes-Sessionliste): Textsuche über Titel/Branch/
+  // Vorschau + Schnellfilter (alle/angepinnt/aktiv). Rein clientseitig, nichts
+  // wird persistiert — ein Pane-Reload setzt sie zurück, genau wie die App.
+  const needle = filterText.trim().toLowerCase()
+  const matchesFilter = row => {
+    if (filterMode === 'pinned' && !row.pinned) {
+      return false
+    }
+
+    if (filterMode === 'active' && activityFor(row, $liveMap.get(), $activity.get()).kind === 'idle') {
+      return false
+    }
+
+    if (!needle) {
+      return true
+    }
+
+    return [row.title, row.branch, row.preview].some(value => String(value || '').toLowerCase().includes(needle))
+  }
+
+  const filterActive = Boolean(needle) || filterMode !== 'all'
+  const filteredSections = useMemo(() => {
+    if (!filterActive) {
+      return sections
+    }
+
+    return sections
+      .map(section => ({ ...section, items: section.items.filter(matchesFilter) }))
+      .filter(section => section.items.length > 0)
+  }, [sections, filterActive, needle, filterMode])
+
+  // Ein kurzer "Gelandet"-Flash auf der Zeile zeigt deutlich, wo eine Session
+  // nach einem Drag&Drop angekommen ist (Zuordnung/Projekt-Verschieben).
+  const flashJustMoved = sessionId => {
+    setJustMovedId(sessionId)
+    window.setTimeout(() => setJustMovedId(current => (current === sessionId ? null : current)), 650)
+  }
 
   // More-Menü: direkte Aktionen oder Dialog (Umbenennen/Farbe/Projekt/Löschen).
   const onMore = (action, row) => {
@@ -4897,30 +5218,80 @@ function SessionsPane() {
     }
   }
 
-  const sectionHandlers = section => ({
-    onDragOver: event => {
-      if (section.kind === 'manual' || section.kind === 'ungrouped') {
+  const newSessionHere = section => {
+    haptic('tap')
+    void startNewSessionInCwd(section.cwd, section.title || '')
+  }
+
+  // Zieht bei einem Projekt-Header die echte Projekt-Verschiebung
+  // (session.workspace.move) — sichtbar UND wirksam, kein reines
+  // Anzeige-Umhängen. Manuelle/ungruppierte Header weisen weiterhin nur die
+  // Firefox-artige Gruppe zu. Hover-Tracking (dragenter/dragleave mit
+  // Containment-Check) treibt die Hervorhebung + den Zielhinweis im Header,
+  // damit beim Ziehen sofort klar ist, was ein Loslassen bewirkt.
+  const sectionHandlers = section => {
+    const canDrop = section.kind === 'manual' || section.kind === 'ungrouped' || (section.kind === 'project' && section.cwd)
+
+    if (!canDrop) {
+      return {}
+    }
+
+    return {
+      onDragEnter: event => {
+        event.preventDefault()
+        setDragOverKey(section.key)
+      },
+      onDragOver: event => {
         event.preventDefault()
 
         if (event.dataTransfer) {
           event.dataTransfer.dropEffect = 'move'
         }
-      }
-    },
-    onDrop: event => {
-      event.preventDefault()
-      const sessionId =
-        event.dataTransfer?.getData('text/session-flow-session') || event.dataTransfer?.getData('text/plain')
 
-      if (sessionId) {
+        if (dragOverKey !== section.key) {
+          setDragOverKey(section.key)
+        }
+      },
+      onDragLeave: event => {
+        // relatedTarget innerhalb der Section (z. B. eine Zeile) ist kein
+        // echtes Verlassen — sonst flackert die Hervorhebung beim Überfahren.
+        if (event.currentTarget.contains(event.relatedTarget)) {
+          return
+        }
+
+        setDragOverKey(current => (current === section.key ? null : current))
+      },
+      onDrop: event => {
+        event.preventDefault()
+        setDragOverKey(null)
+
+        const sessionId =
+          event.dataTransfer?.getData('text/session-flow-session') || event.dataTransfer?.getData('text/plain')
+
+        if (!sessionId) {
+          return
+        }
+
+        if (section.kind === 'project') {
+          const targetRow = rows.find(entry => entry.id === sessionId)
+
+          if (targetRow && targetRow.cwd !== section.cwd) {
+            void moveSessionRow(targetRow, { path: section.cwd, name: section.title || '' })
+            flashJustMoved(sessionId)
+          }
+
+          return
+        }
+
         assign(sessionId, section.kind === 'manual' ? section.groupId : null)
+        flashJustMoved(sessionId)
       }
     }
-  })
+  }
 
   const list = jsx('div', {
     className: 'sf-list',
-    children: sections.map(section => {
+    children: filteredSections.map(section => {
       const expanded = !section.collapsed
       const stackStyle = settings.groups.stackStyle
       const showStack = !expanded && stackStyle !== 'pill' && section.items.length > 0 && section.kind !== 'ungrouped'
@@ -4931,6 +5302,7 @@ function SessionsPane() {
       return jsxs('div', {
         className: 'sf-section',
         key: section.key,
+        'data-drop': dragOverKey === section.key ? 'true' : undefined,
         ...sectionHandlers(section),
         children: [
           jsx(SectionHeader, {
@@ -4942,7 +5314,9 @@ function SessionsPane() {
                 toggleSectionCollapsed(section.key)
               }
             },
-            onEdit: () => editGroup(section)
+            onEdit: () => editGroup(section),
+            onNewHere: section.kind === 'project' ? newSessionHere : undefined,
+            dropActive: dragOverKey === section.key
           }),
           showStack ? jsx(StackLayers, { key: 'stack', style: stackStyle, color: section.color }) : null,
           expanded
@@ -4963,7 +5337,8 @@ function SessionsPane() {
                       groupsState,
                       onAssign: assign,
                       dragging,
-                      setDragging
+                      setDragging,
+                      justMoved: row.id === justMovedId
                     })
                   ),
                   overLimit
@@ -4988,7 +5363,7 @@ function SessionsPane() {
     children: [
       jsx('span', {
         className: 'sf-toolbar-count',
-        children: t('paneCount', totalCount)
+        children: filterActive ? t('paneCountFiltered', totalCount, filteredSections.reduce((sum, section) => sum + section.items.length, 0)) : t('paneCount', totalCount)
       }),
       jsx(Tip, {
         label: t('viewSwitch'),
@@ -5046,6 +5421,45 @@ function SessionsPane() {
     ]
   })
 
+  // Filter-Leiste — Textsuche + Schnellfilter, wie unter Hermes Desktop ⟶
+  // Sessions. Rein clientseitig (siehe needle/matchesFilter oben), keine
+  // Persistierung, damit sie jeden neuen Pane-Besuch frisch startet.
+  const filterBar = jsxs('div', {
+    className: 'sf-filterbar',
+    children: [
+      jsxs('div', {
+        className: 'sf-filter-search',
+        children: [
+          jsx(Codicon, { name: 'search', size: '0.75rem' }),
+          jsx(Input, {
+            'aria-label': t('filterPlaceholder'),
+            onChange: event => setFilterText(event.target.value),
+            placeholder: t('filterPlaceholder'),
+            value: filterText
+          }),
+          filterText
+            ? jsx('button', {
+                'aria-label': t('filterClear'),
+                className: 'sf-filter-clear',
+                onClick: () => setFilterText(''),
+                type: 'button',
+                children: jsx(Codicon, { name: 'close', size: '0.7rem' })
+              })
+            : null
+        ]
+      }),
+      jsx(Segment, {
+        onChange: setFilterMode,
+        options: [
+          { id: 'all', label: t('filterAll') },
+          { id: 'pinned', label: t('filterPinned') },
+          { id: 'active', label: t('filterActive') }
+        ],
+        value: filterMode
+      })
+    ]
+  })
+
   let body = null
 
   if (!rows.length && error) {
@@ -5064,6 +5478,14 @@ function SessionsPane() {
         jsx('div', { className: 'sf-empty-body', children: t('emptyHint') })
       ]
     })
+  } else if (filterActive && filteredSections.length === 0) {
+    body = jsxs('div', {
+      className: 'sf-empty',
+      children: [
+        jsx('div', { className: 'sf-empty-title', children: t('filterEmpty') }),
+        jsx('div', { className: 'sf-empty-body', children: t('filterEmptyHint') })
+      ]
+    })
   } else {
     body = list
   }
@@ -5072,6 +5494,7 @@ function SessionsPane() {
     className: 'sf-pane',
     children: [
       toolbar,
+      filterBar,
       body,
       jsx(GroupDialog, { state: dialog, setState: setDialog, t }),
       jsx(RowDialogHost, { state: rowDialog, setState: setRowDialog, t })
@@ -5798,6 +6221,12 @@ function SettingsPage() {
               onChange: value => patch('tabs', 'openIntent', value)
             })
           }),
+          jsx(ToggleRow, {
+            label: t('tabsAsTabSelector'),
+            description: t('tabsAsTabSelectorDesc'),
+            checked: tabs.asTabSelector,
+            onChange: value => patch('tabs', 'asTabSelector', value)
+          }),
           jsx(Row, {
             title: t('tabsMaxItems'),
             description: t('tabsMaxItemsDesc'),
@@ -5871,7 +6300,8 @@ function SettingsPage() {
               options: [
                 { id: 'off', label: t('groupsAutoOff') },
                 { id: 'date', label: t('groupsAutoDate') },
-                { id: 'source', label: t('groupsAutoSource') }
+                { id: 'source', label: t('groupsAutoSource') },
+                { id: 'project', label: t('groupsAutoProject') }
               ],
               value: groups.autoMode,
               disabled: !groups.enabled,
@@ -6469,7 +6899,7 @@ export default {
 
     // 2b-6) Kontextfenster-Info (reduziert): Prozent je LIVE-Session.
     const stopCtxInfoWatch = $settings.listen(() => {
-      if (readSetting('tabs', 'showContext')) {
+      if (contextInfoNeeded()) {
         scheduleContextRefresh(400)
       } else {
         window.clearTimeout(ctxRefreshTimer)
@@ -6477,7 +6907,7 @@ export default {
       }
     })
 
-    if (readSetting('tabs', 'showContext')) {
+    if (contextInfoNeeded()) {
       scheduleContextRefresh(2500)
     }
 
@@ -6498,6 +6928,11 @@ export default {
 
     ctx.setInterval(() => syncTabBusy(), 2000)
 
+    // 2e) "Liste/Grid als Tab-Selektor": Hermes-eigene Content-Tab-Leiste
+    //     ausblenden, wenn die Pane dieselbe Navigation schon abdeckt.
+    applyTabSelectorMode()
+    const stopTabSelectorWatch = $settings.listen(() => applyTabSelectorMode())
+
     // Versions-Stempel: belegt im Plugin-Storage, welche Version zuletzt sauber
     // geladen wurde (Hilfe beim Debuggen nach Kopie/Hot-Reload).
     try {
@@ -6515,6 +6950,7 @@ export default {
     // 3) Session-Daten: initial + bei Events + Polls.
     void refreshSessions()
     void pollLiveSessions()
+    void refreshProjectsList()
 
     ctx.onEvent('message.complete', () => {
       scheduleSessionsRefresh(1200)
@@ -6530,6 +6966,12 @@ export default {
     ctx.setInterval(() => {
       void refreshSessions()
     }, Math.max(15, Number(readSetting('tabs', 'refreshSec')) || 45) * 1000)
+
+    // Projekt-Cache (Name/Pfad) — selten, aber leichtgewichtig: einmal pro
+    // Minute reicht für die Projekt-Gruppierungs-Labels.
+    ctx.setInterval(() => {
+      void refreshProjectsList()
+    }, 60_000)
 
     ctx.setInterval(() => {
       expireActivity()
@@ -6670,6 +7112,8 @@ export default {
         for (const stop of stopTabBusyWatch) stop()
         stopUiTabsWatch()
         clearUiTabs()
+        stopTabSelectorWatch()
+        clearTabSelectorMode()
         stopGlassWatch()
         clearGlass()
         stopPersonalWatch()

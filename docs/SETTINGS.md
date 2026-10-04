@@ -51,7 +51,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.gridGap` | `6` | Grid: Abstand zwischen den Karten in px. |
 | `tabs.gridLines` | `2` | Grid: max. Zeilen für den Kartentitel (1–4). |
 | `tabs.gridPreview` | `true` | Grid: Vorschau der letzten Nachricht auf den Karten. |
-| `tabs.infoDensity` | `auto` | Info-Dichte: `auto` (wie Hermes), `compact`, `comfortable`, `detailed`. Komfortabel = Detail-Zeile (Branch·Modell·Zähler), Detailreich = + Vorschau; gilt für Liste und Grid. |
+| `tabs.infoDensity` | `auto` | Info-Dichte: `auto` (wie Hermes), `compact`, `comfortable`, `detailed`. Komfortabel = größerer Titel (13 px), lockerere Abstände, Detail-Zeile (Modell · Nachrichten · zuletzt aktiv), Detailreich = zusätzlich Vorschau + Kontext-Auslastung als Text (wenn der Donut aus ist) und zweizeilige Detail-/Vorschau-Zeilen; gilt für Liste und Grid. |
 | `tabs.alignTop` | `true` | Text oben ausrichten: Text-Spalte und Meta-Infos sitzen am Zeilenkopf statt vertikal zentriert (Liste; im Grid stehen die Texte baulich oben). |
 | `tabs.rowGradOn` | `false` | Hintergrund-Verlauf für Zeilen (Liste) & Karten (Grid); Farben `rowGradFrom`/`rowGradTo` (optional mit Alpha `#RRGGBBAA`), Winkel `rowGradAngle` (0–360°). |
 | `tabs.rowShadow` | `off` | Auswählbarer Schlagschatten: `off`/`subtle`/`medium`/`strong`. |
@@ -71,11 +71,28 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.showCounts` | `false` | Nachrichtenanzahl anzeigen. |
 | `tabs.showSource` | `true` | Quellen-Badge (Telegram, Discord, Cron …). |
 | `tabs.openIntent` | `in-place` | `in-place` (ersetzen), `stack` (neben dran), `tab`. |
+| `tabs.asTabSelector` | `false` | Blendet die native Content-Tab-Leiste für Session-Tabs aus (strukturell über `:has()` — nur Streifen mit mindestens einem Session-Tile-Tab; Terminal/Dateien/sonstige Pane-Tabs bleiben unberührt). Sinnvoll, sobald Liste/Grid als alleiniger Tab-Selektor dienen soll. |
 | `tabs.maxItems` | `60` | Maximal geladene Sessions. |
 | `tabs.maxVisible` | `0` | Max. sichtbare Einträge je Gruppe in Liste & Grid; der Rest erscheint hinter „Mehr anzeigen (n)" — erneuter Klick klappt wieder ein („Weniger anzeigen"). `0` = aus. |
 | `tabs.hideCron` | `true` | Cron-Sessions ausblenden. |
 | `tabs.livePollSec` | `30` | Intervall der Live-Status-Abfrage (`session.active_list`). Min. 10s. |
 | `tabs.refreshSec` | `45` | Intervall des Listen-Refresh (`session.list`). Min. 15s. |
+
+### Filter-Leiste
+
+Unter der Toolbar sitzt seit v1.14.0 eine Filter-Leiste wie bei der
+Hermes-Sessionliste — rein clientseitig, nichts wird persistiert (ein
+Pane-Besuch startet die Filter immer frisch):
+
+- **Suche**: Textfeld, durchsucht Titel, Branch und Vorschau (klein-/
+  großschreibungsunabhängig). Ein ✕ im Feld leert die Suche.
+- **Schnellfilter**: `Alle` / `Angepinnt` / `Aktiv` (busy/waiting laut
+  Aktivitäts-Engine) als Segmented-Control.
+- Trifft ein Filter keine Sessions, erscheint ein eigener Leerzustand
+  („Keine Sessions passen zu diesem Filter") statt des generischen
+  „keine Sessions"-Hinweises.
+- Gruppen, deren gesamter Inhalt durch den Filter fällt, verschwinden aus
+  der Liste (keine leeren Header).
 
 ### Pane-Buttons & More-Menü
 
@@ -98,12 +115,32 @@ Animationen unabhängig von diesen Schaltern.
 | Key | Default | Wirkung |
 |---|---|---|
 | `groups.enabled` | `true` | Manuelle Gruppen aktiv. |
-| `groups.autoMode` | `off` | `off`, `date` (Heute/Gestern/Woche/Älter) oder `source`. |
+| `groups.autoMode` | `off` | `off`, `date` (Heute/Gestern/Woche/Älter), `source` oder `project` (Projekt-Ordner — siehe unten). |
 | `groups.stackStyle` | `spine` | Optik eingeklappter Gruppen: `spine`, `fanned`, `pill`. |
 | `groups.showUngrouped` | `true` | „Nicht gruppiert"-Bereich zeigen, wenn Auto-Modus aus ist. |
 
 Gruppen-Daten (Name, Farbe, Zuordnung, Collapse-Zustand) liegen separat unter
 `hermes.plugin.session-flow.groups.v1`.
+
+### Projekt-Ordner-Gruppierung (`groups.autoMode: 'project'`)
+
+Gruppiert alle (nicht manuell zugewiesenen) Sessions nach ihrer Arbeits-CWD —
+spiegelt die Projekt-Baumstruktur von Hermes Desktop:
+
+- **Label**: Treffer in `projects.list` liefert den Projektnamen; sonst der
+  Ordnername der CWD. Sessions ohne CWD landen in „Kein Projekt".
+- **Header-Optik**: Ordner-Icon (offen/geschlossen je Collapse-Zustand) statt
+  Farbpunkt; der Ein-/Ausklapp-Caret ist wie unter „Projekte" erst beim
+  Überfahren sichtbar. Ein Hover-„+" startet eine neue Session direkt mit
+  dieser CWD (`session.create` + `cwd_explicit`).
+- **Drag & Drop**: Einen Tab auf einen Projekt-Header gezogen verschiebt die
+  Session wirklich dorthin (`session.workspace.move`) — keine reine
+  Listen-Umsortierung. Während des Ziehens markiert sich Header **und**
+  Section als Zielzone, ein Inline-Hinweis nennt das Ziel; nach dem Loslassen
+  blitzt die Zeile kurz in der Akzentfarbe auf.
+- **Projekt-Cache**: `$projectsList` pollt `projects.list` alle 60 s (zusätzlich
+  einmal beim Laden) — reicht für Namens-Updates, ohne die Liste ständig
+  anzufragen.
 
 ## UI-Tabs (Content-Tab-Leiste)
 

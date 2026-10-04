@@ -153,9 +153,21 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   (0 bei fester Zahl). **Info-Dichte** (`tabs.infoDensity`) bildet Hermes'
   `sessionListDensity` ab — `auto` folgt live über
   `host.settings.subscribe('sessionListDensity', …)` (Feature-Detect; Fallback
-  bleibt `compact`); Komfortabel rendert `.sf-tab-details`
-  (Branch · Modell · Nachrichten · Tool-Aufrufe), Detailreich zusätzlich die
-  Vorschau-Zeile. **Wichtig**: Plugin-i18n interpoliert Funktions-Keys per
+  bleibt `compact`). Stufen (Liste und Grid): Komfortabel vergrößert den Titel
+  (13 px), öffnet den Abstand zwischen Titel und Subtext (4 px) und füllt die
+  Detail-Zeile (`.sf-tab-details`: Modell · Nachrichten · „zuletzt aktiv“ —
+  Modell und Recency kommen für laufende Sessions aus `session.active_list`,
+  s. `$liveMap`); Detailreich ergänzt die Vorschau-Zeile (`.sf-tab-preview`)
+  und — solange der Kontext-Donut aus ist — die Stats-Zeile mit der
+  Kontext-Auslastung (`.sf-tab-stats`; dafür läuft der Kontext-Fetch auch
+  ohne `showContext`, Gate: `contextInfoNeeded()`). Detail- und Vorschau-Zeile
+  laufen in Detailreich zweizeilig (`-webkit-line-clamp:2`, Grid eingeschlossen).
+  **Datenlage**:
+  `session.list` liefert derzeit nur id/title/preview/started_at/
+  message_count/source — `git_branch`, `model` und `tool_call_count` erreichen
+  das Plugin nicht; Branch und Tool-Zähler erscheinen in der Detail-Zeile
+  daher nur, falls das Gateway sie künftig mitliefert.
+  **Wichtig**: Plugin-i18n interpoliert Funktions-Keys per
   Args — `t('metaMessages', n)` (NICHT `t('key')(n)`; letzteres warf die Pane
   in den Error-Boundary). **Row-Design** (`tabs.rowGrad*`, `rowShadow`, `titleGrad*`,
   `sel*`, `rowLive`) läuft ebenfalls rein deklarativ über `applyRows()` →

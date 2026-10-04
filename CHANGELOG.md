@@ -3,6 +3,67 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [Unreleased]
+
+## [1.14.0] — 2026-10-04
+
+### Added
+- **Projekt-Ordner-Gruppierung** (`groups.autoMode: 'project'`): Sessions
+  gruppieren sich nach ihrer CWD — Label kommt aus `projects.list` (Name)
+  oder fällt auf den Ordnernamen zurück. Der Gruppen-Header übernimmt die
+  Optik der Hermes-Desktop-„Projekte"-Collapsibles: Ordner-Icon statt Punkt,
+  Caret erst beim Überfahren sichtbar, Hover-„+" startet eine neue Session
+  direkt in diesem Projekt.
+- **Drag & Drop verschiebt wirklich ins Projekt:** Ein Tab auf einen
+  Projekt-Ordner-Header gezogen ruft `session.workspace.move` auf — keine
+  reine Anzeige-Zuordnung, sondern dieselbe Aktion wie „In Projekt
+  verschieben…". Ziel-Hervorhebung (Rahmen + Tönung auf Header **und**
+  Section) und ein Inline-Zielhinweis („→ Nach „X" verschieben") zeigen
+  während des Ziehens exakt, was ein Loslassen bewirkt; die gezogene Zeile
+  bekommt Dashed-Outline + Skalierung + Grabbing-Cursor, ein erfolgreicher
+  Drop quittiert mit einem kurzen Akzent-Flash auf der Zielzeile
+  (`prefers-reduced-motion`-sicher).
+- **Filter-Leiste** in der Session-Flow-Pane: Textsuche (Titel/Branch/
+  Vorschau) + Schnellfilter Alle/Angepinnt/Aktiv — rein clientseitig, wie im
+  Vorbild der Hermes-Sessionliste. Leere Treffermenge zeigt einen eigenen
+  Hinweis statt des „keine Sessions"-Leerzustands.
+- **Neue Einstellung `tabs.asTabSelector`:** Blendet die native
+  Content-Tab-Leiste für Session-Tabs aus (strukturell über `:has()` — nur
+  Streifen mit mindestens einem Session-Tile-Tab, Terminal/Dateien bleiben
+  unberührt), wenn die Liste/das Grid dieselbe Navigation schon abdeckt.
+
+### Changed
+- **Info-Dichte klarer abgestuft.** Komfortabel zeigt jetzt einen größeren Titel
+  (13 px), lockerere Abstände zum Subtext (4 px) und eine reichere Detail-Zeile:
+  Modell · Nachrichten · „zuletzt aktiv“ — Modell und Recency kommen für
+  laufende Sessions aus `session.active_list`; Detailreich legt zusätzlich die
+  Vorschau-Zeile und (nur wenn der Kontext-Donut aus ist) eine Stats-Zeile mit
+  der Kontext-Auslastung als Text an. In Detailreich brechen Detail- und
+  Vorschau-Zeile außerdem auf bis zu zwei Zeilen um (Line-Clamp 2) statt
+  einzeilig abzuschneiden.
+- **Datenlage-Befund:** `session.list` liefert derzeit nur
+  id/title/preview/started_at/message_count/source. `git_branch`, `model` und
+  `tool_call_count` erreichen das Plugin nicht — Branch und Tool-Zähler zeigen
+  daher nur, falls das Gateway sie künftig mitliefert (das Modell wird für
+  laufende Sessions aus der Live-Liste nachgereicht). Live verifiziert:
+  Zeilen rendern `data-density`, Titel 13/18 px, Detail-Zeile z. B.
+  „deepseek-flash · 152 Nachrichten · zuletzt aktiv 11m“ (App-Dichte komfortabel).
+
+### Intern
+- Render-Smoketest um Dichte-Checks erweitert (data-density je Stufe,
+  Detail-/Stats-Zeilen, „zuletzt aktiv“ nur für Live-Sessions, Kontext-Stats
+  nur bei Detailreich + Donut aus) sowie um v1.14.0-Checks (Projekt-Header,
+  Filter-Leiste, neue Einstellungs-Zeilen). Der Computed-Style-Test (Chromium)
+  sichert zusätzlich den Umbruch: Detail-/Vorschau-Zeile zweizeilig bei
+  Detailreich, einzeilig bei Komfortabel.
+- Neuer Store `$projectsList` (Projekt-Cache aus `projects.list`, 60-s-Poll)
+  als Grundlage der Projekt-Gruppierung.
+- Dokumentations-/Planungssystem eingeführt: `AGENTS.md` (Einstiegspunkt für
+  Mensch & Agent), `docs/PLANNING.md` (Plan-Prozess + Template) und
+  `docs/plans/` (abgeschlossene/offene Einzelpläne) — siehe dort für den
+  vollständigen Plan dieser Version.
+
+
 ## [1.13.4] — 2026-10-04
 
 ### Fixed
