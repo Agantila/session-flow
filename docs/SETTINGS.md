@@ -52,15 +52,19 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.gridLines` | `2` | Grid: max. Zeilen für den Kartentitel (1–4). |
 | `tabs.gridPreview` | `true` | Grid: Vorschau der letzten Nachricht auf den Karten. |
 | `tabs.infoDensity` | `auto` | Info-Dichte: `auto` (wie Hermes), `compact`, `comfortable`, `detailed`. Komfortabel = Detail-Zeile (Branch·Modell·Zähler), Detailreich = + Vorschau; gilt für Liste und Grid. |
+| `tabs.alignTop` | `true` | Text oben ausrichten: Text-Spalte und Meta-Infos sitzen am Zeilenkopf statt vertikal zentriert (Liste; im Grid stehen die Texte baulich oben). |
 | `tabs.rowGradOn` | `false` | Hintergrund-Verlauf für Zeilen (Liste) & Karten (Grid); Farben `rowGradFrom`/`rowGradTo` (optional mit Alpha `#RRGGBBAA`), Winkel `rowGradAngle` (0–360°). |
 | `tabs.rowShadow` | `off` | Auswählbarer Schlagschatten: `off`/`subtle`/`medium`/`strong`. |
+| `tabs.hoverLift` | `true` | Hover-Anhebung (App-Kachel-Optik): Zeilen/Karten heben sich beim Überfahren leicht an, der Schlagschatten wird tiefer. |
 | `tabs.titleGradOn` | `false` | Titel als Verlauf (`titleGradFrom`/`titleGradTo`, optional mit Alpha `#RRGGBBAA`; Winkel `titleGradAngle`) via Background-Clip Text. |
 | `tabs.selTint` | `standard` | Auswahl-Tönung: `standard` (App-Optik), `accent` (Akzentfarbe), `custom` (eigene Farbe `selColor`, optional mit Alpha `#RRGGBBAA`). Die Tönung liegt als Layer **über** dem Zeilen-Verlauf — der Verlauf bleibt sichtbar. |
 | `tabs.selBorder` | `false` | Kontur um die ausgewählte Zeile/Karte (in der Tönungsfarbe). |
 | `tabs.selShadow` | `off` | Schattenstufe für den Auswahl-Zustand: `off`/`subtle`/`medium`/`strong`. |
 | `tabs.selHover` | `soft` | Hover-Verhalten des ausgewählten Eintrags (Liste & Grid): `soft` (Tönung vertiefen), `strong` (stärker), `off` (unverändert). |
-| `tabs.rowLive` | `false` | Aktiv & Wartend hervorheben: Akzent-Glow + pulsierendes Status-Icon (Bildsprache wie im Tab-Design). |
+| `tabs.rowLive` | `false` | Aktiv & Wartend hervorheben: Akzent-Glow + pulsierendes Status-Icon + Live-Rahmen (Bildsprache wie im Tab-Design). |
+| `tabs.liveFrame` | `glow` | Rahmen für arbeitende/wartende Einträge: `off`/`ring` (statisch)/`glow` (glühender, umlaufender Ring — App-Technik). Nur sichtbar mit `rowLive`. |
 | `tabs.showContext` | `false` | Kontextfenster (kompakt): Prozent-Label je Zeile/Karte für **Live-Sessions** (read-only `session.context_breakdown`, kein Provider-Call). Ab 70 % bernstein, ab 90 % rot; Tooltip zeigt used/max. |
+| `tabs.ctxPie` | `true` | Kontextfenster als Torten-Diagramm: Wert (weiß, Text-Schatten) über einem kleinen Pie (`conic-gradient`, Farbstufen ab 70 %/90 %). Aus = reines Prozent-Label. |
 | `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |
 | `tabs.showTime` | `true` | Alter der Session anzeigen. |
 | `tabs.showPreview` | `false` | Letzte Nachricht als Vorschau (cozy-Dichte). |

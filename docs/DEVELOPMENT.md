@@ -248,6 +248,12 @@ Screenshot zur Sichtprüfung: `SF_STYLE_SHOTS=<ordner> npm run test:style`.
 > Faustregel: Änderungen am Design-CSS (`.sf-tab`-Flächen, Verläufe, Auswahl,
 > Grid-Overrides) immer mit dem Style-Test absichern — Spezifitäts-Fallen
 > (`:where()`-Overrides, Layer-Reihenfolge) sieht man nur in berechneten Styles.
+>
+> Achtung Transitions: `.sf-tab` transitioniert `transform`/`box-shadow`/
+> `background-color` (130 ms). `getComputedStyle` liefert direkt nach einem
+> Zustandswechsel den **Startwert** der laufenden Transition — der Test wartet
+> deshalb mit `settle()` (220 ms) vor jeder Messung. Ohne dieses Warten „kleben"
+> alte Werte und man jagt Phantom-Bugs in der CSS.
 
 ## Troubleshooting
 

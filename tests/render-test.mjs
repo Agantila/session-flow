@@ -456,5 +456,38 @@ try {
   check('Einstellungs-Seite (v1.12) rendert', false, error.message)
 }
 
+// 12) v1.13: App-Optik-Attribute (Text oben, Hover-Anhebung, Kontext-Pie, Live-Rahmen)
+mod.patchSettings('tabs', { alignTop: false, hoverLift: false, ctxPie: false, liveFrame: 'ring' })
+check(
+  'v1.13: alignTop/hoverLift/ctxPie=aus → Attribute off',
+  rootHtml.attrs['data-sf-aligntop'] === 'off' && rootHtml.attrs['data-sf-hoverlift'] === 'off' && rootHtml.attrs['data-sf-ctxpie'] === 'off',
+  `align=${rootHtml.attrs['data-sf-aligntop']} lift=${rootHtml.attrs['data-sf-hoverlift']} pie=${rootHtml.attrs['data-sf-ctxpie']}`
+)
+check('v1.13: liveFrame=ring übernommen', rootHtml.attrs['data-sf-liveframe'] === 'ring', `got=${rootHtml.attrs['data-sf-liveframe']}`)
+mod.patchSettings('tabs', { liveFrame: 'quatsch' })
+check('v1.13: ungültiger liveFrame → Fallback glow', rootHtml.attrs['data-sf-liveframe'] === 'glow', `got=${rootHtml.attrs['data-sf-liveframe']}`)
+mod.patchSettings('tabs', { alignTop: true, hoverLift: true, ctxPie: true, liveFrame: 'glow' })
+
+// 13) Einstellungs-Seite (v1.13): neue Zeilen, Farb-Picker, Übernehmen-Button
+stub.__resetSlots()
+globalThis.__SF__.tCalls.length = 0
+const out13 = { el: [], text: [] }
+walk(settingsPage.render(), out13)
+const keys13 = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+check('Einstellungs-Seite: Text-oben-Zeile', keys13.has('tabsAlignTop') && keys13.has('tabsAlignTopDesc'))
+check('Einstellungs-Seite: Kontext-Pie-Zeile', keys13.has('tabsCtxPie') && keys13.has('tabsCtxPieDesc'))
+check('Einstellungs-Seite: Live-Rahmen-Zeile', keys13.has('tabsLiveFrame') && keys13.has('liveFrameGlow') && keys13.has('liveFrameOff'))
+check('Einstellungs-Seite: Übernehmen-Button (sticky Nav)', keys13.has('applyNow') && keys13.has('applyNowHint'))
+const pickerCount = out13.el.filter(e => e.tag === 'input' && e.props && e.props.type === 'color').length
+check('Einstellungs-Seite: Farb-Picker vorhanden (≥6)', pickerCount >= 6, `pickers=${pickerCount}`)
+const saveButtons = out13.el.filter(e => e.cls.includes('sf-savebtn'))
+check('Einstellungs-Seite: genau ein Save-Button im Nav', saveButtons.length === 1, `btns=${saveButtons.length}`)
+try {
+  saveButtons[0].props.onClick()
+  check('Übernehmen-Klick: persistiert + wendet an (kein Crash)', rootHtml.attrs['data-sf-liveframe'] === 'glow', `live=${rootHtml.attrs['data-sf-liveframe']}`)
+} catch (error) {
+  check('Übernehmen-Klick: persistiert + wendet an (kein Crash)', false, error.message)
+}
+
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)

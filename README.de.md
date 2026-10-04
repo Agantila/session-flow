@@ -121,11 +121,12 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
   Ignorier-Selektoren (CSS).
 - **Session-Tabs**: Dichte (kompakt/bequem), Ansicht (Liste/Grid — Spalten,
   Kartenbreite, Abstand, Titel-Zeilen, Vorschau, Info-Dichte wie Hermes,
-  kompakte Kontextfenster-Auslastung für Live-Sessions, max. sichtbare
-  Einträge je Gruppe mit „Mehr anzeigen“),
-  Zeilen-/Karten-Design (Hintergrund-Verlauf, Schlagschatten, Titel-Verlauf —
-  Farben optional mit Alpha (#RRGGBBAA) —, Auswahl-Tönung/-Kontur/-Schatten
-  inkl. Hover-Stufe, Live-Glow für Aktiv & Wartend),
+  Text oben ausgerichtet, kompaktes Kontextfenster als **Torten-Diagramm** für
+  Live-Sessions, max. sichtbare Einträge je Gruppe mit „Mehr anzeigen“),
+  Zeilen-/Karten-Design (Hintergrund-Verlauf, Schlagschatten, Titel-Verlauf,
+  Auswahl-Tönung/-Kontur/-Schatten inkl. Hover-Stufe, Live-Glow mit dem
+  **glühenden Ring** der App, Hover-Anhebung — alle Farben per **Farb-Picker**,
+  Swatches oder Hex, mit Alpha #RRGGBBAA),
   Status-Darstellung (Icon/Punkt/beides),
   Zeit, Vorschau, Nachrichtenanzahl, Quelle, Öffnen-als (Ersetzen/Stapeln/Tab),
   max. Sessions, Cron ausblenden, Live-Poll, Refresh.

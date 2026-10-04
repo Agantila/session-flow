@@ -3,6 +3,39 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.13.0] — 2026-10-04
+
+### Neu
+- **Text oben ausrichten** (`tabs.alignTop`, Standard an): Text-Spalte und Meta-Infos
+  sitzen am Zeilenkopf statt vertikal zentriert — wie die Session-Zeilen der App.
+- **Kontextfenster als Torten-Diagramm** (`tabs.ctxPie`, Standard an): Der Wert liegt
+  mit Text-Schatten über einem kleinen Pie (`conic-gradient`, Farbstufen ab 70 %/90 %
+  wie bisher). Aus = reines Prozent-Label.
+- **Farb-Picker + Deckkraft**: Jede Design-Farbe (Zeilen-/Titel-Verlauf, Auswahl-Farbe,
+  persönlicher Akzent) hat jetzt einen **nativen Farb-Picker** zusätzlich zu Swatches und
+  Hex-Eingabe; die Deckkraft bleibt über den 0–100-%-Regler einstellbar und überlebt
+  einen Farbwechsel.
+- **App-States übernommen — glühender Rahmen & Anhebung**: `tabs.liveFrame`
+  (Aus / Statischer Ring / **Glühender Ring**) zeichnet arbeitenden & wartenden Einträgen
+  den umlaufenden Glow-Ring der App (gleiche Technik wie `.arc-border`; respektiert
+  `prefers-reduced-motion` und die Animations-Pausierung). `tabs.hoverLift` (Standard an)
+  hebt Zeilen und Karten beim Hover leicht an und vertieft den Schlagschatten.
+- **„Übernehmen" im sticky Menü**: Der sticky Kopf der Einstellungsseite hat rechts einen
+  Button, der Änderungen **sofort persistiert** (überspringt die 350-ms-Debounce) und alle
+  Effekte neu anwendet. Ein Akzent-Punkt zeigt ungespeicherte Änderungen, der Klick
+  quittiert mit „Gespeichert".
+
+### Intern
+- **Computed-Style-Test auf 40 Checks erweitert**: Text-Ausrichtung, Kontext-Pie
+  (conic-gradient, Text-Schatten, Größe, Listen/Grid-Parität), Live-Glow-Ring
+  (`::after` + `sf-arc-turn`) und Hover-Anhebung (`transform: …0,-1`). Neue
+  `settle()`-Hilfe: die Layout-Transition (130 ms) lässt `getComputedStyle` unmittelbar
+  nach einem Zustandswechsel den Start-Wert liefern — gemessen wird erst nach dem
+  Auslaufen.
+- **Render-Smoketest erweitert**: neue Attribute inkl. `liveFrame`-Fallback, die neuen
+  Optionszeilen, 6 Farb-Picker, genau ein Save-Button und der Übernehmen-Klick
+  (persistiert + wendet an, kein Crash).
+
 ## [1.12.0] — 2026-10-04
 
 ### Neu

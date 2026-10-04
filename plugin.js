@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.12.0'
+const VERSION = '1.13.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -176,12 +176,15 @@ const DEFAULT_SETTINGS = {
     gridLines: 2,
     gridPreview: true,
     infoDensity: 'auto',
+    alignTop: true,
     showContext: false,
+    ctxPie: true,
     rowGradOn: false,
     rowGradFrom: '#7c3aed',
     rowGradTo: '#00dbda',
     rowGradAngle: 135,
     rowShadow: 'off',
+    hoverLift: true,
     titleGradOn: false,
     titleGradFrom: '#e4e4e7',
     titleGradTo: '#8b8b93',
@@ -192,6 +195,7 @@ const DEFAULT_SETTINGS = {
     selShadow: 'off',
     selHover: 'soft',
     rowLive: false,
+    liveFrame: 'glow',
     maxVisible: 0
   },
   groups: {
@@ -269,17 +273,39 @@ function deepMerge(base, patch) {
 
 const $settings = atom(DEFAULT_SETTINGS)
 
+const $settingsDirty = atom(false)
+
 let settingsSaveTimer = 0
 
-function scheduleSettingsSave() {
+/** Sofort persistieren (überspringt die Debounce) — für den Übernehmen-Button. */
+function flushSettingsSave() {
   window.clearTimeout(settingsSaveTimer)
-  settingsSaveTimer = window.setTimeout(() => {
+  settingsSaveTimer = 0
+
+  try {
+    CTX?.storage?.set(SETTINGS_KEY, $settings.get())
+  } catch (error) {
+    console.warn(`[${ID}] settings save failed`, error)
+  }
+
+  $settingsDirty.set(false)
+}
+
+function scheduleSettingsSave() {
+  $settingsDirty.set(true)
+  window.clearTimeout(settingsSaveTimer)
+  settingsSaveTimer = window.setTimeout(() => flushSettingsSave(), 350)
+}
+
+/** Alle deklarativen Spiegel (Attribute/Variablen auf <html>) neu anwenden. */
+function applyAllSettings() {
+  for (const apply of [applyGlass, applyPersonal, applyRows, applyUiTabs, applyGrid]) {
     try {
-      CTX?.storage?.set(SETTINGS_KEY, $settings.get())
+      apply()
     } catch (error) {
-      console.warn(`[${ID}] settings save failed`, error)
+      console.warn(`[${ID}] apply failed`, error)
     }
-  }, 350)
+  }
 }
 
 function loadSettings() {
@@ -542,6 +568,10 @@ function clearRows() {
     'data-sf-selborder',
     'data-sf-selshadow',
     'data-sf-selhover',
+    'data-sf-aligntop',
+    'data-sf-hoverlift',
+    'data-sf-ctxpie',
+    'data-sf-liveframe',
     'data-sf-rowlive'
   ]) {
     root.removeAttribute(attr)
@@ -596,6 +626,12 @@ function applyRows() {
 
     // 5) Live-Status: Aktiv/Wartend wie im Tab-Design hervorheben.
     root.setAttribute('data-sf-rowlive', tabs.rowLive ? 'on' : 'off')
+
+    // 6) App-Optik: Text oben, Hover-Anhebung, Live-Rahmen, Kontext-Pie.
+    root.setAttribute('data-sf-aligntop', tabs.alignTop === false ? 'off' : 'on')
+    root.setAttribute('data-sf-hoverlift', tabs.hoverLift === false ? 'off' : 'on')
+    root.setAttribute('data-sf-ctxpie', tabs.ctxPie === false ? 'off' : 'on')
+    root.setAttribute('data-sf-liveframe', ['off', 'ring', 'glow'].includes(tabs.liveFrame) ? tabs.liveFrame : 'glow')
   } catch (error) {
     console.warn(`[${ID}] rows apply failed`, error)
     clearRows()
@@ -1732,6 +1768,10 @@ const EN = {
   tabsRowGradToDesc: 'Second color of the row gradient. Optional alpha via 8-digit hex (#RRGGBBAA).',
   tabsRowGradAngle: 'Gradient angle',
   tabsRowGradAngleDesc: 'Direction of the gradient in degrees (0–360).',
+  tabsAlignTop: 'Top-align text',
+  tabsAlignTopDesc: 'Aligns the text column and meta info to the top of each row/card instead of centering them vertically.',
+  tabsHoverLift: 'Lift on hover',
+  tabsHoverLiftDesc: 'Rows and cards rise slightly on hover and their drop shadow deepens — the app’s tile feel.',
   tabsRowShadow: 'Row drop shadow',
   tabsRowShadowDesc: 'Selectable shadow depth under rows (list) and cards (grid).',
   tabsTitleGrad: 'Gradient title',
@@ -1759,11 +1799,23 @@ const EN = {
   selHoverOff: 'Unchanged',
   selHoverSoft: 'Deepen',
   selHoverStrong: 'Strong',
+  applyNow: 'Apply',
+  savedNow: 'Saved',
+  applyNowHint: 'Saves the settings immediately and re-applies all effects',
+  colorPicker: 'Pick color',
+  colorAlpha: 'Opacity in %',
   tabsLiveHead: 'Live status',
   tabsRowLive: 'Highlight active & waiting',
   tabsRowLiveDesc: 'Sessions that are working or waiting get an accent glow and a pulsing status icon — the same visual language as the tab design.',
+  tabsLiveFrame: 'Live frame',
+  tabsLiveFrameDesc: 'Frame for working & waiting entries: the app’s glowing ring (runs around the edge) or a static ring. Only visible with “Highlight active & waiting”.',
+  liveFrameOff: 'Off',
+  liveFrameRing: 'Static ring',
+  liveFrameGlow: 'Glowing ring',
   tabsShowContext: 'Context window (compact)',
   tabsShowContextDesc: 'Compact percent label per row/card for live sessions (read-only context breakdown; no provider call). Turns amber above 70 % and red above 90 %.',
+  tabsCtxPie: 'Context window as pie',
+  tabsCtxPieDesc: 'Shows the context value on top of a small pie chart (the value keeps a text shadow for readability). Off = plain percent label.',
   ctxTooltip: (used, max, pct) => `Context window: ${used} / ${max} (${pct} %)`,
 
   tabsShowTime: 'Show time',
@@ -2145,6 +2197,10 @@ const DE = {
   tabsRowGradToDesc: 'Zweite Farbe des Zeilen-Verlaufs. Optional Alpha per 8-stelligem Hex (#RRGGBBAA).',
   tabsRowGradAngle: 'Verlaufswinkel',
   tabsRowGradAngleDesc: 'Richtung des Verlaufs in Grad (0–360).',
+  tabsAlignTop: 'Text oben ausrichten',
+  tabsAlignTopDesc: 'Richtet Text-Spalte und Meta-Infos oben in Zeile/Karte aus, statt sie vertikal zu zentrieren.',
+  tabsHoverLift: 'Anhebung bei Hover',
+  tabsHoverLiftDesc: 'Zeilen und Karten heben sich beim Überfahren leicht an; der Schlagschatten wird tiefer — die Kachel-Optik der App.',
   tabsRowShadow: 'Zeilen-Schlagschatten',
   tabsRowShadowDesc: 'Auswählbare Schattenstärke unter Zeilen (Liste) und Karten (Grid).',
   tabsTitleGrad: 'Titel als Verlauf',
@@ -2172,11 +2228,23 @@ const DE = {
   selHoverOff: 'Unverändert',
   selHoverSoft: 'Verstärken',
   selHoverStrong: 'Stark',
+  applyNow: 'Übernehmen',
+  savedNow: 'Gespeichert',
+  applyNowHint: 'Speichert die Einstellungen sofort und wendet alle Effekte neu an',
+  colorPicker: 'Farbe wählen',
+  colorAlpha: 'Deckkraft in %',
   tabsLiveHead: 'Live-Status',
   tabsRowLive: 'Aktiv & Wartend hervorheben',
   tabsRowLiveDesc: 'Arbeitende oder wartende Sessions erhalten einen Akzent-Glow und ein pulsierendes Status-Icon — die gleiche Bildsprache wie im Tab-Design.',
+  tabsLiveFrame: 'Live-Rahmen',
+  tabsLiveFrameDesc: 'Rahmen für arbeitende & wartende Einträge: der glühende Ring der App (läuft um den Rand) oder ein statischer Ring. Sichtbar mit „Aktiv & Wartend hervorheben“.',
+  liveFrameOff: 'Aus',
+  liveFrameRing: 'Statischer Ring',
+  liveFrameGlow: 'Glühender Ring',
   tabsShowContext: 'Kontextfenster (kompakt)',
   tabsShowContextDesc: 'Kompaktes Prozent-Label je Zeile/Karte für Live-Sessions (read-only Context-Breakdown; kein Provider-Call). Ab 70 % bernstein, ab 90 % rot.',
+  tabsCtxPie: 'Kontextfenster als Torten-Diagramm',
+  tabsCtxPieDesc: 'Zeigt den Kontextwert über einem kleinen Torten-Diagramm (der Wert behält einen Text-Schatten für Lesbarkeit). Aus = reines Prozent-Label.',
   ctxTooltip: (used, max, pct) => `Kontextfenster: ${used} / ${max} (${pct} %)`,
 
   tabsShowTime: 'Zeit anzeigen',
@@ -2488,6 +2556,10 @@ const CSS = `
 .sf-tab-ctx{flex-shrink:0;font-size:10px;line-height:14px;font-variant-numeric:tabular-nums;color:var(--ui-text-quaternary)}
 .sf-tab-ctx[data-level=warn]{color:#f59e0b}
 .sf-tab-ctx[data-level=high]{color:var(--destructive,#ef4444)}
+/* Kontextfenster als Torten-Diagramm: der Wert liegt MIT Text-Schatten über dem Pie. */
+html[data-sf-ctxpie~=on] .sf-tab-ctx{position:relative;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:8px;line-height:1;font-weight:700;letter-spacing:-.02em;color:#fff;background:conic-gradient(from -90deg,var(--sf-ctx-color,var(--ui-accent)) var(--sf-ctx-pct,0%),color-mix(in srgb,var(--sf-ctx-color,var(--ui-accent)) 18%,transparent) 0deg);text-shadow:0 1px 2px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.6)}
+html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=warn]{--sf-ctx-color:#f59e0b}
+html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destructive,#ef4444)}
 .sf-tab-time{font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-tab-badge{font-size:9.5px;padding:0 4px;border-radius:4px;background:var(--ui-bg-tertiary,rgba(127,127,127,.12));color:var(--ui-text-tertiary);line-height:14px}
 .sf-tab-count{font-size:10px;color:var(--ui-text-quaternary)}
@@ -2549,6 +2621,9 @@ const CSS = `
 .sf-swatches{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .sf-swatch{width:16px;height:16px;border-radius:50%;border:1px solid var(--ui-stroke-secondary);cursor:pointer}
 .sf-swatch[data-selected=true]{box-shadow:0 0 0 2px var(--ui-bg-elevated,#16181d),0 0 0 3.5px currentColor}
+.sf-colorpick{width:24px;height:24px;flex:0 0 auto;padding:0;border:1px solid var(--ui-stroke-secondary);border-radius:6px;background:transparent;cursor:pointer}
+.sf-colorpick::-webkit-color-swatch-wrapper{padding:2px}
+.sf-colorpick::-webkit-color-swatch{border:0;border-radius:4px}
 .sf-seg{display:inline-grid;grid-auto-flow:column;gap:2px;border-radius:5px;background:var(--ui-bg-tertiary,rgba(127,127,127,.12));padding:2px}
 .sf-seg button{border:0;background:transparent;border-radius:3px;padding:2px 9px;font-size:11px;color:var(--ui-text-secondary);cursor:pointer}
 .sf-seg button[data-active=true]{background:var(--background,#fff);color:var(--foreground);box-shadow:0 1px 2px rgba(0,0,0,.15)}
@@ -2829,8 +2904,14 @@ html[data-sf-shell~='on'][data-sf-shell-border='on'] [data-pane-host]:not([data-
   pointer-events:none
 }
 
-.sf-nav{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:3px;margin:0 -6px 2px;padding:6px;overflow-x:auto;background:color-mix(in srgb,var(--ui-editor-surface-background,var(--background)) 90%,transparent);border-bottom:1px solid var(--ui-stroke-tertiary);scrollbar-width:none;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.sf-nav::-webkit-scrollbar{display:none}
+.sf-nav{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:6px;margin:0 -6px 2px;padding:6px;background:color-mix(in srgb,var(--ui-editor-surface-background,var(--background)) 90%,transparent);border-bottom:1px solid var(--ui-stroke-tertiary);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.sf-nav-chips{display:flex;align-items:center;gap:3px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none}
+.sf-nav-chips::-webkit-scrollbar{display:none}
+/* Übernehmen-Button im sticky Menü: erzwingt Persistenz + erneutes Anwenden. */
+.sf-savebtn{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;border:1px solid var(--ui-stroke-secondary);border-radius:999px;background:transparent;color:var(--ui-text-tertiary);font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background-color .12s ease,color .12s ease,border-color .12s ease}
+.sf-savebtn:hover{background:var(--ui-row-hover-background,color-mix(in srgb,var(--dt-foreground) 6%,transparent));color:var(--foreground)}
+.sf-savebtn[data-dirty=true]{border-color:color-mix(in srgb,var(--ui-accent) 55%,transparent);color:var(--ui-accent)}
+.sf-savebtn[data-state=saved]{border-color:color-mix(in srgb,var(--ui-success,var(--ui-accent)) 60%,transparent);color:var(--ui-success,var(--ui-accent));background:color-mix(in srgb,var(--ui-success,var(--ui-accent)) 14%,transparent)}
 .sf-nav-chip{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;height:24px;padding:0 9px;border:0;border-radius:999px;background:transparent;color:var(--ui-text-tertiary);font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background-color .12s ease,color .12s ease}
 .sf-nav-chip:hover{background:var(--ui-row-hover-background,color-mix(in srgb,var(--dt-foreground) 6%,transparent));color:var(--foreground)}
 .sf-nav-chip[data-active='true']{background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));color:var(--foreground)}
@@ -2843,6 +2924,15 @@ html[data-sf-rowgrad~=on] .sf-tab:hover{filter:brightness(1.07)}
 html[data-sf-rowshadow~=subtle] .sf-tab:not([data-drop=true]){box-shadow:0 1px 2px rgba(0,0,0,.22)}
 html[data-sf-rowshadow~=medium] .sf-tab:not([data-drop=true]){box-shadow:0 2px 6px rgba(0,0,0,.3)}
 html[data-sf-rowshadow~=strong] .sf-tab:not([data-drop=true]){box-shadow:0 4px 14px rgba(0,0,0,.42)}
+/* Text oben ausrichten (Liste & Grid): Text-Spalte und Meta am Zeilenkopf. */
+html[data-sf-aligntop~=on] .sf-tab{align-items:flex-start}
+html[data-sf-aligntop~=on] .sf-tab-lead{margin-top:2px}
+html[data-sf-aligntop~=on] .sf-tab-meta{padding-top:2px}
+html[data-sf-aligntop~=on] .sf-items[data-view=grid] .sf-tab-meta{padding-top:0}
+/* Hover-Anhebung (App-Kachel-Optik): leicht anheben, Schlagschatten tiefer. */
+html[data-sf-hoverlift~=on] .sf-tab{transition:transform .13s ease,box-shadow .13s ease,background-color .13s ease}
+html[data-sf-hoverlift~=on] .sf-tab:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.42)}
+html[data-sf-hoverlift~=on] .sf-tab[data-dragging=true]:hover{transform:none;box-shadow:none}
 html[data-sf-titlegrad~=on] .sf-tab-title{background-image:linear-gradient(var(--sf-title-angle,90deg),var(--sf-title-from,#e4e4e7),var(--sf-title-to,#8b8b93));-webkit-background-clip:text;background-clip:text;color:transparent}
 html[data-sf-rowlive~=on] .sf-tab[data-live=busy]{background:linear-gradient(color-mix(in srgb,var(--ui-accent) 9%,transparent),color-mix(in srgb,var(--ui-accent) 9%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 28%,transparent)}
 html[data-sf-rowlive~=on] .sf-tab[data-live=waiting]{background:linear-gradient(color-mix(in srgb,#f59e0b 9%,transparent),color-mix(in srgb,#f59e0b 9%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,#f59e0b 30%,transparent)}
@@ -2850,6 +2940,13 @@ html[data-sf-rowlive~=on] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowl
 @keyframes sf-live-pulse{0%,100%{opacity:1}50%{opacity:.4}}
 @media (prefers-reduced-motion:reduce){html[data-sf-rowlive~=on] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on] .sf-tab[data-live=waiting] .sf-tab-lead{animation:none}}
 html[data-sf-rowlive~=on][data-renderer-animations-paused] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on][data-renderer-animations-paused] .sf-tab[data-live=waiting] .sf-tab-lead{animation-play-state:paused}
+/* Live-Rahmen (App-Technik): glühender umlaufender Ring bzw. statischer Ring. */
+html[data-sf-liveframe~=glow] .sf-tab[data-live=busy]::after,html[data-sf-liveframe~=glow] .sf-tab[data-live=waiting]::after{content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;padding:1px;background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 238deg,color-mix(in srgb,var(--ui-accent) 30%,transparent) 286deg,var(--ui-accent) 332deg,transparent 360deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;animation:sf-arc-turn var(--sf-arc-duration,3.2s) linear infinite}
+html[data-sf-liveframe~=glow] .sf-tab[data-live=waiting]::after{background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 238deg,color-mix(in srgb,#f59e0b 30%,transparent) 286deg,#f59e0b 332deg,transparent 360deg)}
+html[data-sf-liveframe~=ring] .sf-tab[data-live=busy]::after,html[data-sf-liveframe~=ring] .sf-tab[data-live=waiting]::after{content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;border:1px solid color-mix(in srgb,var(--ui-accent) 45%,transparent)}
+html[data-sf-liveframe~=ring] .sf-tab[data-live=waiting]::after{border-color:color-mix(in srgb,#f59e0b 50%,transparent)}
+@media (prefers-reduced-motion:reduce){html[data-sf-liveframe~=glow] .sf-tab[data-live=busy]::after,html[data-sf-liveframe~=glow] .sf-tab[data-live=waiting]::after{animation:none}}
+html[data-renderer-animations-paused] .sf-tab[data-live=busy]::after,html[data-renderer-animations-paused] .sf-tab[data-live=waiting]::after{animation-play-state:paused}
 html[data-sf-seltint~=accent]{--sf-sel-tone:var(--ui-accent)}
 html[data-sf-seltint~=custom]{--sf-sel-tone:var(--sf-sel-color,#7c3aed)}
 /* Auswahl-Zustand (Liste UND Grid): Tönung als Layer ÜBER dem optionalen
@@ -3681,11 +3778,13 @@ function Segment(props) {
   return jsx(LocalSegment, props)
 }
 
-function NumberInput({ value, onChange, min, max, step }) {
+function NumberInput({ value, onChange, min, max, step, title, 'aria-label': ariaLabel }) {
   return jsx(Input, {
+    'aria-label': ariaLabel,
     className: 'sf-num',
     max,
     min,
+    title,
     onChange: event => {
       const next = Number(event.target.value)
 
@@ -3751,19 +3850,36 @@ function withAlpha(value, percent) {
   return `${base}${Math.round((clamped / 100) * 255).toString(16).padStart(2, '0')}`
 }
 
-/** Farbwahl-Zeile (Swatches + Hex-Eingabe) für Design-Farben; opts.alpha erlaubt Transparenz. */
+/** Farbwahl-Zeile (Farb-Picker + Swatches + Hex-Eingabe + Deckkraft) für Design-Farben. */
 function colorRowControl(value, onChange, resetLabel, opts = {}) {
   const parsed = parseColorValue(value)
+  const base = parsed ? parsed.base : '#000000'
+
+  // Basis-Farbe übernehmen — ein vorhandener Alpha-Wert bleibt erhalten.
+  const commitBase = next => {
+    const picked = String(next || '').trim()
+
+    if (opts.alpha && picked && parsed && parsed.alpha < 100) {
+      onChange(withAlpha(picked, parsed.alpha))
+    } else {
+      onChange(picked)
+    }
+  }
+
   return jsxs('div', {
     className: 'sf-row-control',
     children: [
+      jsx('input', {
+        'aria-label': opts.pickerLabel || 'color',
+        className: 'sf-colorpick',
+        onChange: event => commitBase(event.target.value),
+        title: opts.pickerLabel,
+        type: 'color',
+        value: base
+      }),
       jsx(GroupSwatches, {
         value: parsed ? parsed.base : value || null,
-        onChange: next => {
-          const base = next || ''
-          if (opts.alpha && base && parsed && parsed.alpha < 100) onChange(withAlpha(base, parsed.alpha))
-          else onChange(base)
-        },
+        onChange: next => commitBase(next || ''),
         clearLabel: resetLabel
       }),
       jsx(Input, {
@@ -3777,6 +3893,7 @@ function colorRowControl(value, onChange, resetLabel, opts = {}) {
             min: 0,
             max: 100,
             step: 5,
+            title: opts.alphaLabel,
             value: parsed ? parsed.alpha : 100,
             onChange: percent => onChange(withAlpha(value, percent))
           })
@@ -4044,6 +4161,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         className: 'sf-tab-ctx',
         'data-level': ctxLevel,
         key: 'ctx',
+        style: { '--sf-ctx-pct': `${Math.max(0, Math.min(100, Number(ctx.percent) || 0))}%` },
         title: t('ctxTooltip', usedLabel, maxLabel, String(ctx.percent)),
         children: `${ctx.percent}%`
       })
@@ -4990,6 +5108,32 @@ const SETTINGS_CATEGORIES = [
   { id: 'sf-sec-about', icon: 'info', labelKey: 'navAbout' }
 ]
 
+/** Sticky „Übernehmen": persistiert sofort und wendet alle Effekte neu an. */
+function SettingsSaveAction() {
+  const t = usePluginI18n(ID)
+  const dirty = useValue($settingsDirty)
+  const [saved, setSaved] = useState(false)
+
+  return jsx('button', {
+    'aria-live': 'polite',
+    className: 'sf-savebtn',
+    'data-dirty': dirty ? 'true' : undefined,
+    'data-state': saved ? 'saved' : undefined,
+    onClick: () => {
+      flushSettingsSave()
+      applyAllSettings()
+      setSaved(true)
+      window.setTimeout(() => setSaved(false), 1600)
+    },
+    title: t('applyNowHint'),
+    type: 'button',
+    children: [
+      jsx(Codicon, { key: 'icon', name: saved ? 'check' : 'save', size: '0.8125rem' }),
+      jsx('span', { key: 'label', children: saved ? t('savedNow') : t('applyNow') })
+    ]
+  })
+}
+
 /** Sticky Kategorie-Leiste: springt zur Sektion, markiert die aktuelle. */
 function SettingsNav() {
   const t = usePluginI18n(ID)
@@ -5020,26 +5164,32 @@ function SettingsNav() {
     return () => io.disconnect()
   }, [])
 
-  return jsx('div', {
+  return jsxs('div', {
     className: 'sf-nav',
     role: 'navigation',
-    children: SETTINGS_CATEGORIES.map(category =>
-      jsx('button', {
-        'aria-current': active === category.id ? 'true' : undefined,
-        className: 'sf-nav-chip',
-        'data-active': active === category.id ? 'true' : undefined,
-        key: category.id,
-        onClick: () => {
-          setActive(category.id)
-          document.getElementById(category.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        },
-        type: 'button',
-        children: [
-          jsx(Codicon, { key: 'i', name: category.icon, size: '0.8125rem' }),
-          jsx('span', { key: 'l', children: t(category.labelKey) })
-        ]
-      })
-    )
+    children: [
+      jsx('div', {
+        className: 'sf-nav-chips',
+        children: SETTINGS_CATEGORIES.map(category =>
+          jsx('button', {
+            'aria-current': active === category.id ? 'true' : undefined,
+            className: 'sf-nav-chip',
+            'data-active': active === category.id ? 'true' : undefined,
+            key: category.id,
+            onClick: () => {
+              setActive(category.id)
+              document.getElementById(category.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            },
+            type: 'button',
+            children: [
+              jsx(Codicon, { key: 'i', name: category.icon, size: '0.8125rem' }),
+              jsx('span', { key: 'l', children: t(category.labelKey) })
+            ]
+          })
+        )
+      }),
+      jsx(SettingsSaveAction, {})
+    ]
   })
 }
 
@@ -5438,6 +5588,12 @@ function SettingsPage() {
             checked: tabs.showContext,
             onChange: value => patch('tabs', 'showContext', value)
           }),
+          jsx(ToggleRow, {
+            label: t('tabsCtxPie'),
+            description: t('tabsCtxPieDesc'),
+            checked: tabs.ctxPie,
+            onChange: value => patch('tabs', 'ctxPie', value)
+          }),
           jsx(Row, {
             title: t('tabsStatusStyle'),
             description: t('tabsStatusStyleDesc'),
@@ -5461,12 +5617,12 @@ function SettingsPage() {
           jsx(Row, {
             title: t('tabsRowGradFrom'),
             description: t('tabsRowGradFromDesc'),
-            action: colorRowControl(tabs.rowGradFrom, value => patch('tabs', 'rowGradFrom', value), t('personalAccentReset'), { alpha: true })
+            action: colorRowControl(tabs.rowGradFrom, value => patch('tabs', 'rowGradFrom', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(Row, {
             title: t('tabsRowGradTo'),
             description: t('tabsRowGradToDesc'),
-            action: colorRowControl(tabs.rowGradTo, value => patch('tabs', 'rowGradTo', value), t('personalAccentReset'), { alpha: true })
+            action: colorRowControl(tabs.rowGradTo, value => patch('tabs', 'rowGradTo', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(Row, {
             title: t('tabsRowGradAngle'),
@@ -5494,6 +5650,18 @@ function SettingsPage() {
             })
           }),
           jsx(ToggleRow, {
+            label: t('tabsAlignTop'),
+            description: t('tabsAlignTopDesc'),
+            checked: tabs.alignTop,
+            onChange: value => patch('tabs', 'alignTop', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('tabsHoverLift'),
+            description: t('tabsHoverLiftDesc'),
+            checked: tabs.hoverLift,
+            onChange: value => patch('tabs', 'hoverLift', value)
+          }),
+          jsx(ToggleRow, {
             label: t('tabsTitleGrad'),
             description: t('tabsTitleGradDesc'),
             checked: tabs.titleGradOn,
@@ -5502,12 +5670,12 @@ function SettingsPage() {
           jsx(Row, {
             title: t('tabsTitleGradFrom'),
             description: t('tabsTitleGradFromDesc'),
-            action: colorRowControl(tabs.titleGradFrom, value => patch('tabs', 'titleGradFrom', value), t('personalAccentReset'), { alpha: true })
+            action: colorRowControl(tabs.titleGradFrom, value => patch('tabs', 'titleGradFrom', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(Row, {
             title: t('tabsTitleGradTo'),
             description: t('tabsTitleGradToDesc'),
-            action: colorRowControl(tabs.titleGradTo, value => patch('tabs', 'titleGradTo', value), t('personalAccentReset'), { alpha: true })
+            action: colorRowControl(tabs.titleGradTo, value => patch('tabs', 'titleGradTo', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(Row, {
             title: t('tabsTitleGradAngle'),
@@ -5537,7 +5705,7 @@ function SettingsPage() {
           jsx(Row, {
             title: t('tabsSelColor'),
             description: t('tabsSelColorDesc'),
-            action: colorRowControl(tabs.selColor, value => patch('tabs', 'selColor', value), t('personalAccentReset'), { alpha: true })
+            action: colorRowControl(tabs.selColor, value => patch('tabs', 'selColor', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(ToggleRow, {
             label: t('tabsSelBorder'),
@@ -5578,6 +5746,19 @@ function SettingsPage() {
             description: t('tabsRowLiveDesc'),
             checked: tabs.rowLive,
             onChange: value => patch('tabs', 'rowLive', value)
+          }),
+          jsx(Row, {
+            title: t('tabsLiveFrame'),
+            description: t('tabsLiveFrameDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'off', label: t('liveFrameOff') },
+                { id: 'ring', label: t('liveFrameRing') },
+                { id: 'glow', label: t('liveFrameGlow') }
+              ],
+              value: tabs.liveFrame,
+              onChange: value => patch('tabs', 'liveFrame', value)
+            })
           }),
           jsx(ToggleRow, {
             label: t('tabsShowTime'),
@@ -6079,6 +6260,14 @@ function SettingsPage() {
                   value: personal.accentColor || null,
                   onChange: value => patch('personal', 'accentColor', value || '#7c3aed'),
                   clearLabel: t('personalAccentReset')
+                }),
+                jsx('input', {
+                  'aria-label': t('colorPicker'),
+                  className: 'sf-colorpick',
+                  onChange: event => patch('personal', 'accentColor', String(event.target.value || '').trim()),
+                  title: t('colorPicker'),
+                  type: 'color',
+                  value: /^#[0-9a-f]{6}$/i.test(String(personal.accentColor || '')) ? personal.accentColor : '#7c3aed'
                 }),
                 jsx(Input, {
                   className: 'sf-num',

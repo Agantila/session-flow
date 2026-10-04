@@ -84,13 +84,14 @@ const tokens = [
 ].join(';')
 
 const row = (id, label, extra = '') =>
-  `<div class="sf-tab" id="${id}"${extra}><span class="sf-tab-lead"></span><span class="sf-tab-main"><span class="sf-tab-title">${label}</span><span class="sf-tab-preview">preview</span></span><span class="sf-tab-meta"><span class="sf-tab-time">now</span></span></div>`
+  `<div class="sf-tab" id="${id}"${extra}><span class="sf-tab-lead"></span><span class="sf-tab-main"><span class="sf-tab-title">${label}</span><span class="sf-tab-preview">preview</span></span><span class="sf-tab-meta"><span class="sf-tab-ctx" data-level="warn" style="--sf-ctx-pct:56%">56%</span><span class="sf-tab-time">now</span></span></div>`
 
 const html = `<!doctype html>
 <html lang="de"
   data-sf-rowgrad="on" data-sf-rowshadow="medium" data-sf-titlegrad="on"
   data-sf-seltint="custom" data-sf-selborder="on" data-sf-selshadow="medium"
-  data-sf-selhover="soft" data-sf-rowlive="on"
+  data-sf-selhover="soft" data-sf-rowlive="on" data-sf-liveframe="glow"
+  data-sf-aligntop="on" data-sf-hoverlift="on" data-sf-ctxpie="on"
   style="--sf-row-from:#7c3aed80;--sf-row-to:#00dbda20;--sf-row-angle:120deg;--sf-sel-color:#ff00ff;--sf-title-from:#e4e4e7;--sf-title-to:#8b8b93;--sf-title-angle:90deg">
 <head><meta charset="utf-8">
 <style>:root{${tokens}}body{background:#1c1c1e;padding:16px;margin:0}</style>
@@ -132,15 +133,27 @@ const probeExpr = `(() => {
     const cs = getComputedStyle(el)
     const title = el.querySelector('.sf-tab-title')
     const tcs = title ? getComputedStyle(title) : null
+    const ctxEl = el.querySelector('.sf-tab-ctx')
+    const ccs = ctxEl ? getComputedStyle(ctxEl) : null
+    const fcs = getComputedStyle(el, '::after')
     return {
       bgImage: cs.backgroundImage,
       bgColor: cs.backgroundColor,
       shadow: cs.boxShadow,
       outline: cs.outline,
       filter: cs.filter,
+      alignItems: cs.alignItems,
+      transform: cs.transform,
+      transition: cs.transitionProperty,
       titleImage: tcs ? tcs.backgroundImage : '',
       titleColor: tcs ? tcs.color : '',
-      titleClip: tcs ? tcs.backgroundClip : ''
+      titleClip: tcs ? tcs.backgroundClip : '',
+      ctxBg: ccs ? ccs.backgroundImage : '',
+      ctxColor: ccs ? ccs.color : '',
+      ctxShadow: ccs ? ccs.textShadow : '',
+      ctxWidth: ccs ? ccs.width : '',
+      frameContent: fcs ? fcs.content : '',
+      frameAnim: fcs ? fcs.animationName : ''
     }
   }
   const out = {}
@@ -149,6 +162,10 @@ const probeExpr = `(() => {
 })()`
 
 const read = () => page.evaluate(probeExpr)
+// .sf-tab transitioniert transform/box-shadow/background-color (130 ms) — nach
+// einem Zustandswechsel liefert getComputedStyle sonst den START-Wert der
+// laufenden Transition. Vor jeder Messung kurz auslaufen lassen.
+const settle = () => page.waitForTimeout(220)
 const has = (s, sub) => typeof s === 'string' && s.includes(sub)
 const gradCount = s => (typeof s === 'string' && s.match(/linear-gradient\(/g) || []).length
 
@@ -244,7 +261,37 @@ try {
   await page.evaluate(() => document.documentElement.setAttribute('data-sf-selhover', 'soft'))
   await page.mouse.move(4, 4)
 
-  // ── 7) Standard-Tönung: App-Standard-Fläche über dem Verlauf, beide Views ─
+  // ── 7) v1.13: App-Optik — Text oben, Hover-Anhebung, Kontext-Pie, Live-Rahmen ─
+  await page.evaluate(() => {
+    const r = document.documentElement
+    r.setAttribute('data-sf-rowgrad', 'on')
+    r.setAttribute('data-sf-seltint', 'custom')
+    r.setAttribute('data-sf-selhover', 'soft')
+    r.style.setProperty('--sf-row-from', '#7c3aed80')
+    r.style.setProperty('--sf-row-to', '#00dbda20')
+    r.style.setProperty('--sf-row-angle', '120deg')
+  })
+  await settle()
+  P = await read()
+  check(
+    'Text oben: Liste=flex-start, Grid nicht zentriert (Text bereits oben)',
+    P.l1.alignItems === 'flex-start' && P.g1.alignItems !== 'center',
+    `list=${P.l1.alignItems} grid=${P.g1.alignItems}`
+  )
+  check('Kontext-Pie: conic-gradient als Hintergrund', has(P.g1.ctxBg, 'conic-gradient'), P.g1.ctxBg.slice(0, 80))
+  check('Kontext-Pie: Wert weiß + Text-Schatten', P.g1.ctxColor === 'rgb(255, 255, 255)' && has(P.g1.ctxShadow, 'rgba(0, 0, 0'), P.g1.ctxShadow)
+  check('Kontext-Pie: kompakte Größe (22px)', P.g1.ctxWidth === '22px', P.g1.ctxWidth)
+  check('Parität: Kontext-Pie Liste==Grid', P.l1.ctxBg === P.g1.ctxBg, '')
+  check('Live-Rahmen: glühender Ring am busy-Eintrag', P.g3.frameContent !== 'none' && has(P.g3.frameAnim, 'sf-arc-turn'), `${P.g3.frameContent} / ${P.g3.frameAnim}`)
+  check('Live-Rahmen: kein Ring am normalen Eintrag', P.g1.frameContent === 'none', P.g1.frameContent)
+  check('Hover-Anhebung: Transition auf transform', has(P.g1.transition, 'transform'), P.g1.transition)
+  await page.hover('#g1')
+  await settle()
+  const lift = await read()
+  check('Hover-Anhebung: transform beim Hover aktiv', lift.g1.transform !== 'none' && has(lift.g1.transform, 'matrix'), lift.g1.transform)
+  await page.mouse.move(4, 4)
+
+  // ── 8) Standard-Tönung: App-Standard-Fläche über dem Verlauf, beide Views ─
   await page.evaluate(() => document.documentElement.setAttribute('data-sf-seltint', 'standard'))
   P = await read()
   check('Standard-Tönung: App-Fläche @12 % als Layer', has(P.g2.bgImage, 'rgba(127, 127, 127, 0.12'), P.g2.bgImage.slice(0, 150))
@@ -270,6 +317,7 @@ try {
     const r = document.documentElement
     for (const a of ['data-sf-rowgrad', 'data-sf-rowshadow', 'data-sf-titlegrad', 'data-sf-seltint', 'data-sf-selborder', 'data-sf-selshadow', 'data-sf-selhover', 'data-sf-rowlive']) r.removeAttribute(a)
   })
+  await settle()
   P = await read()
   check('Design aus: Grid-Karte = App-Fläche @4 %', P.g1.bgImage === 'none' && has(P.g1.bgColor, '0.04'), `${P.g1.bgImage} / ${P.g1.bgColor}`)
   check('Design aus: Listenzeile ohne Hintergrund', P.l1.bgImage === 'none' && P.l1.bgColor === 'rgba(0, 0, 0, 0)', P.l1.bgColor)
