@@ -3,6 +3,36 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.13.2] — 2026-10-04
+
+### Fixed
+- **Kontextfenster-Wert besser lesbar**: Die Prozentzahl über dem Torten-Diagramm
+  bekommt einen **mehrlagigen Text-Schatten** (dunkle Kontur + weicher Glow an allen
+  Seiten), etwas mehr Fläche (24 px) und kräftigere, kontrastreichere Füllfarben
+  (Bernstein `#d97706`, Rot `--destructive`) — lesbar auch auf hellen Füllungen und
+  im hellen Theme.
+- **Chat-Hintergrund (Bild/Video) wurde nicht angezeigt**: Die Injektion zielte auf
+  `[data-pane-host]` — diesen Marker tragen nur Keep-Alive-Panes (z. B. das
+  Plugin-Pane selbst); die Chat-/Arbeitsbereich-Panes haben ihn nicht, also wurde nie
+  ein Layer gesetzt. Zusätzlich deckte die opake Chat-Fläche
+  (`--ui-chat-surface-background`) alles ab. Jetzt liegt der Layer direkt in jeder
+  sichtbaren **Chat-Surface** (`[data-chat-surface]`, stabiler App-Marker) — deren
+  `isolate`-Kontext lässt ein `z-index:-1`-Kind sauber über der Fläche und unter dem
+  Inhalt zeichnen. Der Geltungsbereich **„alle"** setzt zusätzlich Layer in Zonen ohne
+  Chat-Surface und schaltet deren Fläche transparent (Variablen-Override), damit der
+  Layer sichtbar wird. Videos laufen als `<video>` im Layer (stumm, loop, autoplay,
+  `object-fit` = Darstellung).
+- **Content-Abgrenzung** nutzt dieselben Anker: Der Rahmen sitzt jetzt auch an
+  Chat-Surfaces (bzw. Pane-Hosts und chat-losen Zonen bei „alle") und setzt den Inhalt
+  per Innenabstand ein — vorher nur an Plugin-Panes.
+
+### Intern
+- **Render-Smoketest** deckt die Hintergrund-Injektion über das Mini-DOM ab (Layer an
+  der Chat-Surface, Scope-Wechsel inkl. Zonen, `<video>`-Element, vollständiges
+  Aufräumen) sowie die neuen Rahmen-Anker.
+- **Computed-Style-Test** prüft den mehrlagigen Text-Schatten, die Pie-Größe, den
+  `z-index:-1` des Layers und den Transparenz-Override am echten Chromium.
+
 ## [1.13.1] — 2026-10-04
 
 ### Fixed

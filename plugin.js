@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.13.1'
+const VERSION = '1.13.2'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -479,15 +479,24 @@ function syncPaneShell() {
     const p = $settings.get().personal || {}
     const on = Boolean(p.shellOn)
     const scopeAll = p.shellScope === 'all'
-    const isTile = host => (host.getAttribute('data-pane-host') || '').startsWith('session-tile:')
-    const bodyApplies = body => {
-      const hosts = body ? [...body.querySelectorAll('[data-pane-host]')] : []
-      return hosts.length > 0 && (scopeAll || hosts.some(isTile))
+    const inHiddenPane = element => Boolean(element.closest('[data-pane-hidden]'))
+
+    // Dieselben Anker wie der Hintergrund: Chat-Surfaces (stabiler Marker) und — bei
+    // Geltungsbereich „alle" — Pane-Hosts (Plugin-Panes, dort wird der Host-Inhalt per
+    // padding eingesetzt) sowie Zonen ohne Chat-Surface.
+    const targets = [...document.querySelectorAll('[data-chat-surface]')]
+
+    if (scopeAll) {
+      targets.push(...document.querySelectorAll('[data-pane-host]:not([data-pane-overlay])'))
+      targets.push(
+        ...[...document.querySelectorAll('[data-tree-group]')].filter(zone => !zone.querySelector('[data-chat-surface]'))
+      )
     }
 
-    // Nicht mehr passende Overlays (Option aus, Scope gewechselt, Body leer) entfernen.
+    const wanted = new Set(targets.filter(target => !inHiddenPane(target)))
+
     for (const frame of [...document.querySelectorAll('[data-sf-shell-frame]')]) {
-      if (!on || !bodyApplies(frame.parentElement)) {
+      if (!on || !wanted.has(frame.parentElement)) {
         frame.remove()
       }
     }
@@ -496,21 +505,15 @@ function syncPaneShell() {
       return
     }
 
-    for (const host of document.querySelectorAll('[data-pane-host]:not([data-pane-overlay])')) {
-      const body = host.parentElement
-
-      if (!body || !bodyApplies(body)) {
-        continue
-      }
-
-      if (body.querySelector(':scope > [data-sf-shell-frame]')) {
+    for (const target of wanted) {
+      if (target.querySelector(':scope > [data-sf-shell-frame]')) {
         continue
       }
 
       const frame = document.createElement('div')
       frame.className = 'sf-shell-frame'
       frame.setAttribute('data-sf-shell-frame', '')
-      body.appendChild(frame)
+      target.appendChild(frame)
     }
   } catch (error) {
     console.warn(`[${ID}] shell sync failed`, error)
@@ -719,20 +722,36 @@ function syncPaneBackgrounds() {
     const kind = p.bgKind === 'video' ? 'video' : 'image'
     const scopeAll = p.bgScope === 'all'
 
-    for (const host of document.querySelectorAll('[data-pane-host]')) {
-      const paneId = host.getAttribute('data-pane-host') || ''
-      const applies = active && (scopeAll || paneId.startsWith('session-tile:'))
-      const existing = host.querySelector('[data-sf-bg-layer]')
+    // Ziele: immer die sichtbaren Chat-Surfaces (stabiler Marker `data-chat-surface`;
+    // sie sind `isolate`, darum zeichnet ein z-index:-1-Layer über ihrer Fläche und
+    // unter ihrem Inhalt). Bei Geltungsbereich „alle" zusätzlich jede Zone OHNE
+    // Chat-Surface — dort wird die Zonenfläche per Variablen-Override transparent,
+    // weil ein Negativ-Layer sonst hinter ihr läge.
+    const inHiddenPane = element => Boolean(element.closest('[data-pane-hidden]'))
+    const targets = [...document.querySelectorAll('[data-chat-surface]')]
 
-      if (!applies) {
-        if (existing) {
-          existing.remove()
-        }
+    if (scopeAll) {
+      targets.push(
+        ...[...document.querySelectorAll('[data-tree-group]')].filter(zone => !zone.querySelector('[data-chat-surface]'))
+      )
+    }
 
-        continue
+    const wanted = new Set(targets.filter(target => !inHiddenPane(target)))
+
+    // Layer entfernen, die nicht mehr gebraucht werden (Option aus, Target weg, Scope gewechselt).
+    for (const layer of [...document.querySelectorAll('[data-sf-bg-layer]')]) {
+      if (!active || !wanted.has(layer.parentElement)) {
+        layer.remove()
       }
+    }
 
-      const visible = !host.hasAttribute('data-pane-hidden')
+    if (!active) {
+      return
+    }
+
+    for (const target of wanted) {
+      const existing = target.querySelector(':scope > [data-sf-bg-layer]')
+      const visible = !inHiddenPane(target)
       const sig = `${kind}|${bgPath}|${p.bgFit}|${visible ? 'v' : 'h'}`
 
       if (existing && existing.getAttribute('data-sf-bg-sig') === sig) {
@@ -744,7 +763,7 @@ function syncPaneBackgrounds() {
       if (!existing) {
         layer.className = 'sf-bg-layer'
         layer.setAttribute('data-sf-bg-layer', '')
-        host.appendChild(layer)
+        target.appendChild(layer)
       }
 
       layer.setAttribute('data-sf-bg-sig', sig)
@@ -2627,10 +2646,12 @@ const CSS = `
 .sf-tab-ctx{flex-shrink:0;font-size:10px;line-height:14px;font-variant-numeric:tabular-nums;color:var(--ui-text-quaternary)}
 .sf-tab-ctx[data-level=warn]{color:#f59e0b}
 .sf-tab-ctx[data-level=high]{color:var(--destructive,#ef4444)}
-/* Kontextfenster als Torten-Diagramm: der Wert liegt MIT Text-Schatten über dem Pie. */
-html[data-sf-ctxpie~=on] .sf-tab-ctx{position:relative;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:8px;line-height:1;font-weight:700;letter-spacing:-.02em;color:#fff;background:conic-gradient(from -90deg,var(--sf-ctx-color,var(--ui-accent)) var(--sf-ctx-pct,0%),color-mix(in srgb,var(--sf-ctx-color,var(--ui-accent)) 18%,transparent) 0deg);text-shadow:0 1px 2px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.6)}
-html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=warn]{--sf-ctx-color:#f59e0b}
-html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destructive,#ef4444)}
+/* Kontextfenster als Torten-Diagramm: der Wert liegt MIT Text-Schatten über dem Pie.
+   Der Schatten ist mehrlagig (Kontur + Glow), damit die weiße Zahl auch auf hellen
+   Füllungen (Bernstein/Rot) und im hellen Theme lesbar bleibt. */
+html[data-sf-ctxpie~=on] .sf-tab-ctx{position:relative;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:9px;line-height:1;font-weight:800;letter-spacing:-.03em;color:#fff;background:conic-gradient(from -90deg,var(--sf-ctx-color,var(--ui-accent)) var(--sf-ctx-pct,0%),color-mix(in srgb,var(--sf-ctx-color,var(--ui-accent)) 18%,transparent) 0deg);text-shadow:0 0 1px rgba(0,0,0,.95),0 0 2px rgba(0,0,0,.9),0 0 4px rgba(0,0,0,.6),0 1px 1px rgba(0,0,0,.85),0 -1px 1px rgba(0,0,0,.75),0 1px 2px rgba(0,0,0,.7)}
+html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=warn]{--sf-ctx-color:#d97706}
+html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destructive,#dc2626)}
 .sf-tab-time{font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-tab-badge{font-size:9.5px;padding:0 4px;border-radius:4px;background:var(--ui-bg-tertiary,rgba(127,127,127,.12));color:var(--ui-text-tertiary);line-height:14px}
 .sf-tab-count{font-size:10px;color:var(--ui-text-quaternary)}
@@ -2934,12 +2955,19 @@ html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destr
 
 html[data-sf-accent~='on']{--ui-accent:var(--sf-accent-color,#7c3aed)}
 
+/* Geltungsbereich „alle": die Zonenfläche transparent schalten, damit der
+   Hintergrund-Layer (z-index:-1) hinter dem Pane-Inhalt sichtbar wird — sonst läge
+   er hinter der opaken Zonen-Fläche (--ui-editor-surface-background). */
+html[data-sf-bg~='on'][data-sf-bg-scope='all']{
+  --ui-editor-surface-background:transparent
+}
+
 /* Content-Abgrenzung: Der Pane-Inhalt wird um --sf-shell-pad eingesetzt (Abstand)
-   und der Rahmen liegt als Overlay (.sf-shell-frame) im Pane-Body. Das Overlay ist
-   Geschwister des Pane-Hosts — der Host selbst entspricht exakt der Pane-Fläche
-   (anchor-size), sodass Rahmen/Schatten dort am Rand klebten und der
-   overflow-hidden-Body den Schatten abschnitt. Als Geschwister scrollt das Overlay
-   außerdem nicht mit dem Inhalt mit. */
+   und der Rahmen liegt als Overlay (.sf-shell-frame) direkt im jeweiligen Anker:
+   in der Chat-Surface bzw. im Pane-Host. Beide Anker sind kleiner/anders als die
+   Pane-Fläche selbst — ein Rahmen am Pane-Host-Rand klebte am Sash/Fensterrand und
+   sein Schatten würde vom overflow:hidden des Bodys abgeschnitten. */
+html[data-sf-shell~='on'] [data-chat-surface],
 html[data-sf-shell~='on'] [data-pane-host]:not([data-pane-overlay]){
   padding:var(--sf-shell-pad,0px)
 }
@@ -2961,7 +2989,7 @@ html:not([data-sf-shell~='on']) .sf-shell-frame{
 
 .sf-bg-layer{
   position:absolute;
-  inset:var(--sf-shell-pad,0px);
+  inset:0;
   z-index:-1;
   pointer-events:none;
   background-image:var(--sf-bg-url,none);

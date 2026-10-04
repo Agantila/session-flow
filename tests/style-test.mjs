@@ -80,6 +80,7 @@ const tokens = [
   '--ui-row-active-background:rgba(127,127,127,.12)',
   '--ui-bg-tertiary:rgba(127,127,127,.12)',
   '--ui-stroke-tertiary:rgba(127,127,127,.2)',
+  '--ui-editor-surface-background:#101014',
   '--foreground:#e5e5e5'
 ].join(';')
 
@@ -93,6 +94,7 @@ const html = `<!doctype html>
   data-sf-selhover="soft" data-sf-rowlive="on" data-sf-liveframe="glow"
   data-sf-aligntop="on" data-sf-hoverlift="on" data-sf-ctxpie="on"
   data-sf-shell="on" data-sf-shell-border="on" data-sf-shell-shadow="medium"
+  data-sf-bg="on" data-sf-bg-kind="image" data-sf-bg-scope="all"
   style="--sf-row-from:#7c3aed80;--sf-row-to:#00dbda20;--sf-row-angle:120deg;--sf-sel-color:#ff00ff;--sf-title-from:#e4e4e7;--sf-title-to:#8b8b93;--sf-title-angle:90deg;--sf-shell-pad:8px;--sf-shell-radius:10px;--sf-shell-shadow:0 2px 4px rgba(0,0,0,.12), 0 10px 28px rgba(0,0,0,.13)">
 <head><meta charset="utf-8">
 <style>:root{${tokens}}body{background:#1c1c1e;padding:16px;margin:0}</style>
@@ -118,6 +120,9 @@ const html = `<!doctype html>
     <div id="paneBody" style="position:relative;overflow:hidden;width:320px;height:120px">
       <div data-pane-host="session-tile:x" id="host1" style="position:absolute;inset:0"><div style="height:100%;background:#2a2a2e"></div></div>
       <div class="sf-shell-frame" data-sf-shell-frame id="frame1"></div>
+    </div>
+    <div id="zoneSurface" style="background:var(--ui-editor-surface-background);height:40px;position:relative">
+      <div class="sf-bg-layer" data-sf-bg-layer id="bgLayer"></div>
     </div>
   </div>
 </body></html>`
@@ -285,8 +290,13 @@ try {
     `list=${P.l1.alignItems} grid=${P.g1.alignItems}`
   )
   check('Kontext-Pie: conic-gradient als Hintergrund', has(P.g1.ctxBg, 'conic-gradient'), P.g1.ctxBg.slice(0, 80))
-  check('Kontext-Pie: Wert weiß + Text-Schatten', P.g1.ctxColor === 'rgb(255, 255, 255)' && has(P.g1.ctxShadow, 'rgba(0, 0, 0'), P.g1.ctxShadow)
-  check('Kontext-Pie: kompakte Größe (22px)', P.g1.ctxWidth === '22px', P.g1.ctxWidth)
+  check(
+    'Kontext-Pie: mehrlagiger Text-Schatten (Kontur + Glow)',
+    (P.g1.ctxShadow.match(/rgba\(/g) || []).length >= 4 && has(P.g1.ctxShadow, '1px 1px') && has(P.g1.ctxShadow, '-1px'),
+    P.g1.ctxShadow
+  )
+  check('Kontext-Pie: Wert weiß', P.g1.ctxColor === 'rgb(255, 255, 255)', P.g1.ctxColor)
+  check('Kontext-Pie: kompakte Größe (24px)', P.g1.ctxWidth === '24px', P.g1.ctxWidth)
   check('Parität: Kontext-Pie Liste==Grid', P.l1.ctxBg === P.g1.ctxBg, '')
   check('Live-Rahmen: glühender Ring am busy-Eintrag', P.g3.frameContent !== 'none' && has(P.g3.frameAnim, 'sf-arc-turn'), `${P.g3.frameContent} / ${P.g3.frameAnim}`)
   check('Live-Rahmen: kein Ring am normalen Eintrag', P.g1.frameContent === 'none', P.g1.frameContent)
@@ -349,6 +359,15 @@ try {
   check('Abgrenzung: Schlagschatten liegt am Overlay', shell.frameShadow !== 'none' && has(shell.frameShadow, '0.12'), shell.frameShadow)
   check('Abgrenzung: Radius übernommen (10px)', shell.frameRadius === '10px', shell.frameRadius)
   check('Abgrenzung: Overlay fängt keine Klicks', shell.framePointer === 'none' && shell.frameZ === '2', `${shell.framePointer}/${shell.frameZ}`)
+
+  // ── 12) v1.13.2: Chat-Hintergrund — Layer hinter dem Inhalt + Flächen-Override ──
+  const wallpaper = await page.evaluate(() => {
+    const layer = getComputedStyle(document.getElementById('bgLayer'))
+    const zone = getComputedStyle(document.getElementById('zoneSurface'))
+    return { z: layer.zIndex, pointer: layer.pointerEvents, zoneBg: zone.backgroundColor }
+  })
+  check('Hintergrund: Layer liegt hinter dem Inhalt (z-index -1)', wallpaper.z === '-1' && wallpaper.pointer === 'none', `${wallpaper.z}/${wallpaper.pointer}`)
+  check('Hintergrund: Scope=alle macht die Zonenfläche transparent', wallpaper.zoneBg === 'rgba(0, 0, 0, 0)', wallpaper.zoneBg)
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }

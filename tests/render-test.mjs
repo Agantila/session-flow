@@ -144,8 +144,11 @@ globalThis.__SF__.rootEl = rootEl
 const shellMatchers = {
   '[data-pane-host]': node => 'data-pane-host' in node.attrs,
   '[data-pane-host]:not([data-pane-overlay])': node => 'data-pane-host' in node.attrs && !('data-pane-overlay' in node.attrs),
+  '[data-chat-surface]': node => 'data-chat-surface' in node.attrs,
+  '[data-tree-group]': node => 'data-tree-group' in node.attrs,
   '[data-sf-shell-frame]': node => 'data-sf-shell-frame' in node.attrs,
-  '[data-sf-bg-layer]': node => 'data-sf-bg-layer' in node.attrs
+  '[data-sf-bg-layer]': node => 'data-sf-bg-layer' in node.attrs,
+  '[data-sf-bg-video]': node => 'data-sf-bg-video' in node.attrs
 }
 
 function domWalk(node, out) {
@@ -199,7 +202,25 @@ function makeNode(attrs = {}) {
     },
     querySelector(selector) {
       return node.querySelectorAll(selector)[0] || null
-    }
+    },
+    closest(selector) {
+      const test = shellMatchers[selector] || (() => false)
+      let current = node
+
+      while (current) {
+        if (test(current)) {
+          return current
+        }
+
+        current = current.parentElement
+      }
+
+      return null
+    },
+    play() {
+      return Promise.resolve()
+    },
+    pause() {}
   }
 
   return node
@@ -324,7 +345,7 @@ const rewritten = src
   .replace("from 'react/jsx-runtime'", `from '${stubUrl}'`)
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
-  .concat('\nexport { patchSettings, applyPersonal, syncPaneShell }\n')
+  .concat('\nexport { patchSettings, applyPersonal, syncPaneShell, syncPaneBackgrounds }\n')
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
 
@@ -560,27 +581,60 @@ try {
   check('Übernehmen-Klick: persistiert + wendet an (kein Crash)', false, error.message)
 }
 
-// 14) v1.13.1: Content-Abgrenzung — ein Shell-Overlay je Pane-Body
-const shellBody = makeNode()
-const shellBody2 = makeNode()
-domRoot.appendChild(shellBody)
-domRoot.appendChild(shellBody2)
-shellBody.appendChild(makeNode({ 'data-pane-host': 'session-tile:abc' }))
-shellBody2.appendChild(makeNode({ 'data-pane-host': 'logs' }))
+// 14) v1.13.1: Content-Abgrenzung — Rahmen-Overlay je Anker (Chat-Surface/Host/Zone)
+const frameChat = makeNode({ 'data-chat-surface': '' })
+const frameHost = makeNode({ 'data-pane-host': 'session-flow' })
+const frameZoneChat = makeNode({ 'data-tree-group': 'z-chat' })
+const frameZonePlain = makeNode({ 'data-tree-group': 'z-plain' })
+frameZoneChat.appendChild(frameChat)
+frameZoneChat.appendChild(frameHost)
+domRoot.appendChild(frameZoneChat)
+domRoot.appendChild(frameZonePlain)
 const frameCount = () => globalThis.document.querySelectorAll('[data-sf-shell-frame]').length
-const hasOwnFrame = body => body.children.some(child => 'data-sf-shell-frame' in child.attrs)
+const hasOwnFrame = node => node.children.some(child => 'data-sf-shell-frame' in child.attrs)
 
-mod.patchSettings('personal', { shellOn: true, shellScope: 'all', shellPad: 10 })
+mod.patchSettings('personal', { shellOn: true, shellScope: 'chat', shellPad: 10 })
 check('v1.13.1: --sf-shell-pad gespiegelt', rootHtml.props['--sf-shell-pad'] === '10px', `got=${rootHtml.props['--sf-shell-pad']}`)
-check('v1.13.1: ein Shell-Overlay je Pane-Body', frameCount() === 2, `frames=${frameCount()}`)
+check('v1.13.1: Rahmen an der Chat-Surface (Scope chat)', hasOwnFrame(frameChat))
+check('v1.13.1: Scope=chat → kein Rahmen an Host/Zone', !hasOwnFrame(frameHost) && !hasOwnFrame(frameZonePlain))
 mod.syncPaneShell()
-check('v1.13.1: Sync ist idempotent (kein Doppel-Overlay)', frameCount() === 2, `frames=${frameCount()}`)
-mod.patchSettings('personal', { shellScope: 'chat' })
+check('v1.13.1: Sync ist idempotent (kein Doppel-Overlay)', frameCount() === 1, `frames=${frameCount()}`)
+mod.patchSettings('personal', { shellScope: 'all' })
 mod.syncPaneShell()
-check('v1.13.1: Scope=chat → nur Tile-Body behält das Overlay', hasOwnFrame(shellBody) && !hasOwnFrame(shellBody2), `b1=${hasOwnFrame(shellBody)} b2=${hasOwnFrame(shellBody2)}`)
+check('v1.13.1: Scope=alle → Chat + Host + chat-lose Zone', hasOwnFrame(frameChat) && hasOwnFrame(frameHost) && hasOwnFrame(frameZonePlain))
+check('v1.13.1: Scope=alle → genau drei Rahmen', frameCount() === 3, `frames=${frameCount()}`)
 mod.patchSettings('personal', { shellOn: false })
 mod.syncPaneShell()
-check('v1.13.1: Shell aus → Overlays entfernt + Variable weg', frameCount() === 0 && rootHtml.props['--sf-shell-pad'] === undefined, `frames=${frameCount()} pad=${rootHtml.props['--sf-shell-pad']}`)
+check('v1.13.1: Shell aus → Rahmen entfernt + Variable weg', frameCount() === 0 && rootHtml.props['--sf-shell-pad'] === undefined, `frames=${frameCount()} pad=${rootHtml.props['--sf-shell-pad']}`)
+
+// 15) v1.13.2: Chat-Hintergrund — Layer an der Chat-Surface (nicht mehr am Pane-Host)
+const bgChat = makeNode({ 'data-chat-surface': '' })
+const bgZoneChat = makeNode({ 'data-tree-group': 'z-bg-chat' })
+const bgZonePlain = makeNode({ 'data-tree-group': 'z-bg-plain' })
+bgZoneChat.appendChild(bgChat)
+domRoot.appendChild(bgZoneChat)
+domRoot.appendChild(bgZonePlain)
+const layerCount = () => globalThis.document.querySelectorAll('[data-sf-bg-layer]').length
+const hasOwnLayer = node => node.children.some(child => 'data-sf-bg-layer' in child.attrs)
+
+mod.patchSettings('personal', { bgOn: true, bgPath: '/tmp/bg.jpg', bgKind: 'image', bgScope: 'chat' })
+check('v1.13.2: --sf-bg-url gespiegelt (hermes-media)', String(rootHtml.props['--sf-bg-url'] || '').startsWith('url("hermes-media://stream/'), rootHtml.props['--sf-bg-url'])
+check('v1.13.2: Layer in der Chat-Surface', hasOwnLayer(bgChat))
+check('v1.13.2: Scope=chat → keine Layer in chat-losen Zonen', !hasOwnLayer(bgZonePlain))
+mod.patchSettings('personal', { bgScope: 'all' })
+mod.syncPaneBackgrounds()
+check('v1.13.2: Scope=alle → Layer zusätzlich in der Zone', hasOwnLayer(bgZonePlain))
+check(
+  'v1.13.2: Scope=alle → 4 Layer (2 Chat-Surfaces + 2 chat-lose Zonen)',
+  layerCount() === 4,
+  `layers=${layerCount()}`
+)
+const layerNodes = globalThis.document.querySelectorAll('[data-sf-bg-layer]')
+check('v1.13.2: Layer tragen die Klasse sf-bg-layer', layerNodes.every(layer => layer.className === 'sf-bg-layer'), layerNodes.map(layer => layer.className).join(','))
+mod.patchSettings('personal', { bgKind: 'video' })
+check('v1.13.2: Video-Modus erzeugt ein <video> im Layer', Boolean(bgChat.querySelector('[data-sf-bg-video]')))
+mod.patchSettings('personal', { bgOn: false })
+check('v1.13.2: Hintergrund aus → alle Layer entfernt', layerCount() === 0, `layers=${layerCount()}`)
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)
