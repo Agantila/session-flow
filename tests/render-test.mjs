@@ -803,6 +803,18 @@ try {
     }
   ])
 
+  mod.$projectsList.set([
+    {
+      id: 'proj-demo',
+      label: 'demo-project',
+      color: null,
+      icon: null,
+      isAuto: true,
+      isNoProject: false,
+      path: '/tmp/demo-project/app',
+      sessionIds: new Set(['p1', 'p2'])
+    }
+  ])
   mod.patchSettings('groups', { autoMode: 'project', headerDensity: 'comfortable' })
   stub.__resetSlots()
   globalThis.__SF__.tCalls.length = 0
@@ -864,6 +876,7 @@ try {
     'v1.15.0: Einstellungen enthalten groupsHeaderDensity-Zeile',
     keys18.has('groupsHeaderDensity') && keys18.has('headerDensityDetailed')
   )
+  mod.$projectsList.set([])
 } catch (error) {
   check('v1.15.0-Tests durchgelaufen', false, error && error.message)
 }
@@ -967,7 +980,7 @@ try {
     }
   ])
   mod.$projectsList.set([
-    { id: 'proj-c', name: 'Colored', color: '#ff0066', icon: null, archived: false, folders: [{ path: '/tmp/colored-project' }] }
+    { id: 'proj-c', label: 'Colored', color: '#ff0066', icon: null, isAuto: false, isNoProject: false, path: '/tmp/colored-project', sessionIds: new Set(['c1']) }
   ])
   mod.patchSettings('groups', { autoMode: 'project', headerDensity: 'comfortable' })
   stub.__resetSlots()
@@ -987,7 +1000,7 @@ try {
 
   // b) Eigenes Icon + Farbe → Icon statt Punkt, eingefärbt.
   mod.$projectsList.set([
-    { id: 'proj-c', name: 'Colored', color: '#ff0066', icon: 'rocket', archived: false, folders: [{ path: '/tmp/colored-project' }] }
+    { id: 'proj-c', label: 'Colored', color: '#ff0066', icon: 'rocket', isAuto: false, isNoProject: false, path: '/tmp/colored-project', sessionIds: new Set(['c1']) }
   ])
   stub.__resetSlots()
   out20 = { el: [], text: [] }
@@ -1006,7 +1019,7 @@ try {
 
   // c) Weder Icon noch Farbe → Fallback bleibt der Ordner-Icon-Wechsel.
   mod.$projectsList.set([
-    { id: 'proj-p', name: 'Plain', color: null, icon: null, archived: false, folders: [{ path: '/tmp/colored-project' }] }
+    { id: 'proj-p', label: 'Plain', color: null, icon: null, isAuto: false, isNoProject: false, path: '/tmp/colored-project', sessionIds: new Set(['c1']) }
   ])
   stub.__resetSlots()
   out20 = { el: [], text: [] }
@@ -1027,7 +1040,7 @@ try {
   check('v1.16.0-Tests durchgelaufen', false, error && error.message)
 }
 
-// 21) v1.16.1: Hermes' eigene Projekt-Zuordnung (liveSessionProjectId) portiert
+// 21) v1.16.2: Gruppierung über projects.tree (ProjectTreeNode.sessionIds) statt cwd-Abgleich
 try {
   const textOf = node => {
     if (node == null) return ''
@@ -1037,15 +1050,14 @@ try {
     return ''
   }
 
-  // a) Session OHNE cwd, nur Git-Repo-Root — Hermes gruppiert danach, unsere
-  //    alte Logik (nur row.cwd) warf das bisher komplett in "Kein Projekt".
+  // a) session.list liefert GAR KEINE cwd — die Session-ID allein, über
+  //    projects.tree gefunden, muss für die Zuordnung reichen.
   mod.$sessions.set([
     {
       id: 'r1',
       title: 'Repo only',
       preview: '',
       cwd: '',
-      repoRoot: '/home/deniz/work/myrepo',
       branch: '',
       model: '',
       toolCount: 0,
@@ -1056,29 +1068,36 @@ try {
       live: 0
     }
   ])
-  mod.$projectsList.set([])
+  mod.$projectsList.set([
+    {
+      id: 'auto:/home/deniz/work/myrepo',
+      label: 'myrepo',
+      color: null,
+      icon: null,
+      isAuto: true,
+      isNoProject: false,
+      path: '/home/deniz/work/myrepo',
+      sessionIds: new Set(['r1'])
+    }
+  ])
   mod.patchSettings('groups', { autoMode: 'project' })
   stub.__resetSlots()
   globalThis.__SF__.tCalls.length = 0
   let out21 = { el: [], text: [] }
   walk(pane.render(), out21)
   check(
-    'v1.16.1: Session ohne CWD (nur Repo-Root) landet NICHT in „Kein Projekt"',
-    !globalThis.__SF__.tCalls.some(([k]) => k === 'noProject')
-  )
-  check(
-    'v1.16.1: Auto-Projekt heißt wie der Repo-Root-Ordner',
-    out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('myrepo'))
+    'v1.16.2: Session ohne CWD wird trotzdem über projects.tree gefunden (NICHT „Kein Projekt")',
+    !globalThis.__SF__.tCalls.some(([k]) => k === 'noProject') &&
+      out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('myrepo'))
   )
 
-  // b) CWD trifft nur den ZWEITEN Ordner eines Mehrordner-Projekts.
+  // b) Explizites Projekt mit eigenem Namen (nicht aus einem Pfad abgeleitet).
   mod.$sessions.set([
     {
-      id: 'm1',
-      title: 'Multi',
+      id: 'e1',
+      title: 'Explicit',
       preview: '',
-      cwd: '/home/deniz/work/secondary/sub',
-      repoRoot: '',
+      cwd: '',
       branch: '',
       model: '',
       toolCount: 0,
@@ -1091,12 +1110,81 @@ try {
   ])
   mod.$projectsList.set([
     {
-      id: 'proj-multi',
-      name: 'Multi-Folder',
+      id: 'p_ebb77402',
+      label: 'AGANTILA',
+      color: '#00aaff',
+      icon: null,
+      isAuto: false,
+      isNoProject: false,
+      path: '/some/workspace',
+      sessionIds: new Set(['e1'])
+    }
+  ])
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  out21 = { el: [], text: [] }
+  walk(pane.render(), out21)
+  check(
+    'v1.16.2: Explizites Projekt wird über seine Session-ID-Liste gefunden',
+    out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('AGANTILA'))
+  )
+
+  // c) isNoProject-Knoten zählt wie "nicht zugeordnet" — fällt in "Kein Projekt".
+  mod.$sessions.set([
+    {
+      id: 'h1',
+      title: 'Home case',
+      preview: '',
+      cwd: '',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 1000,
+      messageCount: 1,
+      live: 0
+    }
+  ])
+  mod.$projectsList.set([
+    { id: '__no_project__', label: 'Home', color: null, icon: null, isAuto: false, isNoProject: true, path: '', sessionIds: new Set(['h1']) }
+  ])
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  out21 = { el: [], text: [] }
+  walk(pane.render(), out21)
+  check(
+    'v1.16.2: isNoProject-Knoten landet in „Kein Projekt"',
+    globalThis.__SF__.tCalls.some(([k]) => k === 'noProject')
+  )
+
+  // d) Session-ID taucht in GAR KEINEM Knoten auf (z. B. jenseits von session_limit).
+  mod.$sessions.set([
+    {
+      id: 'u1',
+      title: 'Unclaimed',
+      preview: '',
+      cwd: '',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 1000,
+      messageCount: 1,
+      live: 0
+    }
+  ])
+  mod.$projectsList.set([
+    {
+      id: 'proj-other',
+      label: 'Other',
       color: null,
       icon: null,
-      archived: false,
-      folders: [{ path: '/home/deniz/work/primary' }, { path: '/home/deniz/work/secondary' }]
+      isAuto: false,
+      isNoProject: false,
+      path: '/other',
+      sessionIds: new Set(['does-not-exist'])
     }
   ])
   stub.__resetSlots()
@@ -1104,45 +1192,15 @@ try {
   out21 = { el: [], text: [] }
   walk(pane.render(), out21)
   check(
-    'v1.16.1: Mehrordner-Projekt greift über den zweiten (nicht primären) Ordner',
-    out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('Multi-Folder'))
-  )
-
-  // c) Archiviertes Projekt wird ignoriert — fällt auf den rohen Ordnernamen zurück.
-  mod.$sessions.set([
-    {
-      id: 'a1',
-      title: 'Archived case',
-      preview: '',
-      cwd: '/tmp/archived-proj',
-      repoRoot: '',
-      branch: '',
-      model: '',
-      toolCount: 0,
-      pinned: false,
-      source: 'desktop',
-      startedAt: 1000,
-      messageCount: 1,
-      live: 0
-    }
-  ])
-  mod.$projectsList.set([
-    { id: 'proj-arch', name: 'Archived', color: null, icon: null, archived: true, folders: [{ path: '/tmp/archived-proj' }] }
-  ])
-  stub.__resetSlots()
-  globalThis.__SF__.tCalls.length = 0
-  out21 = { el: [], text: [] }
-  walk(pane.render(), out21)
-  check(
-    'v1.16.1: Archiviertes Projekt wird übersprungen (Rückfall auf Ordnernamen)',
-    !out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('Archived')) &&
-      out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('archived-proj'))
+    'v1.16.2: Unbekannte Session-ID (in keinem Knoten) landet in „Kein Projekt"',
+    globalThis.__SF__.tCalls.some(([k]) => k === 'noProject') &&
+      !out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('Other'))
   )
 
   mod.$projectsList.set([])
   mod.patchSettings('groups', { autoMode: 'off' })
 } catch (error) {
-  check('v1.16.1-Tests durchgelaufen', false, error && error.message)
+  check('v1.16.2-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

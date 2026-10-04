@@ -5,6 +5,45 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+## [1.16.2] — 2026-10-04
+
+### Fixed
+- **1.16.1 reichte nicht — `session.list` liefert gar keine `cwd`/
+  `git_repo_root` pro Session.** Grund für den Diagnose-Fehlschlag: ich
+  hatte den Client-seitigen Pfad-Abgleich aus 1.16.1 auf Basis der
+  `SessionInfo`/`ProjectInfo`-TS-Typen in `hermes-agent` entworfen, ohne zu
+  prüfen, welche Felder die tatsächlich benutzte RPC (`session.list`)
+  liefert. Direkter Blick in den Gateway-Quelltext
+  (`tui_gateway/methods_session.py`, Funktion `_session_row_summary`, die
+  jede `session.list`-Zeile baut) zeigt: sie gibt NUR `id`, `title`,
+  `preview`, `started_at`, `message_count`, `source` zurück — `cwd` und
+  `git_repo_root` fehlen komplett. `normalizeRow()`/`row.cwd` waren also
+  für die Gruppierung von Anfang an leer; kein Pfad-Algorithmus, egal wie
+  genau er Hermes Desktop nachbaut, kann auf leeren Daten etwas treffen.
+- **Fix**: nicht mehr selbst zuordnen — direkt bei der Quelle fragen, die
+  Hermes Desktops eigene Sidebar auch benutzt: `projects.tree`
+  (`tui_gateway/methods_projects.py` → `project_tree.build_tree()`). Jeder
+  `ProjectTreeNode` trägt bereits `sessionIds: string[]` — die vollständige,
+  serverseitig autoritative Liste aller Session-IDs dieses Projekts
+  (explizite Projekte UND Auto-Projekte per Git-Repo-Root, derselbe Baum,
+  den die Desktop-Sidebar für ihre Projekt-Übersicht aufbaut). Session Flow
+  lädt diesen Baum jetzt per `refreshProjectsList()` und schlägt pro
+  Session nur noch deren ID nach (`resolveSessionProject()`) — kein
+  Pfadvergleich mehr nötig.
+- `$projectsList` speichert jetzt `{id, label, color, icon, isAuto,
+  isNoProject, path, sessionIds:Set}` je Knoten statt `{name, folders}`.
+  Die clientseitigen Helfer `pathSegments()`/`isPathUnder()`/`basenameOf()`
+  aus 1.16.1 sind komplett entfernt — toter Code, seit die Zuordnung nicht
+  mehr pfadbasiert ist.
+- Neue Render-Tests (4 Checks, Block 21): Session ohne CWD wird über ihre
+  ID gefunden; explizites Projekt mit eigenem Namen wird gefunden;
+  `isNoProject`-Knoten fällt in „Kein Projekt"; eine Session-ID, die in
+  KEINEM Knoten auftaucht, fällt ebenfalls in „Kein Projekt".
+- Bekannter Nebenbefund (nicht in diesem Fix behoben, siehe Plan-Datei):
+  `branch`/`model`/`toolCount`/`pinned` fehlen aus demselben Grund
+  ebenfalls in jeder `session.list`-Zeile — diese Anzeigen zeigen aktuell
+  immer ihren Default-Wert.
+
 ## [1.16.1] — 2026-10-04
 
 ### Fixed

@@ -151,42 +151,40 @@ Spiegelt Hermes Desktops Sidebar-Filter-Icon in Form und Platzierung.
 
 ### Projekt-Ordner-Gruppierung (`groups.autoMode: 'project'`)
 
-Gruppiert alle (nicht manuell zugewiesenen) Sessions nach demselben
-Algorithmus wie Hermes Desktops eigene Sidebar
-(`liveSessionProjectId`/`sessionBucketId` aus
-`app/chat/sidebar/projects/workspace-groups.ts`) — **nicht** nur ein
-wortwörtlicher `cwd === primary_path`-Vergleich, der bei den meisten echten
-Setups leer ausgeht:
+Gruppiert alle (nicht manuell zugewiesenen) Sessions nach **derselben
+Backend-Quelle wie Hermes Desktops eigene Sidebar**: dem Projekt-Baum aus
+`projects.tree` (`tui_gateway/methods_projects.py` →
+`project_tree.build_tree()`). Der Baum enthält pro Projekt-Knoten
+(`ProjectTreeNode`) bereits die vollständige, serverseitig berechnete
+Liste aller Session-IDs (`sessionIds`) — Session Flow bildet die Zuordnung
+also NICHT selbst per Pfad-Abgleich nach, sondern schlägt jede Session-ID
+direkt im Baum nach. Das ist bewusst so: `session.list` liefert keine
+`cwd`/`git_repo_root` pro Zeile, ein Client-seitiger Pfadvergleich lief
+deshalb historisch immer ins Leere („Kein Projekt" für alles).
 
-- **Zuordnung**: für jede Session wird geprüft, ob ihre CWD **oder** ihr vom
-  Backend aufgelöster Git-Repo-Root (`git_repo_root`) unter einem der
-  **Ordner** (`folders[]`, nicht nur `primary_path`) eines expliziten
-  Hermes-Projekts liegt — bei mehreren Treffern gewinnt der Ordner mit dem
-  längsten Pfad-Präfix. Archivierte Projekte werden übersprungen. Ohne
-  Treffer wird der Git-Repo-Root selbst zur **Auto-Projekt**-Identität
-  (Name = Ordnername) — genau wie bei einem Git-Checkout ohne eigenen
-  projects.db-Eintrag in Hermes Desktop. Nur Sessions ganz ohne CWD UND ohne
-  Repo-Root landen in „Kein Projekt".
-  Abweichung von Hermes (bewusst): eine Session, die weder zu einem
-  Projekt-Ordner noch zu ihrem eigenen Repo-Root passt, verschwindet bei uns
-  nie aus der Liste — letzter Ausweg ist die rohe CWD als eigene Gruppe.
+- **Zuordnung**: Session-ID ∈ `ProjectTreeNode.sessionIds` → dieses
+  Projekt (Name, Farbe, Icon, Pfad kommen aus demselben Knoten). Der
+  synthetische Home/„Kein Projekt"-Knoten (`isNoProject`) zählt als „nicht
+  zugeordnet"; eine ID, die in keinem Knoten auftaucht (z. B. neuer als der
+  Baum oder jenseits von `session_limit: 2000`), ebenfalls.
 - **Identität (Icon/Farbe)**: Trägt das zugeordnete Hermes-Projekt ein
-  eigenes Icon (`project.icon`), zeigt der Header genau dieses Icon —
-  optional in der Projektfarbe (`project.color`) eingefärbt. Nur eine Farbe
+  eigenes Icon (`node.icon`), zeigt der Header genau dieses Icon —
+  optional in der Projektfarbe (`node.color`) eingefärbt. Nur eine Farbe
   ohne eigenes Icon ergibt einen Farbpunkt wie bei manuellen Gruppen. Ohne
-  beides (auch bei Auto-Projekten) bleibt es beim Ordner-Icon (offen/
-  geschlossen je Collapse-Zustand).
+  beides (auch bei Auto-Projekten per Git-Root) bleibt es beim Ordner-Icon
+  (offen/geschlossen je Collapse-Zustand).
 - **Header-Optik**: der Ein-/Ausklapp-Caret ist wie unter „Projekte" erst
   beim Überfahren sichtbar. Ein Hover-„+" startet eine neue Session direkt
-  mit dieser CWD (`session.create` + `cwd_explicit`).
+  mit diesem Projektpfad (`session.create` + `cwd_explicit`).
 - **Drag & Drop**: Einen Tab auf einen Projekt-Header gezogen verschiebt die
   Session wirklich dorthin (`session.workspace.move`) — keine reine
   Listen-Umsortierung. Während des Ziehens markiert sich Header **und**
   Section als Zielzone, ein Inline-Hinweis nennt das Ziel; nach dem Loslassen
   blitzt die Zeile kurz in der Akzentfarbe auf.
-- **Projekt-Cache**: `$projectsList` pollt `projects.list` alle 60 s (zusätzlich
-  einmal beim Laden) — reicht für Namens-Updates, ohne die Liste ständig
-  anzufragen.
+- **Projekt-Cache**: `$projectsList` pollt `projects.tree` alle 60 s
+  (zusätzlich einmal beim Laden und 1,2 s nach jeder Session-Aktualisierung
+  via `scheduleSessionsRefresh`) — hält den Baum nah genug an der Liste,
+  ohne ihn ständig anzufragen.
 
 ## UI-Tabs (Content-Tab-Leiste)
 

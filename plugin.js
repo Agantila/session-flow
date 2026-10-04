@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.16.1'
+const VERSION = '1.16.2'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1109,11 +1109,23 @@ const $sessionsError = atom(null)
 const $liveMap = atom({}) // runtimeId -> { storedId, status, at }
 const $activity = atom({}) // storedId -> { kind, name, at }
 const $appDensity = atom('compact') // App-Einstellung "Dichte der Session-Liste" (sessionListDensity)
-const $projectsList = atom([]) // [{ id, name, color, icon, archived, folders:[{path}] }] — Grundlage der Projekt-Zuordnung
+const $projectsList = atom([]) // [{ id, label, color, icon, isAuto, isNoProject, path, sessionIds:Set<string> }]
 
 let projectsListInFlight = null
+let projectsListSucceededAt = 0
 
-/** Projekt-Cache (projects.list) neu laden — Grundlage der Projekt-Gruppierung. */
+/**
+ * Projekt-Baum (`projects.tree`) neu laden — dieselbe Backend-Quelle wie
+ * Hermes Desktops eigene Sidebar. BEWUSST NICHT `projects.list` + eigener
+ * cwd-Abgleich: `session.list` (füllt `$sessions`) liefert gar keine `cwd`
+ * oder `git_repo_root` pro Session — `_session_row_summary` in
+ * `tui_gateway/methods_session.py` gibt nur `id/title/preview/started_at/
+ * message_count/source` zurück. Ein Pfad-Vergleich im Plugin kann also nie
+ * etwas treffen, egal wie genau er den Desktop-Algorithmus nachbaut. Die
+ * einzige Quelle mit der echten Zuordnung ist `projects.tree`
+ * (`ProjectTreeNode.sessionIds`) — die serverseitige, autoritative Liste
+ * aller Session-IDs je Projekt (explizit + Auto-Projekte per Git-Root).
+ */
 async function refreshProjectsList() {
   if (projectsListInFlight) {
     return projectsListInFlight
@@ -1121,40 +1133,26 @@ async function refreshProjectsList() {
 
   projectsListInFlight = (async () => {
     try {
-      const payload = await host.request('projects.list', {})
-      const projects = Array.isArray(payload?.projects) ? payload.projects : []
+      const payload = await host.request('projects.tree', { session_limit: 2000 })
+      const nodes = Array.isArray(payload?.projects) ? payload.projects : []
 
       $projectsList.set(
-        projects
-          .map(entry => {
-            const rawFolders = Array.isArray(entry?.folders) ? entry.folders : []
-            const folders = rawFolders
-              .map(folder => ({ path: String(folder?.path || '').trim() }))
-              .filter(folder => folder.path)
-
-            // Ältere/abweichende Payloads ohne folders[]: primary_path als
-            // einzigen Ordner nutzen, sonst läuft die Zuordnung leer.
-            if (!folders.length) {
-              const primary = String(entry?.primary_path || '').trim()
-
-              if (primary) {
-                folders.push({ path: primary })
-              }
-            }
-
-            return {
-              id: String(entry?.id || '').trim(),
-              name: String(entry?.name || '').trim(),
-              color: entry?.color ? String(entry.color).trim() : null,
-              icon: entry?.icon ? String(entry.icon).trim() : null,
-              archived: Boolean(entry?.archived),
-              folders
-            }
-          })
-          .filter(entry => entry.id && entry.folders.length)
+        nodes
+          .map(node => ({
+            id: String(node?.id || '').trim(),
+            label: String(node?.label || '').trim(),
+            color: node?.color ? String(node.color).trim() : null,
+            icon: node?.icon ? String(node.icon).trim() : null,
+            isAuto: Boolean(node?.isAuto),
+            isNoProject: Boolean(node?.isNoProject),
+            path: node?.path ? String(node.path).trim() : '',
+            sessionIds: new Set(Array.isArray(node?.sessionIds) ? node.sessionIds.map(String) : [])
+          }))
+          .filter(node => node.id)
       )
+      projectsListSucceededAt = Date.now()
     } catch {
-      // Älteres Backend ohne projects.* — Gruppierung fällt auf den Ordnernamen zurück.
+      // Älteres Backend ohne projects.tree — Gruppierung fällt auf "Kein Projekt" zurück.
     } finally {
       projectsListInFlight = null
     }
@@ -1163,99 +1161,32 @@ async function refreshProjectsList() {
   return projectsListInFlight
 }
 
-/** Pfad in Segmente zerlegt (Trennzeichen- und Trailing-Slash-unabhängig). */
-function pathSegments(path) {
-  return String(path || '')
-    .trim()
-    .replace(/[\\/]+$/, '')
-    .split(/[\\/]/)
-    .filter(Boolean)
-}
-
-/** true, wenn `target` gleich `folder` ist oder darunter liegt (segmentweise). */
-function isPathUnder(folder, target) {
-  const f = pathSegments(folder)
-  const t = pathSegments(target)
-
-  if (!f.length || f.length > t.length) {
-    return false
-  }
-
-  return f.every((seg, i) => seg === t[i])
-}
-
-/** Letztes Pfadsegment — Fallback-Anzeigename, wenn kein projects.list-Treffer existiert. */
-function basenameOf(path) {
-  const segs = pathSegments(path)
-
-  return segs[segs.length - 1] || String(path || '').trim()
-}
-
 /**
- * Welchem Projekt eine Session gehört — derselbe Algorithmus wie Hermes
- * Desktops eigene Sidebar (`liveSessionProjectId` in
- * `app/chat/sidebar/projects/workspace-groups.ts`): zuerst das explizite
- * Projekt mit dem längsten passenden Ordner-Präfix (CWD ODER git-Repo-Root,
- * über ALLE Ordner eines Mehrordner-Projekts), sonst der Repo-Root selbst
- * als Auto-Projekt-Identität (wie bei einem nicht in projects.db
- * eingetragenen Git-Checkout) — Hermes gruppiert genau so, nicht nur über
- * eine exakte `cwd === primary_path`-Prüfung, die bei den meisten echten
- * Setups (kein primary_path, Mehrordner-Projekte, reine Repo-Root-Sessions
- * ohne projects.db-Eintrag) leer ausgeht und alles in „Kein Projekt" wirft.
- *
- * Abweichung von Hermes (bewusst): eine Session mit CWD, die weder zu einem
- * Projekt-Ordner noch zu ihrem eigenen Repo-Root passt, verschwindet bei
- * Hermes aus der Projekt-Übersicht (liveSessionProjectId → null). Session
- * Flow lässt stattdessen nie eine Session aus der Liste fallen — letzter
- * Ausweg ist die rohe CWD als eigene Gruppe (altes Verhalten vor diesem Fix).
+ * Welchem Projekt eine Session gehört — schlägt direkt im Hermes-Projekt-
+ * Baum nach (`projects.tree` → `ProjectTreeNode.sessionIds`), statt die
+ * Zuordnung client-seitig nachzubauen (siehe `refreshProjectsList()` oben
+ * für die Begründung). Der Home/„Kein Projekt"-Knoten (`isNoProject`) zählt
+ * genauso als „nicht zugeordnet" wie eine Session-ID, die in KEINEM Knoten
+ * auftaucht (z. B. jenseits von `session_limit`).
  *
  * @returns {{id:string,name:string,color:?string,icon:?string,anchor:string,isAuto:boolean}|null}
- *   `null` = echt „detached" (weder CWD noch Repo-Root) → „Kein Projekt".
+ *   `null` → „Kein Projekt".
  */
 function resolveSessionProject(row) {
-  const cwd = String(row?.cwd || '').trim()
-  const repoRoot = String(row?.repoRoot || '').trim() || cwd
-  const anchor = cwd || repoRoot
+  const id = String(row?.id || '').trim()
 
-  if (!anchor) {
+  if (!id) {
     return null
   }
 
-  let best = null
-  let bestLen = -1
-
-  for (const project of $projectsList.get()) {
-    if (project.archived) {
+  for (const node of $projectsList.get()) {
+    if (node.isNoProject) {
       continue
     }
 
-    for (const folder of project.folders) {
-      if (isPathUnder(folder.path, cwd) || isPathUnder(folder.path, repoRoot)) {
-        const len = pathSegments(folder.path).length
-
-        if (len > bestLen) {
-          bestLen = len
-          best = project
-        }
-      }
+    if (node.sessionIds.has(id)) {
+      return { id: node.id, name: node.label, color: node.color, icon: node.icon, anchor: node.path, isAuto: node.isAuto }
     }
-  }
-
-  if (best) {
-    return { id: best.id, name: best.name, color: best.color || null, icon: best.icon || null, anchor: cwd || repoRoot, isAuto: false }
-  }
-
-  // Auto-Projekt-Fallback: der Repo-Root selbst wird zur Projekt-Identität —
-  // genau wie Hermes nicht in projects.db eingetragene Git-Checkouts nach
-  // ihrem Root gruppiert.
-  if (repoRoot && (!cwd || isPathUnder(repoRoot, cwd))) {
-    return { id: repoRoot, name: basenameOf(repoRoot), color: null, icon: null, anchor: repoRoot, isAuto: true }
-  }
-
-  // Letzter Ausweg (Abweichung von Hermes, siehe oben): nie verschwinden
-  // lassen — nach der rohen CWD gruppieren, wenn wenigstens die existiert.
-  if (cwd) {
-    return { id: `cwd:${cwd}`, name: basenameOf(cwd), color: null, icon: null, anchor: cwd, isAuto: true }
   }
 
   return null
@@ -1443,11 +1374,6 @@ function normalizeRow(row) {
     title: String(row?.title || '').trim(),
     preview: String(row?.preview || '').trim(),
     cwd: String(row?.cwd || '').trim(),
-    // Backend-seitig bei cwd-Set aufgelöster Git-Repo-Root (`types/hermes.ts`:
-    // "The sidebar groups by this instead of probing git in the GUI.") — viele
-    // Sessions tragen GAR KEINE cwd mehr, nur noch diesen Root. Ohne ihn
-    // bleibt die Projekt-Gruppierung bei "Kein Projekt" hängen.
-    repoRoot: String(row?.git_repo_root || '').trim(),
     branch: String(row?.git_branch || '').trim(),
     model: String(row?.model || '').trim(),
     toolCount: Number(row?.tool_call_count || 0),
@@ -1492,6 +1418,13 @@ function scheduleSessionsRefresh(delay = 1500) {
   window.clearTimeout(refreshDebounce)
   refreshDebounce = window.setTimeout(() => {
     void refreshSessions()
+    // Der Projekt-Baum (Zuordnungs-Grundlage) läuft seinem eigenen 60-s-Takt
+    // hinterher — eine frisch erstellte Session würde sonst bis zum nächsten
+    // Takt in "Kein Projekt" parken. Mit nachziehen bleibt die Gruppierung
+    // aktuell; der Inflight-Guard + 15-s-Mindestabstand verhindern Spam.
+    if (Date.now() - projectsListSucceededAt > 15_000) {
+      void refreshProjectsList()
+    }
   }, delay)
 }
 
