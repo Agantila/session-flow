@@ -1,6 +1,6 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.5.1 (2026-10-03). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.11.0 (2026-10-04). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Geplant / Ideen

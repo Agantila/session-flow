@@ -105,7 +105,8 @@ runtime-only (noch nicht persistierte) Sessions — für die Runtime-Stufe
 
 ## Wartungs-Checkliste bei App-Updates
 
-1. `npm run check` (Syntax + i18n) — fängt lokale Regressions sofort.
+1. `npm run check` (Syntax + i18n) und `npm test` (Render-Smoketest) — fangen
+   lokale Regressionen sofort.
 2. Ladefehler-Log prüfen (oben).
 3. Kurz gegengoogeln: `[data-slot='composer-surface']`, `role=tab`-Struktur,
    `--pane-tab-close-width`, `.arc-border` — falls die App sie umbenannt hat,

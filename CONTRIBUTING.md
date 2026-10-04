@@ -13,8 +13,9 @@ cd session-flow
 # Dev-Loop einrichten (Symlink ins Plugin-Verzeichnis):
 ./install.sh --link
 
-# Nach jeder Änderung prüfen (Syntax + i18n-Parität):
+# Nach jeder Änderung prüfen (Syntax + i18n-Parität + Render-Smoketest):
 npm run check
+npm test
 ```
 
 Mit `--link` lädt die App das Plugin bei jedem Speichern neu (Hot-Reload).
@@ -43,7 +44,7 @@ stehen in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) und
 ## Änderungen einreichen
 
 1. Fork bzw. Branch anlegen: `feat/…`, `fix/…`, `docs/…`.
-2. `npm run check` muss grün sein.
+2. `npm run check` **und** `npm test` müssen grün sein.
 3. Wenn möglich: live verifizieren (Dev-Loop + Log-Check, siehe unten) und das
    Ergebnis in der PR-Beschreibung nennen.
 4. PR öffnen; das Template führt durch die Checkliste.
@@ -85,6 +86,7 @@ Empfehlungen für das Repo:
 | `docs/APP-INTEGRATION.md` | App-Hooks & fragile Selektoren + Verifikation. |
 | `docs/ROADMAP.md` | Ideen & bekannte Grenzen. |
 | `scripts/check.mjs` | Pre-Flight-Check (Syntax + i18n). |
+| `tests/render-test.mjs` | Render-Smoketest (Pane + Einstellungen, Stub-basiert, `npm test`). |
 
 ## Lizenz
 

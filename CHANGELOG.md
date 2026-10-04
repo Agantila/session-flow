@@ -12,6 +12,13 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   (erneuter Klick: „Weniger anzeigen"). `0` = aus (alles anzeigen). Ohne
   Gruppen entspricht die Grenze der Gesamtliste.
 
+### Intern
+- **Render-Smoketest im Repo**: `tests/render-test.mjs` rendert Sessions-Pane
+  und Einstellungsseite headless gegen SDK-Stubs (inkl. Klick-Simulation für
+  „Mehr anzeigen"); Aufruf über `npm test`, läuft auch in der CI. READMEs,
+  CONTRIBUTING, DEVELOPMENT, APP-INTEGRATION und PR-Template entsprechend
+  aktualisiert.
+
 ## [1.10.0] — 2026-10-04
 
 ### Neu

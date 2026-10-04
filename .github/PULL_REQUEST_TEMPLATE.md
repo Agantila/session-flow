@@ -14,6 +14,7 @@
 ## Checkliste
 
 - [ ] `npm run check` ist grün (Syntax + i18n-Parität)
+- [ ] `npm test` ist grün (Render-Smoketest: Pane + Einstellungen)
 - [ ] Neue Keys/I18n **in beiden Bundles** (EN + DE) angelegt
 - [ ] Neue Optionen haben einen **Subtext** (…Desc, beide Sprachen) und stehen in `docs/SETTINGS.md`
 - [ ] **CHANGELOG.md** aktualisiert (Version + Datum)

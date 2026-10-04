@@ -150,6 +150,8 @@ session-flow/
 ├── package.json                 # Nur npm-Skripte — keine Abhängigkeiten
 ├── scripts/
 │   └── check.mjs                # Syntaxcheck + i18n-Key-Audit (nur Node)
+├── tests/
+│   └── render-test.mjs          # Headless-Render-Smoketest (Pane + Einstellungen)
 ├── docs/
 │   ├── README.md                # Doku-Index
 │   ├── SETTINGS.md              # Alle Optionen erklärt
@@ -175,6 +177,7 @@ bei jedem Speichern hot-reloaded.
 
 ```bash
 npm run check          # Syntaxcheck + Locale-Key-Audit (nur Node nötig)
+npm test               # Render-Smoketest (Pane + Einstellungen, ohne App)
 ./install.sh --link    # ein mal einrichten, danach: speichern -> App lädt neu
 ```
 

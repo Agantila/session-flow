@@ -17,3 +17,6 @@ jobs:
 
       - name: Syntax check + i18n key audit
         run: npm run check
+
+      - name: Render-Smoketest (Pane + Einstellungen, Stub-basiert)
+        run: npm test

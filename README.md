@@ -141,6 +141,8 @@ session-flow/
 ├── package.json                 # npm scripts only — no dependencies
 ├── scripts/
 │   └── check.mjs                # Syntax check + i18n key audit (stdlib only)
+├── tests/
+│   └── render-test.mjs          # Headless render smoke test (pane + settings)
 ├── docs/
 │   ├── README.md                # Docs index
 │   ├── SETTINGS.md              # Every option explained (German)
@@ -166,6 +168,7 @@ hot-reloaded on every save.
 
 ```bash
 npm run check          # syntax check + locale key audit (Node only)
+npm test               # headless render smoke test (pane + settings)
 ./install.sh --link    # set up once; then: save -> the app reloads the plugin
 ```
 

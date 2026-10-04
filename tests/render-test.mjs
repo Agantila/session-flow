@@ -1,0 +1,401 @@
+// tests/render-test.mjs — Headless-Render-Smoketest für Session Flow.
+//
+// Lädt die ECHTE plugin.js, ersetzt die drei Import-Module (@hermes/plugin-sdk,
+// react, react/jsx-runtime) durch Stubs und rendert Sessions-Pane UND
+// Einstellungsseite komplett (rekursiver Walk; Funktions-Komponenten werden
+// aufgerufen). Klicks werden über slot-basiertes useState simuliert — ein
+// gespeicherter props.onClick() wirkt im nächsten Render.
+//
+// Geprüft wird u. a.: Listen-Begrenzung (tabs.maxVisible) mit
+// „Mehr anzeigen (n)“/„Weniger anzeigen“-Toggle, Grenzfälle (Limit = Anzahl,
+// > Anzahl), Render-Stabilität mehrerer Renders und die Einstellungsseite
+// inkl. der zugehörigen Optionszeile.
+//
+// Aufruf:  npm test   (oder:  node tests/render-test.mjs)
+// Nur Node nötig, keine Dependencies, keine laufende App.
+import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const PLUGIN_PATH = fileURLToPath(new URL('../plugin.js', import.meta.url))
+
+// ── Atom-Factory (get/set/subscribe/listen/update) ──────────────────────────
+function makeAtom(v) {
+  let c = v
+  const subs = new Set()
+  const api = {
+    get: () => c,
+    set: x => {
+      c = x
+      for (const f of subs) f(c)
+    },
+    update: fn => api.set(fn(c)),
+    subscribe: f => {
+      subs.add(f)
+      return () => subs.delete(f)
+    },
+    listen: f => {
+      subs.add(f)
+      return () => subs.delete(f)
+    }
+  }
+  return api
+}
+
+// ── Fake-Sessions (30 Stück, neueste zuerst) ────────────────────────────────
+const sessions = Array.from({ length: 30 }, (_, i) => ({
+  id: `s${i + 1}`,
+  title: `Session ${i + 1}`,
+  preview: `Vorschau ${i + 1}`,
+  git_branch: 'main',
+  model: 'test/model',
+  tool_call_count: i,
+  message_count: 10 + i,
+  source: 'desktop',
+  started_at: 1000000 - i,
+  pinned: false
+}))
+
+// ── Host-Stub ───────────────────────────────────────────────────────────────
+const hostStub = {
+  state: {
+    focusedSessionId: makeAtom('rt-live'),
+    focusedStoredSessionId: makeAtom('st-live'),
+    activeSessionId: makeAtom('rt-live'),
+    cwd: makeAtom('/tmp'),
+    model: makeAtom('test/model'),
+    profile: makeAtom('default')
+  },
+  request: async method => {
+    if (method === 'session.list') return { sessions }
+    if (method === 'session.active_list') return { sessions: [] }
+    if (method === 'session.context_breakdown') return {}
+    return {}
+  },
+  sessions: { pin() {}, setColor() {} },
+  onEvent: () => () => {},
+  notify: () => {},
+  notifyError: () => {},
+  navigate: () => {},
+  openSession: async () => {},
+  settings: { subscribe: () => () => {}, get: () => undefined }
+}
+
+globalThis.__SF__ = {
+  makeAtom,
+  Fragment: Symbol('Fragment'),
+  host: hostStub,
+  tCalls: [],
+  haptics: [],
+  bundles: null
+}
+
+// ── Browser-Globals ─────────────────────────────────────────────────────────
+const el = () => ({
+  tagName: 'DIV',
+  setAttribute() {},
+  removeAttribute() {},
+  getAttribute: () => null,
+  hasAttribute: () => false,
+  appendChild() {},
+  remove() {},
+  style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => '' },
+  classList: { add() {}, remove() {} },
+  textContent: '',
+  querySelectorAll: () => [],
+  querySelector: () => null
+})
+globalThis.document = {
+  documentElement: el(),
+  body: el(),
+  head: { append() {}, appendChild() {} },
+  createElement: () => el(),
+  createElementNS: () => el(),
+  getElementById: () => null,
+  querySelector: () => null,
+  querySelectorAll: () => [],
+  addEventListener() {},
+  removeEventListener() {}
+}
+globalThis.window = {
+  setTimeout: () => 0,
+  clearTimeout() {},
+  setInterval: () => 0,
+  clearInterval() {},
+  requestAnimationFrame: () => 0,
+  cancelAnimationFrame() {},
+  matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
+  addEventListener() {},
+  removeEventListener() {},
+  innerHeight: 900,
+  innerWidth: 1440,
+  localStorage: { getItem: () => null, setItem() {}, removeItem() {} }
+}
+globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' })
+globalThis.MutationObserver = class { observe() {} disconnect() {} takeRecords() { return [] } }
+globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
+globalThis.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} }
+
+// ── Stub-Modul (SDK + react + jsx-runtime in einem Modul) ───────────────────
+const stubSrc = `
+const S = globalThis.__SF__
+const pc = p => (p && p.children !== undefined ? p.children : null)
+export const atom = S.makeAtom
+export const computed = fn => ({ get: fn, set() {}, subscribe: () => () => {}, listen: () => () => {} })
+export const cn = (...a) => a.filter(Boolean).join(' ')
+export const haptic = (...a) => { S.haptics.push(a) }
+export const host = S.host
+export const useValue = a => a.get()
+export const Button = pc
+export const Input = pc
+export const Switch = pc
+export const Codicon = pc
+export const Tip = pc
+export const Separator = pc
+export const Dialog = p => (p && p.open ? pc(p) : null)
+export const DialogContent = pc
+export const DialogFooter = pc
+export const DialogHeader = pc
+export const DialogTitle = pc
+export const ContextMenu = pc
+export const ContextMenuContent = pc
+export const ContextMenuItem = pc
+export const ContextMenuSeparator = pc
+export const ContextMenuSub = pc
+export const ContextMenuSubContent = pc
+export const ContextMenuSubTrigger = pc
+export const ContextMenuTrigger = pc
+export const ConfirmDialog = p => (p && p.open ? pc(p) : null)
+export const DropdownMenu = pc
+export const DropdownMenuContent = pc
+export const DropdownMenuItem = pc
+export const DropdownMenuSeparator = pc
+export const DropdownMenuTrigger = pc
+export const SegmentedControl = pc
+export const SessionStatusDot = () => null
+export const ColorSwatches = pc
+export const LocalizedTabTitle = pc
+export const PROFILE_SWATCHES = ['#111111', '#7c3aed', '#00dbda']
+export const icons = new Proxy({}, { get: () => ({}) })
+export const PANES_AREA = 'panes'
+export const ROUTES_AREA = 'routes'
+export const SIDEBAR_NAV_AREA = 'sidebar-nav'
+export const PALETTE_AREA = 'palette'
+export const KEYBINDS_AREA = 'keybinds'
+export const usePluginI18n = () => (key, ...args) => { S.tCalls.push([key, ...args]); return key }
+export const coarseElapsed = () => 'now'
+export const compactNumber = n => String(n ?? 0)
+
+// react
+let _slot = 0
+const _slots = new Map()
+export const __resetSlots = () => { _slot = 0 }
+export const useState = init => {
+  const s = _slot++
+  if (!_slots.has(s)) _slots.set(s, typeof init === 'function' ? init() : init)
+  return [_slots.get(s), nv => { _slots.set(s, typeof nv === 'function' ? nv(_slots.get(s)) : nv) }]
+}
+export const useMemo = fn => fn()
+export const useRef = v => ({ current: v })
+export const useEffect = () => {}
+export const useCallback = fn => fn
+export const Fragment = S.Fragment
+export const createElement = () => null
+
+// jsx-runtime
+export const jsx = (t, p, k) => ({ __jsx: true, t, p, k })
+export const jsxs = jsx
+`
+
+const dir = mkdtempSync(join(tmpdir(), 'session-flow-render-'))
+const stubPath = join(dir, 'stub.mjs')
+writeFileSync(stubPath, stubSrc)
+const stubUrl = pathToFileURL(stubPath).href
+const stub = await import(stubUrl)
+
+// ── Plugin-Quelle umschreiben (+ Test-Export) und importieren ───────────────
+const src = readFileSync(PLUGIN_PATH, 'utf8')
+const rewritten = src
+  .replace("from 'react/jsx-runtime'", `from '${stubUrl}'`)
+  .replace("from 'react'", `from '${stubUrl}'`)
+  .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
+  .concat('\nexport { patchSettings }\n')
+writeFileSync(join(dir, 'plugin.mjs'), rewritten)
+const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
+
+// ── ctx-Stub ────────────────────────────────────────────────────────────────
+const storage = new Map()
+const contributions = []
+const ctx = {
+  register: c => contributions.push(c),
+  registerMany: cs => {
+    for (const c of cs) contributions.push(c)
+  },
+  onDispose: () => {},
+  setInterval: () => () => {},
+  setTimeout: () => 0,
+  onEvent: () => () => {},
+  addEventListener: () => () => {},
+  storage: {
+    get: (k, f) => (storage.has(k) ? storage.get(k) : f),
+    set: (k, v) => storage.set(k, v),
+    remove: k => storage.delete(k)
+  },
+  i18n: {
+    register: b => {
+      globalThis.__SF__.bundles = b
+    },
+    t: (k, ...a) => k
+  }
+}
+
+try {
+  mod.default.register(ctx)
+} catch (error) {
+  console.log('✗ REGISTER CRASH:', error && error.stack)
+  process.exit(1)
+}
+
+// refreshSessions() läuft async an — kurz warten
+await new Promise(r => setTimeout(r, 50))
+
+// ── Render-Walker ───────────────────────────────────────────────────────────
+const Fragment = globalThis.__SF__.Fragment
+
+function walk(node, out, depth = 0) {
+  if (depth > 300) throw new Error('walk depth cap')
+  if (node == null || typeof node === 'boolean') return
+  if (typeof node === 'string' || typeof node === 'number') {
+    out.text.push(String(node))
+    return
+  }
+  if (Array.isArray(node)) {
+    for (const n of node) walk(n, out, depth + 1)
+    return
+  }
+  if (typeof node === 'function') {
+    walk(node(), out, depth + 1)
+    return
+  }
+  if (typeof node !== 'object') return
+  const { t, p } = node
+  if (t === Fragment) {
+    walk(p && p.children, out, depth + 1)
+    return
+  }
+  if (typeof t === 'function') {
+    walk(t(p || {}), out, depth + 1)
+    return
+  }
+  if (typeof t === 'string') {
+    const cls = p && typeof p.className === 'string' ? p.className.split(/\s+/) : []
+    out.el.push({ tag: t, cls, props: p })
+    walk(p && p.children, out, depth + 1)
+    return
+  }
+  walk(p && p.children, out, depth + 1)
+}
+
+const pane = contributions.find(c => c.area === 'panes' && c.id === 'pane')
+if (!pane) {
+  console.log('✗ Pane-Beitrag nicht gefunden:', contributions.map(c => c.area + '/' + c.id))
+  process.exit(1)
+}
+
+function renderPane() {
+  globalThis.__SF__.tCalls.length = 0
+  stub.__resetSlots()
+  const out = { el: [], text: [] }
+  walk(pane.render(), out)
+  const tabs = out.el.filter(e => e.cls.includes('sf-tab')).length
+  const showmore = out.el.find(e => e.cls.includes('sf-showmore')) || null
+  return { tabs, showmore, total: out.el.length }
+}
+
+let failed = false
+const check = (label, cond, extra = '') => {
+  console.log(`${cond ? '✓' : '✗'} ${label}${extra ? ' — ' + extra : ''}`)
+  if (!cond) failed = true
+}
+
+// 1) maxVisible = 0 (aus): 30 Tabs, kein Button
+mod.patchSettings('tabs', { maxVisible: 0 })
+let r = renderPane()
+check('Aus: 30 Tabs gerendert', r.tabs === 30, `tabs=${r.tabs}`)
+check('Aus: kein „Mehr anzeigen“-Button', !r.showmore)
+
+// 2) maxVisible = 8: 8 Tabs + Button mit Zähler (22)
+mod.patchSettings('tabs', { maxVisible: 8 })
+r = renderPane()
+check('Limit 8: genau 8 Tabs', r.tabs === 8, `tabs=${r.tabs}`)
+check('Limit 8: Button vorhanden', Boolean(r.showmore))
+check('Limit 8: Button data-expanded=false', r.showmore && r.showmore.props['data-expanded'] === 'false')
+const tCalls1 = globalThis.__SF__.tCalls.slice()
+check(
+  'Limit 8: t(showMore, 22)',
+  tCalls1.some(([k, n]) => k === 'showMore' && n === 22),
+  JSON.stringify(tCalls1.filter(c => c[0] === 'showMore'))
+)
+
+// 3) Klick auf „Mehr anzeigen“ → alle 30 + „Weniger anzeigen“
+r.showmore.props.onClick()
+r = renderPane()
+check('Klick: 30 Tabs sichtbar', r.tabs === 30, `tabs=${r.tabs}`)
+check('Klick: Button data-expanded=true', r.showmore && r.showmore.props['data-expanded'] === 'true')
+const tCalls2 = globalThis.__SF__.tCalls.slice()
+check('Klick: t(showLess) gerufen', tCalls2.some(([k]) => k === 'showLess'))
+
+// 4) Erneuter Klick → wieder eingeklappt (8)
+r.showmore.props.onClick()
+r = renderPane()
+check('Wieder einklappen: 8 Tabs', r.tabs === 8, `tabs=${r.tabs}`)
+check('Wieder einklappen: data-expanded=false', r.showmore && r.showmore.props['data-expanded'] === 'false')
+
+// 5) maxVisible = 29 (Grenze): 29 Tabs + Button (1 versteckt)
+mod.patchSettings('tabs', { maxVisible: 29 })
+r = renderPane()
+check('Limit 29: 29 Tabs + Button', r.tabs === 29 && Boolean(r.showmore), `tabs=${r.tabs}`)
+
+// 6) maxVisible = 30 (== Anzahl): kein Overflow, kein Button
+mod.patchSettings('tabs', { maxVisible: 30 })
+r = renderPane()
+check('Limit 30: alle 30 Tabs, kein Button', r.tabs === 30 && !r.showmore, `tabs=${r.tabs}`)
+
+// 7) maxVisible = 45 (> Anzahl): kein Button
+mod.patchSettings('tabs', { maxVisible: 45 })
+r = renderPane()
+check('Limit 45: alle 30 Tabs, kein Button', r.tabs === 30 && !r.showmore, `tabs=${r.tabs}`)
+
+// 8) Stabilität: 3× wiederholt rendern
+try {
+  renderPane()
+  renderPane()
+  renderPane()
+  check('Wiederholtes Rendern stabil', true)
+} catch (error) {
+  check('Wiederholtes Rendern stabil', false, error.message)
+}
+
+// 9) Einstellungs-Seite: rendert komplett + enthält die neue Option
+const settingsPage = contributions.find(c => c.area === 'routes' && c.id === 'settings-page')
+try {
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out2 = { el: [], text: [] }
+  walk(settingsPage.render(), out2)
+  check('Einstellungs-Seite rendert (kein Crash)', true, `el=${out2.el.length}`)
+  check(
+    'Einstellungs-Seite enthält tabsMaxVisible-Zeile',
+    globalThis.__SF__.tCalls.some(([k]) => k === 'tabsMaxVisible')
+  )
+  check(
+    'Einstellungs-Seite enthält Beschreibung',
+    globalThis.__SF__.tCalls.some(([k]) => k === 'tabsMaxVisibleDesc')
+  )
+} catch (error) {
+  check('Einstellungs-Seite rendert (kein Crash)', false, error.message)
+}
+
+console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
+process.exit(failed ? 1 : 0)

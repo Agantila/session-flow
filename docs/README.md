@@ -20,3 +20,4 @@ entwicklerorientiert; die Nutzer-Doku steht im Root-README.
 | [../CHANGELOG.md](../CHANGELOG.md) | Versionshistorie (Keep a Changelog). |
 | [../SECURITY.md](../SECURITY.md) | Sicherheitsmodell & Meldewege. |
 | [../scripts/check.mjs](../scripts/check.mjs) | Pre-Flight: Syntaxcheck + i18n-Key-Audit (`npm run check`). |
+| [../tests/render-test.mjs](../tests/render-test.mjs) | **Render-Smoketest** (`npm test`): rendert Sessions-Pane & Einstellungsseite headless gegen SDK-Stubs — prüft UI-Verhalten (u. a. Listen-Begrenzung) ohne laufende App. |

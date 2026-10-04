@@ -5,6 +5,7 @@
 ```bash
 ./install.sh --link   # einmal: Symlink ~/.hermes/desktop-plugins/session-flow -> Repo
 npm run check         # Syntaxcheck + i18n-Audit (Node, keine Dependencies)
+npm test              # Render-Smoketest: Pane + Einstellungen (Stub-basiert, ohne App)
 ```
 
 Danach: `plugin.js` speichern → die App hot-reloaded das Plugin (keine
@@ -206,6 +207,25 @@ schlägt `npm run check` an.
 - Timer/Listener via `ctx.setTimeout`/`ctx.setInterval`/`ctx.addEventListener`
   oder manuell in `ctx.onDispose` abräumen (DOM-Observer, `<style>`-Tags, HUD).
 - Im `register()` nur registrieren; Waiting/Fetching asynchron anstoßen.
+
+## Render-Smoketest (`npm test`)
+
+`tests/render-test.mjs` lädt die echte `plugin.js`, ersetzt die drei
+Import-Module (`@hermes/plugin-sdk`, `react`, `react/jsx-runtime`) durch Stubs
+und rendert `SessionsPane` **und** `SettingsPage` komplett (rekursiver Walk —
+Funktions-Komponenten werden tatsächlich aufgerufen). Läuft in Sekunden, nur
+Node, keine App nötig — ideal als Vorflug und in der CI:
+
+- **Pane**: 30 Fake-Sessions; Listen-Begrenzung (`tabs.maxVisible`) inkl.
+  „Mehr anzeigen (n)“/„Weniger anzeigen“-Toggle, Grenzfälle (Limit = Anzahl,
+  > Anzahl) und Render-Stabilität über mehrere Renders.
+- **Einstellungen**: komplette Seite rendert; neue Optionszeilen müssen im
+  Baum auftauchen.
+
+Trick für echte Interaktionen: `useState` ist im Stub **slot-basiert**
+(Map + `__resetSlots()` pro Render) — ein per Walk eingesammelter
+`props.onClick()` wirkt damit im nächsten Render, Klicks sind echt simulierbar.
+Bei neuen interaktiven UI-Teilen einfach Assertions ergänzen.
 
 ## Troubleshooting
 

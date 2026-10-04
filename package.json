@@ -21,6 +21,7 @@
   },
   "scripts": {
     "check": "node scripts/check.mjs",
+    "test": "node tests/render-test.mjs",
     "install:plugin": "bash install.sh",
     "install:link": "bash install.sh --link",
     "uninstall:plugin": "bash uninstall.sh"
