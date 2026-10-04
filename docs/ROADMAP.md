@@ -17,6 +17,8 @@ zugesagt.
   Code-Blöcke), Kaskade auch für Tool-Karten (opt-in).
 - **Glow-Feintuning**: optionaler Halo/Weichzeichner am Ring, Preset-Farben
   (z. B. „Erfolg/Fehler"-Glow bei fertig/Fehler).
+- **Kontext-Anzeige-Feinschliff**: einstellbare Warnschwellen (statt fix 70/90 %)
+  und alternatives Label-Format (`used/max` statt Prozent).
 
 ## Bewusst so gelassen (Design-Entscheidungen)
 

@@ -87,11 +87,17 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | Im Terminal öffnen | `window.hermesDesktop.openSessionInTerminal(id)` (IPC) | stored-id ok (tui resume); Rückgabe `{ok}` prüfen |
 | ID kopieren | `window.hermesDesktop.writeClipboard(text)` (IPC) | Feature-Detect |
 | Info-Dichte folgen | SDK `host.settings.get/subscribe('sessionListDensity')` | Werte `compact`/`comfortable`/`detailed`; App-persistiert unter localStorage `hermes.desktop.sessionListDensity` (Fallback-Lesepfad) |
+| Kontextfenster lesen | RPC `session.context_breakdown {session_id: runtimeId}` | **Nur LIVE — Runtime-ID Pflicht** (stored-ID ⇒ „session not found“); read-only (chars/4, kein Provider-Call, kein Cache-Impact); Ergebnis `{context_used, context_max, context_percent, context_estimated}`; `context_max: 0` = Agent nicht gebaut → überspringen (v1.10) |
 | Nicht verfügbar | gelesen/ungelesen, Export | App-lokale Stores bzw. Renderer-Bibliothek ohne Plugin-Door |
 
 Hinweis: `host.setPersistedSessionHidden` ist ein **REST**-Door und 404t für
 runtime-only (noch nicht persistierte) Sessions — für die Runtime-Stufe
 `session.set_hidden`/`session.close` (Gateway-RPC) verwenden.
+
+Hinweis (IDs): Die Live-Map (Poll über `session.active_list`) liefert beide
+IDs — **Schlüssel = Runtime-ID, `session_key` = durable Stored-ID**. Alle
+Live-Doors (`SessionParams`: `session.title`, `session.usage`,
+`session.context_breakdown`, …) adressieren über die **Runtime-ID**.
 
 ## Verifikations-Rezepte (Linux, Wayland/KDE)
 
