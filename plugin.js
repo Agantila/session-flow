@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.13.3'
+const VERSION = '1.13.4'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -2915,6 +2915,15 @@ html[data-sf-liveframe~=ring] .sf-tab[data-live=busy]::after,html[data-sf-livefr
 html[data-sf-liveframe~=ring] .sf-tab[data-live=waiting]::after{border-color:color-mix(in srgb,#f59e0b 50%,transparent)}
 @media (prefers-reduced-motion:reduce){html[data-sf-liveframe~=glow] .sf-tab[data-live=busy]::after,html[data-sf-liveframe~=glow] .sf-tab[data-live=waiting]::after{animation:none}}
 html[data-renderer-animations-paused] .sf-tab[data-live=busy]::after,html[data-renderer-animations-paused] .sf-tab[data-live=waiting]::after{animation-play-state:paused}
+
+/* Drehung für Status-Icons (Arbeits-Indikator). Die App-Komponente dreht über
+   den Prop spinning (codicon-modifier-spin); diese Klasse ist der Fallback für
+   SDK-Builds ohne den Prop — sonst stünde das Icon still und wäre kaum als
+   „arbeitet" zu lesen. */
+@keyframes sf-icon-spin{to{transform:rotate(360deg)}}
+.sf-icon-spin{display:inline-block;animation:sf-icon-spin 1.1s linear infinite}
+@media (prefers-reduced-motion:reduce){.sf-icon-spin{animation:none}}
+html[data-renderer-animations-paused] .sf-icon-spin{animation-play-state:paused}
 html[data-sf-seltint~=accent]{--sf-sel-tone:var(--ui-accent)}
 html[data-sf-seltint~=custom]{--sf-sel-tone:var(--sf-sel-color,#7c3aed)}
 /* Auswahl-Zustand (Liste UND Grid): Tönung als Layer ÜBER dem optionalen
@@ -3648,6 +3657,25 @@ function createWheelController(ctx) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Eigener Status-Glyph (Aktivitäts-Icon) mit Core-Fallback via SessionStatusDot. */
+/**
+ * Codicon-Aufruf mit `~spin`-Marker. Die App-Komponente kennt den Marker NICHT —
+ * sie erwartet den `spinning`-Prop; ein Name wie `codicon-sync~spin` ist eine
+ * unbekannte Klasse und rendert gar kein Glyph (Icon 0×0 → Indikator unsichtbar).
+ * Darum Marker abtrennen, als `spinning` weitergeben und zusätzlich die Klasse
+ * `sf-icon-spin` setzen (dreht auch dann, wenn ein SDK-Build `spinning` ignoriert).
+ */
+function SfIcon({ name, size, className, ...rest }) {
+  const spinning = String(name).includes('~spin')
+
+  return jsx(Codicon, {
+    name: String(name).replace(/~spin/g, ''),
+    size,
+    spinning,
+    className: cn('sf-icon', spinning && 'sf-icon-spin', className),
+    ...rest
+  })
+}
+
 function StatusLead({ row, live, activity, style, t }) {
   const detail = activityFor(row, live, activity)
   const glyph = ACTIVITY_GLYPHS[detail.kind] || ACTIVITY_GLYPHS.idle
@@ -3662,11 +3690,7 @@ function StatusLead({ row, live, activity, style, t }) {
     role: 'status',
     'aria-label': label,
     children: [
-      showGlyph
-        ? jsx(Codicon, { name: glyph.icon, size: '0.8125rem' })
-        : showDot
-          ? renderDot(row)
-          : null,
+      showGlyph ? jsx(SfIcon, { name: glyph.icon, size: '0.8125rem' }) : showDot ? renderDot(row) : null,
       showDot && showGlyph ? renderDot(row) : null
     ]
   })

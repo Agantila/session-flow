@@ -3,6 +3,27 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.13.4] — 2026-10-04
+
+### Fixed
+- **Arbeits-Indikator in der Session-Liste war unsichtbar** (Liste **und** Grid): Der
+  Aktivitäts-Glyph für „arbeitet"/„denkt" wurde mit dem Namen `sync~spin` an die
+  App-Icon-Komponente übergeben. Die kennt den `~spin`-Marker NICHT (sie erwartet den
+  `spinning`-Prop) — es entstand die unbekannte Klasse `codicon-sync~spin`, das Icon
+  rendert mit 0×0 und war damit komplett unsichtbar. Ein Wrapper trennt jetzt den
+  Marker ab, übergibt `spinning` und setzt zusätzlich die Fallback-Klasse
+  `sf-icon-spin` (CSS-Drehung), damit der Indikator auch mit SDK-Builds ohne den Prop
+  dreht. Live verifiziert: Icon 14×14, Klasse
+  `codicon codicon-sync codicon-modifier-spin sf-icon sf-icon-spin`, Akzentfarbe +
+  Glow-Ring an der arbeitenden Zeile.
+- Statische Status-Glyphen (Glocke/Wartend, Haken/Erledigt, Fehler, Kreis/Leerlauf)
+  waren nicht betroffen und sind unverändert.
+
+### Intern
+- Render-Smoketest prüft die Glyph-Erzeugung je Status: kein `~` im Namen,
+  `spinning`-Prop gesetzt, Fallback-Klasse vorhanden — plus die neutralen Fälle
+  (Leerlauf, Wartend) als Regressionsschutz.
+
 ## [1.13.3] — 2026-10-04
 
 ### Removed

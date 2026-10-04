@@ -345,7 +345,7 @@ const rewritten = src
   .replace("from 'react/jsx-runtime'", `from '${stubUrl}'`)
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
-  .concat('\nexport { patchSettings, applyPersonal, syncPaneBackgrounds }\n')
+  .concat('\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead }\n')
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
 
@@ -623,6 +623,31 @@ mod.patchSettings('personal', { bgKind: 'video' })
 check('v1.13.2: Video-Modus erzeugt ein <video> im Layer', Boolean(bgChat.querySelector('[data-sf-bg-video]')))
 mod.patchSettings('personal', { bgOn: false })
 check('v1.13.2: Hintergrund aus → alle Layer entfernt', layerCount() === 0, `layers=${layerCount()}`)
+
+// 16) v1.13.4: Status-Indikator — `~spin` darf nicht in der Codicon-Klasse landen
+const leadEl = (kind, status) =>
+  mod.StatusLead({
+    row: { id: 's-lead' },
+    live: { r1: { storedId: 's-lead', status } },
+    activity: {},
+    style: 'glyph',
+    t: key => key
+  })
+const resolveGlyph = el => (el && typeof el.t === 'function' && el.p && 'name' in el.p ? el.t(el.p) : el)
+const glyphOf = lead => resolveGlyph((lead.p.children || []).find(child => child && child.p && 'name' in child.p))
+const workingGlyph = glyphOf(leadEl('working', 'working'))
+check('v1.13.4: Arbeits-Icon ohne ~spin im Namen', workingGlyph && workingGlyph.p.name === 'sync', workingGlyph && String(workingGlyph.p.name))
+check('v1.13.4: Arbeits-Icon dreht über spinning-Prop', workingGlyph && workingGlyph.p.spinning === true, workingGlyph && String(workingGlyph.p.spinning))
+check('v1.13.4: Arbeits-Icon trägt Fallback-Klasse sf-icon-spin', workingGlyph && String(workingGlyph.p.className).includes('sf-icon-spin'), workingGlyph && String(workingGlyph.p.className))
+check('v1.13.4: Lead-Kind wird als working gemeldet', leadEl('working', 'working').p['data-kind'] === 'working', leadEl('working', 'working').p['data-kind'])
+const idleGlyph = glyphOf(leadEl('idle', 'idle'))
+check(
+  'v1.13.4: Idle-Icon unverändert (circle-outline, ohne spinning)',
+  idleGlyph && idleGlyph.p.name === 'circle-outline' && !idleGlyph.p.spinning,
+  idleGlyph && `${idleGlyph.p.name}/${idleGlyph.p.spinning}`
+)
+const waitingGlyph = glyphOf(leadEl('waiting', 'waiting'))
+check('v1.13.4: Wartend-Icon (bell) intakt', waitingGlyph && waitingGlyph.p.name === 'bell' && !waitingGlyph.p.spinning, waitingGlyph && String(waitingGlyph.p.name))
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)
