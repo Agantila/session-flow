@@ -966,7 +966,9 @@ try {
       live: 0
     }
   ])
-  mod.$projectsList.set([{ id: 'proj-c', name: 'Colored', path: '/tmp/colored-project', color: '#ff0066', icon: null }])
+  mod.$projectsList.set([
+    { id: 'proj-c', name: 'Colored', color: '#ff0066', icon: null, archived: false, folders: [{ path: '/tmp/colored-project' }] }
+  ])
   mod.patchSettings('groups', { autoMode: 'project', headerDensity: 'comfortable' })
   stub.__resetSlots()
   let out20 = { el: [], text: [] }
@@ -984,7 +986,9 @@ try {
   )
 
   // b) Eigenes Icon + Farbe → Icon statt Punkt, eingefärbt.
-  mod.$projectsList.set([{ id: 'proj-c', name: 'Colored', path: '/tmp/colored-project', color: '#ff0066', icon: 'rocket' }])
+  mod.$projectsList.set([
+    { id: 'proj-c', name: 'Colored', color: '#ff0066', icon: 'rocket', archived: false, folders: [{ path: '/tmp/colored-project' }] }
+  ])
   stub.__resetSlots()
   out20 = { el: [], text: [] }
   walk(pane.render(), out20)
@@ -1001,7 +1005,9 @@ try {
   )
 
   // c) Weder Icon noch Farbe → Fallback bleibt der Ordner-Icon-Wechsel.
-  mod.$projectsList.set([{ id: 'proj-p', name: 'Plain', path: '/tmp/colored-project', color: null, icon: null }])
+  mod.$projectsList.set([
+    { id: 'proj-p', name: 'Plain', color: null, icon: null, archived: false, folders: [{ path: '/tmp/colored-project' }] }
+  ])
   stub.__resetSlots()
   out20 = { el: [], text: [] }
   walk(pane.render(), out20)
@@ -1019,6 +1025,124 @@ try {
   mod.patchSettings('groups', { autoMode: 'off', headerDensity: 'comfortable' })
 } catch (error) {
   check('v1.16.0-Tests durchgelaufen', false, error && error.message)
+}
+
+// 21) v1.16.1: Hermes' eigene Projekt-Zuordnung (liveSessionProjectId) portiert
+try {
+  const textOf = node => {
+    if (node == null) return ''
+    if (typeof node === 'string' || typeof node === 'number') return String(node)
+    if (Array.isArray(node)) return node.map(textOf).join('')
+    if (node.p) return textOf(node.p.children)
+    return ''
+  }
+
+  // a) Session OHNE cwd, nur Git-Repo-Root — Hermes gruppiert danach, unsere
+  //    alte Logik (nur row.cwd) warf das bisher komplett in "Kein Projekt".
+  mod.$sessions.set([
+    {
+      id: 'r1',
+      title: 'Repo only',
+      preview: '',
+      cwd: '',
+      repoRoot: '/home/deniz/work/myrepo',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 1000,
+      messageCount: 1,
+      live: 0
+    }
+  ])
+  mod.$projectsList.set([])
+  mod.patchSettings('groups', { autoMode: 'project' })
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  let out21 = { el: [], text: [] }
+  walk(pane.render(), out21)
+  check(
+    'v1.16.1: Session ohne CWD (nur Repo-Root) landet NICHT in „Kein Projekt"',
+    !globalThis.__SF__.tCalls.some(([k]) => k === 'noProject')
+  )
+  check(
+    'v1.16.1: Auto-Projekt heißt wie der Repo-Root-Ordner',
+    out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('myrepo'))
+  )
+
+  // b) CWD trifft nur den ZWEITEN Ordner eines Mehrordner-Projekts.
+  mod.$sessions.set([
+    {
+      id: 'm1',
+      title: 'Multi',
+      preview: '',
+      cwd: '/home/deniz/work/secondary/sub',
+      repoRoot: '',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 1000,
+      messageCount: 1,
+      live: 0
+    }
+  ])
+  mod.$projectsList.set([
+    {
+      id: 'proj-multi',
+      name: 'Multi-Folder',
+      color: null,
+      icon: null,
+      archived: false,
+      folders: [{ path: '/home/deniz/work/primary' }, { path: '/home/deniz/work/secondary' }]
+    }
+  ])
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  out21 = { el: [], text: [] }
+  walk(pane.render(), out21)
+  check(
+    'v1.16.1: Mehrordner-Projekt greift über den zweiten (nicht primären) Ordner',
+    out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('Multi-Folder'))
+  )
+
+  // c) Archiviertes Projekt wird ignoriert — fällt auf den rohen Ordnernamen zurück.
+  mod.$sessions.set([
+    {
+      id: 'a1',
+      title: 'Archived case',
+      preview: '',
+      cwd: '/tmp/archived-proj',
+      repoRoot: '',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 1000,
+      messageCount: 1,
+      live: 0
+    }
+  ])
+  mod.$projectsList.set([
+    { id: 'proj-arch', name: 'Archived', color: null, icon: null, archived: true, folders: [{ path: '/tmp/archived-proj' }] }
+  ])
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  out21 = { el: [], text: [] }
+  walk(pane.render(), out21)
+  check(
+    'v1.16.1: Archiviertes Projekt wird übersprungen (Rückfall auf Ordnernamen)',
+    !out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('Archived')) &&
+      out21.el.some(e => e.cls.includes('sf-group-name') && textOf(e.props.children).includes('archived-proj'))
+  )
+
+  mod.$projectsList.set([])
+  mod.patchSettings('groups', { autoMode: 'off' })
+} catch (error) {
+  check('v1.16.1-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

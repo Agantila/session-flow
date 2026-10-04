@@ -5,6 +5,32 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+## [1.16.1] — 2026-10-04
+
+### Fixed
+- **Projekt-Ordner-Gruppierung zeigte fast immer nur „Kein Projekt"** — die
+  Bucketing-Logik verglich bisher nur `session.cwd` wortwörtlich gegen
+  `project.primary_path`. In der Praxis greift das kaum: viele Sessions
+  tragen inzwischen gar keine `cwd` mehr, nur noch den vom Backend
+  aufgelösten `git_repo_root` (`types/hermes.ts`: „The sidebar groups by
+  this instead of probing git in the GUI."); Projekte haben oft keinen
+  `primary_path`, sondern nur eine `folders[]`-Liste; und Hermes selbst
+  gruppiert auch Sessions ganz ohne projects.db-Eintrag automatisch nach
+  ihrem Repo-Root. Session Flow portiert jetzt denselben Algorithmus wie
+  Hermes Desktops eigene Sidebar (`liveSessionProjectId` aus
+  `app/chat/sidebar/projects/workspace-groups.ts`):
+  - Explizites Projekt mit dem längsten passenden Ordner-Präfix gewinnt —
+    geprüft werden ALLE Ordner eines Mehrordner-Projekts, gegen CWD UND
+    Git-Repo-Root, nicht nur `primary_path`.
+  - Archivierte Projekte werden übersprungen.
+  - Ohne Treffer wird der Git-Repo-Root selbst zur Auto-Projekt-Identität
+    (Name = Ordnername), genau wie bei einem nicht in projects.db
+    eingetragenen Git-Checkout in Hermes Desktop.
+  - Bewusste Abweichung von Hermes: eine Session, die sich über keinen der
+    beiden Wege platzieren lässt, verschwindet bei uns NIE aus der Liste —
+    letzter Ausweg ist die rohe CWD als eigene Gruppe (altes Verhalten).
+- `normalizeRow()` liest jetzt zusätzlich `git_repo_root` ein.
+
 ## [1.16.0] — 2026-10-04
 
 ### Added

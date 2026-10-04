@@ -151,18 +151,31 @@ Spiegelt Hermes Desktops Sidebar-Filter-Icon in Form und Platzierung.
 
 ### Projekt-Ordner-Gruppierung (`groups.autoMode: 'project'`)
 
-Gruppiert alle (nicht manuell zugewiesenen) Sessions nach ihrer Arbeits-CWD —
-spiegelt die Projekt-Baumstruktur von Hermes Desktop:
+Gruppiert alle (nicht manuell zugewiesenen) Sessions nach demselben
+Algorithmus wie Hermes Desktops eigene Sidebar
+(`liveSessionProjectId`/`sessionBucketId` aus
+`app/chat/sidebar/projects/workspace-groups.ts`) — **nicht** nur ein
+wortwörtlicher `cwd === primary_path`-Vergleich, der bei den meisten echten
+Setups leer ausgeht:
 
-- **Label**: Treffer in `projects.list` liefert den Projektnamen; sonst der
-  Ordnername der CWD. Sessions ohne CWD landen in „Kein Projekt".
-- **Identität (Icon/Farbe)**: Trägt das Hermes-Projekt ein eigenes Icon
-  (`project.icon`), zeigt der Header genau dieses Icon — optional in der
-  Projektfarbe (`project.color`) eingefärbt. Nur eine Farbe ohne eigenes
-  Icon ergibt einen Farbpunkt wie bei manuellen Gruppen. Ohne beides bleibt
-  es beim Ordner-Icon (offen/geschlossen je Collapse-Zustand). Projekte ohne
-  `primary_path` (Mehrordner-Setups) werden über ihren ersten Ordner
-  gefunden.
+- **Zuordnung**: für jede Session wird geprüft, ob ihre CWD **oder** ihr vom
+  Backend aufgelöster Git-Repo-Root (`git_repo_root`) unter einem der
+  **Ordner** (`folders[]`, nicht nur `primary_path`) eines expliziten
+  Hermes-Projekts liegt — bei mehreren Treffern gewinnt der Ordner mit dem
+  längsten Pfad-Präfix. Archivierte Projekte werden übersprungen. Ohne
+  Treffer wird der Git-Repo-Root selbst zur **Auto-Projekt**-Identität
+  (Name = Ordnername) — genau wie bei einem Git-Checkout ohne eigenen
+  projects.db-Eintrag in Hermes Desktop. Nur Sessions ganz ohne CWD UND ohne
+  Repo-Root landen in „Kein Projekt".
+  Abweichung von Hermes (bewusst): eine Session, die weder zu einem
+  Projekt-Ordner noch zu ihrem eigenen Repo-Root passt, verschwindet bei uns
+  nie aus der Liste — letzter Ausweg ist die rohe CWD als eigene Gruppe.
+- **Identität (Icon/Farbe)**: Trägt das zugeordnete Hermes-Projekt ein
+  eigenes Icon (`project.icon`), zeigt der Header genau dieses Icon —
+  optional in der Projektfarbe (`project.color`) eingefärbt. Nur eine Farbe
+  ohne eigenes Icon ergibt einen Farbpunkt wie bei manuellen Gruppen. Ohne
+  beides (auch bei Auto-Projekten) bleibt es beim Ordner-Icon (offen/
+  geschlossen je Collapse-Zustand).
 - **Header-Optik**: der Ein-/Ausklapp-Caret ist wie unter „Projekte" erst
   beim Überfahren sichtbar. Ein Hover-„+" startet eine neue Session direkt
   mit dieser CWD (`session.create` + `cwd_explicit`).
