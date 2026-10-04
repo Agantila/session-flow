@@ -64,7 +64,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.rowLive` | `false` | Aktiv & Wartend hervorheben: Akzent-Glow + pulsierendes Status-Icon + Live-Rahmen (Bildsprache wie im Tab-Design). |
 | `tabs.liveFrame` | `glow` | Rahmen für arbeitende/wartende Einträge: `off`/`ring` (statisch)/`glow` (glühender, umlaufender Ring — App-Technik). Nur sichtbar mit `rowLive`. |
 | `tabs.showContext` | `false` | Kontextfenster (kompakt): Prozent-Label je Zeile/Karte für **Live-Sessions** (read-only `session.context_breakdown`, kein Provider-Call). Ab 70 % bernstein, ab 90 % rot; Tooltip zeigt used/max. |
-| `tabs.ctxPie` | `true` | Kontextfenster als Torten-Diagramm: Wert (weiß, Text-Schatten) über einem kleinen Pie (`conic-gradient`, Farbstufen ab 70 %/90 %). Aus = reines Prozent-Label. |
+| `tabs.ctxPie` | `true` | Kontextfenster als **Donut**: Außenring = Füllstand, Innenkreis ausgespart (die Zeilenfläche scheint durch). Der Wert steht im Loch — weiß mit mehrlagigem Text-Schatten (Kontur + Glow); Farbstufen ab 70 %/90 %. Aus = reines Prozent-Label. **Listen-Ansicht:** Donut ganz rechts am Ende (nach der Zeit); **Grid:** vor der Zeit. |
 | `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |
 | `tabs.showTime` | `true` | Alter der Session anzeigen. |
 | `tabs.showPreview` | `false` | Letzte Nachricht als Vorschau (cozy-Dichte). |
@@ -222,13 +222,11 @@ Eigene Akzentfarbe und eigener Chat-Hintergrund. Alle Optionen sind standardmä�
   Fläche wird dafür per Variablen-Override transparent). Videos laufen nur auf
   sichtbaren Panes.
 
-### Kontext-Anzeige (Donut)
+### Kontext-Anzeige
 
-- **Kontextfenster als Donut** (`tabs.ctxPie`): Füllstand als Außenring mit
-  ausgespartem Loch; die Prozentzahl steht im Loch und bleibt durch einen mehrlagigen
-  Text-Schatten (Kontur + Glow) auch auf hellen Füllungen lesbar.
-- In der **Listen-Ansicht** steht der Donut ganz rechts am Ende (nach der Zeit), in
-  der **Grid-Ansicht** vor der Zeit.
+- Ist `tabs.ctxPie` aktiv, zeichnet die Zeile einen Donut (Ring außen, Loch innen);
+  die Prozentzahl sitzt im Loch und bleibt durch den Text-Schatten lesbar.
+  Details siehe Sektion **Session-Tabs** (`tabs.ctxPie`).
 
 ## Über
 

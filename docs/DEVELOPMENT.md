@@ -209,6 +209,23 @@ schlägt `npm run check` an.
 - Timer/Listener via `ctx.setTimeout`/`ctx.setInterval`/`ctx.addEventListener`
   oder manuell in `ctx.onDispose` abräumen (DOM-Observer, `<style>`-Tags, HUD).
 - Im `register()` nur registrieren; Waiting/Fetching asynchron anstoßen.
+- **Niemals Backticks im CSS-Template** — auch nicht als Markdown-Zitat in einem
+  CSS-Kommentar: der Backtick beendet das Template-Literal. Symptom im Log:
+  `SyntaxError: Invalid left-hand side expression in postfix operation`
+  (die Zeilenangabe zeigt auf den Template-Start, nicht auf den Backtick).
+  Vor jedem Save `npm run check` laufen lassen.
+- **Icon-Komponente der App:** `Codicon` erwartet `name` OHNE Marker plus den
+  `spinning`-Prop. Ein Name wie `sync~spin` erzeugt die unbekannte Klasse
+  `codicon-sync~spin` → Icon rendert 0×0 (unsichtbar). Immer `SfIcon` benutzen:
+  trennt den Marker ab, setzt den Prop und zusätzlich die Fallback-Klasse
+  `sf-icon-spin` (dreht auch mit SDK-Builds ohne den Prop).
+- **Anker für pane-weite Regeln:** `[data-chat-surface]` (Chat-Surface, hat
+  `isolate`) und `[data-tree-group]` (Zone). `[data-pane-host]` existiert NUR
+  für Keep-Alive-Panes — Regeln dort wirken im normalen Chat gar nicht.
+- **Temporäre Debug-Ausgaben** (`console.error`) vor dem Commit entfernen und
+  `git commit --amend` nie in derselben Runde wie einen Marker-Save ausführen
+  (Tool-Reihenfolge nicht garantiert) — danach mit
+  `git show HEAD:plugin.js | grep -c <marker>` prüfen.
 
 ## Render-Smoketest (`npm test`)
 
@@ -266,6 +283,8 @@ Screenshot zur Sichtprüfung: `SF_STYLE_SHOTS=<ordner> npm run test:style`.
 | Glass-Effekt fehlt | `glass.enabled`? Bereichs-Toggles? System-„Transparenz reduzieren" aktiv (Blur wird dann global genullt)? Modell-Pill gibt es nur im Primär-Chat |
 | Animation passiert nichts | `prefers-reduced-motion` aktiv? Animation in den Einstellungen aus? Nur Assistant-Nachrichten werden animiert |
 | Strg+Scroll reagiert nicht | Fokus in Zoom-Fläche (Bild/Editor)? Andere App-Sektion? `wheel.enabled`? |
+| Status-Icon/Indikator unsichtbar | Icon-Name enthält `~spin` → unbekannte Klasse, Icon 0×0. Prüfen: `el.firstElementChild.getBoundingClientRect()` muss ~13–14 px sein, `innerHTML` zeigt die Klassen wörtlich. Fix: über `SfIcon` rendern. |
+| Design-Regel wirkt im Chat nicht | Selektor zielt auf `[data-pane-host]` (nur Keep-Alive-Panes). Chat: `[data-chat-surface]`, Zonen: `[data-tree-group]`. |
 | Rahmen: „duplicate id" | Zweite Kopie unter anderem Ordner mit gleicher id (z.B. Unified-Package) — nur eine Installation behalten |
 
 ## Roadmap-Ideen

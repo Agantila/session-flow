@@ -21,4 +21,4 @@ entwicklerorientiert; die Nutzer-Doku steht im Root-README.
 | [../SECURITY.md](../SECURITY.md) | Sicherheitsmodell & Meldewege. |
 | [../scripts/check.mjs](../scripts/check.mjs) | Pre-Flight: Syntaxcheck + i18n-Key-Audit (`npm run check`). |
 | [../tests/render-test.mjs](../tests/render-test.mjs) | **Render-Smoketest** (`npm test`): rendert Sessions-Pane & Einstellungsseite headless gegen SDK-Stubs — prüft UI-Verhalten (u. a. Listen-Begrenzung) ohne laufende App. |
-| [../tests/style-test.mjs](../tests/style-test.mjs) | **Computed-Style-Test** (`npm run test:style`, optional): prüft die berechneten Styles am echten Chromium (Playwright) — Liste-vs-Grid-Parität, Alpha-Verläufe, Auswahl-/Hover-Stufen, Kontext-Pie, Live-Glow-Ring, Hover-Anhebung. Skip ohne Playwright. |
+| [../tests/style-test.mjs](../tests/style-test.mjs) | **Computed-Style-Test** (`npm run test:style`, optional): prüft die berechneten Styles am echten Chromium (Playwright) — Liste-vs-Grid-Parität, Alpha-Verläufe, Auswahl-/Hover-Stufen, Kontext-Donut (Ring + Loch), Live-Glow-Ring, Hover-Anhebung, Hintergrund-Layer. Skip ohne Playwright. |

@@ -116,7 +116,7 @@ const html = `<!doctype html>
         ${row('g3', 'Grid busy', ' data-live="busy"')}
       </div>
     </div>
-    <h4 style="color:#9ca3af;font:600 11px/1 system-ui;margin:14px 4px 6px">Content-Abgrenzung</h4>
+    <h4 style="color:#9ca3af;font:600 11px/1 system-ui;margin:14px 4px 6px">Content-Abgrenzung (entfernt)</h4>
     <div id="paneBody" style="position:relative;overflow:hidden;width:320px;height:120px">
       <div data-chat-surface id="chatSurface" style="height:60px"></div>
       <div class="sf-shell-frame" data-sf-shell-frame id="frame1"></div>

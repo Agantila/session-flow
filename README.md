@@ -111,7 +111,7 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
   HUD on/off + duration, ignore selectors (CSS).
 - **Session-Tabs**: density (compact/cozy), view (list/grid — columns, card
   width, gap, title lines, preview, info density like Hermes, top-aligned
-  text, compact context-window **pie** for live sessions, max visible entries
+  text, compact context-window **donut** for live sessions, max visible entries
   per group with “show more”), row/card design
   (gradient background, drop shadows, gradient titles, selected-state
   tint/outline/shadow incl. hover strength, live glow with the app’s

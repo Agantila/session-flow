@@ -121,7 +121,7 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
   Ignorier-Selektoren (CSS).
 - **Session-Tabs**: Dichte (kompakt/bequem), Ansicht (Liste/Grid — Spalten,
   Kartenbreite, Abstand, Titel-Zeilen, Vorschau, Info-Dichte wie Hermes,
-  Text oben ausgerichtet, kompaktes Kontextfenster als **Torten-Diagramm** für
+  Text oben ausgerichtet, kompaktes Kontextfenster als **Donut** (Ring mit Loch) für
   Live-Sessions, max. sichtbare Einträge je Gruppe mit „Mehr anzeigen“),
   Zeilen-/Karten-Design (Hintergrund-Verlauf, Schlagschatten, Titel-Verlauf,
   Auswahl-Tönung/-Kontur/-Schatten inkl. Hover-Stufe, Live-Glow mit dem
