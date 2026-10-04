@@ -116,11 +116,38 @@ Pane-Besuch startet die Filter immer frisch):
 |---|---|---|
 | `groups.enabled` | `true` | Manuelle Gruppen aktiv. |
 | `groups.autoMode` | `off` | `off`, `date` (Heute/Gestern/Woche/Älter), `source` oder `project` (Projekt-Ordner — siehe unten). |
+| `groups.headerDensity` | `comfortable` | Typografie & Infotiefe der Kopfzeilen — siehe unten. |
 | `groups.stackStyle` | `spine` | Optik eingeklappter Gruppen: `spine`, `fanned`, `pill`. |
 | `groups.showUngrouped` | `true` | „Nicht gruppiert"-Bereich zeigen, wenn Auto-Modus aus ist. |
 
 Gruppen-Daten (Name, Farbe, Zuordnung, Collapse-Zustand) liegen separat unter
 `hermes.plugin.session-flow.groups.v1`.
+
+### Kopfzeilen-Dichte (`groups.headerDensity`)
+
+Steuert, wie groß/kräftig eine einklappbare Sektions-Kopfzeile (Datum, Quelle,
+manuelle Gruppe, Projekt-Ordner) ist und ob sie eine zweite Zeile zeigt —
+analog zur Info-Dichte der Zeilen selbst (`tabs.infoDensity`), nur für die
+Kopfzeile:
+
+- **`compact`**: alte, einzeilige Optik (11px/600) — keine Subzeile.
+- **`comfortable`** (Default): größere, fettere Schrift (12px/700); Projekt-
+  Gruppen zeigen zusätzlich den gekürzten Ordnerpfad als Subzeile (z. B.
+  „…/ARBEIT_2026/_AGANTILA_Workspace"), der volle Pfad bleibt im Tooltip.
+- **`detailed`**: wie Komfortabel (13px), plus eine Kennzahl-Subzeile mit
+  Angepinnt-/Aktiv-Anzahl, wenn die Sektion tatsächlich welche enthält (nie
+  erfunden — ohne Treffer bleibt die Zeile weg).
+
+Die Kopfzeile wächst nur bei vorhandener Subzeile auf zwei Zeilen
+(`.sf-group-twoline`); ohne Subzeile bleibt sie einzeilig, nur größer gesetzt.
+
+### Ansichtsoptionen-Icon (Toolbar)
+
+Das Filter-Symbol (list-filter) in der Pane-Toolbar öffnet ein Menü mit
+Gruppierung (`groups.autoMode`), Kopfzeilen-Dichte (`groups.headerDensity`)
+und „Nicht gruppiert"-Bereich (`groups.showUngrouped`) — dieselben drei
+Optionen wie auf der Einstellungsseite, nur ohne dorthin wechseln zu müssen.
+Spiegelt Hermes Desktops Sidebar-Filter-Icon in Form und Platzierung.
 
 ### Projekt-Ordner-Gruppierung (`groups.autoMode: 'project'`)
 

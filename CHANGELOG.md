@@ -5,6 +5,35 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-10-04
+
+### Added
+- **Kopfzeilen-Dichte** (`groups.headerDensity: 'compact'|'comfortable'|
+  'detailed'`, Default `comfortable`): Sektions-/Gruppen-Kopfzeilen (Datum,
+  Quelle, manuelle Gruppe, Projekt-Ordner) sind jetzt größer & fetter gesetzt
+  (12–13px/700 statt 11px/600) und zeigen optional eine zweite Zeile —
+  Projekt-Gruppen den gekürzten Ordnerpfad als Subzeile (voller Pfad bleibt
+  im Tooltip), „Detailreich" zusätzlich eine Angepinnt-/Aktiv-Kennzahl, wenn
+  die Sektion tatsächlich welche enthält. Die Zeile wächst nur bei
+  vorhandener Subzeile auf zwei Zeilen; `compact` behält die alte,
+  einzeilige Optik bei.
+- **Ansichtsoptionen-Icon** (list-filter) in der Pane-Toolbar: öffnet ein
+  Menü mit Gruppierung, Kopfzeilen-Dichte und „Nicht gruppiert"-Toggle direkt
+  aus der Pane — dieselben drei Optionen wie auf der Einstellungsseite, ohne
+  dorthin wechseln zu müssen. Spiegelt Hermes Desktops Sidebar-Filter-Icon
+  (`list-filter`, aus `filter-menu.tsx`) in Form und Platzierung.
+- Neue Settings-Zeile für `groups.headerDensity` (Segment compact/
+  comfortable/detailed).
+
+### Fixed
+- Das neue Ansichtsoptionen-Menü öffnete sich in der echten App gar nicht:
+  `Tip` saß zwischen `DropdownMenuTrigger asChild` und dem eigentlichen
+  Button — Radix kann den Ref durch einen zusätzlichen Wrapper nicht
+  durchreichen (derselbe dokumentierte Pitfall wie bei Popover-Triggern).
+  Der Button ist jetzt direktes Trigger-Kind, wie bei der bereits
+  funktionierenden Zeilen-„⋯"-Aktionsmenü (`moreRowMenu`); die Tooltip-
+  Beschriftung läuft stattdessen über `title`.
+
 ## [1.14.0] — 2026-10-04
 
 ### Added

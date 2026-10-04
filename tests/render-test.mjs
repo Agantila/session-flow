@@ -770,5 +770,103 @@ try {
   check('v1.14.0-Tests durchgelaufen', false, error && error.message)
 }
 
+// 18) v1.15.0: Kopfzeilen-Dichte, Projekt-Subzeile, Ansichtsoptionen-Menü
+try {
+  mod.$sessions.set([
+    {
+      id: 'p1',
+      title: 'Pinned one',
+      preview: '',
+      cwd: '/tmp/demo-project/app',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: true,
+      source: 'desktop',
+      startedAt: 2000,
+      messageCount: 1,
+      live: 0
+    },
+    {
+      id: 'p2',
+      title: 'Second',
+      preview: '',
+      cwd: '/tmp/demo-project/app',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 1000,
+      messageCount: 1,
+      live: 0
+    }
+  ])
+
+  mod.patchSettings('groups', { autoMode: 'project', headerDensity: 'comfortable' })
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out18a = { el: [], text: [] }
+  walk(pane.render(), out18a)
+  const projectHead18 = out18a.el.find(e => e.cls.includes('sf-group-head') && e.cls.includes('sf-group-project'))
+  check(
+    'v1.15.0: Komfortabler Projekt-Header ist zweizeilig (Subzeile)',
+    Boolean(projectHead18) && projectHead18.cls.includes('sf-group-twoline')
+  )
+  const subEl18 = out18a.el.find(e => e.cls.includes('sf-group-sub'))
+  check(
+    'v1.15.0: Subzeile zeigt den gekürzten Projekt-Pfad',
+    Boolean(subEl18) && String(subEl18.props.children) === '…/demo-project/app',
+    String(subEl18 && subEl18.props.children)
+  )
+
+  mod.patchSettings('groups', { headerDensity: 'compact' })
+  stub.__resetSlots()
+  const out18b = { el: [], text: [] }
+  walk(pane.render(), out18b)
+  check('v1.15.0: Kompakt-Dichte zeigt keine Subzeile', !out18b.el.some(e => e.cls.includes('sf-group-sub')))
+
+  mod.patchSettings('groups', { headerDensity: 'detailed' })
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out18c = { el: [], text: [] }
+  walk(pane.render(), out18c)
+  check(
+    'v1.15.0: Detailreich zeigt die angepinnt-Kennzahl',
+    globalThis.__SF__.tCalls.some(([k, v]) => k === 'groupFactsPinned' && v === 1)
+  )
+
+  mod.patchSettings('groups', { autoMode: 'off', headerDensity: 'comfortable' })
+
+  // Ansichtsoptionen-Icon-Button in der Toolbar (spiegelt Hermes Desktops
+  // Sidebar-Filter-Icon) — öffnet Gruppierung + Kopfzeilen-Dichte inline.
+  // Der Render-Stub reicht Button/Codicon-Props nicht durch (pc-Stub gibt nur
+  // children zurück), darum über t()-Aufrufe + die echten Caption-<div>s
+  // nachweisen, dass das Menü ohne Crash vollständig aufgebaut wurde.
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out18d = { el: [], text: [] }
+  walk(pane.render(), out18d)
+  check(
+    'v1.15.0: Ansichtsoptionen-Button + Menü aufgebaut (keine Crash)',
+    globalThis.__SF__.tCalls.some(([k]) => k === 'viewOptions') &&
+      out18d.el.some(e => e.cls.includes('sf-menu-caption') && e.props.children === 'viewOptionsGrouping') &&
+      out18d.el.some(e => e.cls.includes('sf-menu-caption') && e.props.children === 'viewOptionsDensity')
+  )
+
+  // Einstellungs-Seite: neue Kopfzeilen-Dichte-Zeile.
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out18e = { el: [], text: [] }
+  walk(settingsPage.render(), out18e)
+  const keys18 = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  check(
+    'v1.15.0: Einstellungen enthalten groupsHeaderDensity-Zeile',
+    keys18.has('groupsHeaderDensity') && keys18.has('headerDensityDetailed')
+  )
+} catch (error) {
+  check('v1.15.0-Tests durchgelaufen', false, error && error.message)
+}
+
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)

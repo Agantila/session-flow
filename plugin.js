@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.14.0'
+const VERSION = '1.15.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -202,6 +202,7 @@ const DEFAULT_SETTINGS = {
   groups: {
     enabled: true,
     autoMode: 'off',
+    headerDensity: 'comfortable',
     stackStyle: 'spine',
     showUngrouped: true
   },
@@ -929,6 +930,33 @@ function applyTabSelectorMode() {
   }
 }
 
+/** Räumt die Gruppen-Kopfzeilen-Dichte ab (groups.headerDensity). */
+function clearGroupsDensity() {
+  document.documentElement.removeAttribute('data-sf-grpdensity')
+}
+
+/**
+ * Typografie der Sektions-/Gruppen-Kopfzeilen (Liste/Grid): größer & stärker
+ * wie die Projekt-Header von Hermes Desktop, plus optionale zweite Zeile
+ * (Ordner-Pfad bei Projekt-Gruppen, Kennzahlen bei den übrigen Arten) — siehe
+ * `SectionHeader`. Die Stufe steuert nur, WIE VIEL die Kopfzeile zeigt; die
+ * Daten selbst werden in React berechnet, hier nur die CSS-Stufe gesetzt.
+ */
+function applyGroupsDensity() {
+  const groups = $settings.get().groups || {}
+
+  try {
+    const density = ['compact', 'comfortable', 'detailed'].includes(groups.headerDensity)
+      ? groups.headerDensity
+      : 'comfortable'
+
+    document.documentElement.setAttribute('data-sf-grpdensity', density)
+  } catch (error) {
+    console.warn(`[${ID}] groups-density apply failed`, error)
+    clearGroupsDensity()
+  }
+}
+
 /**
  * Markiert Session-Tabs arbeitender Sessions (denkt/schreibt/Tool/arbeitet) —
  * dieselbe Live-Info, die auch die Sidebar (Status-Punkt/Arc) zeigt. Das CSS
@@ -1132,6 +1160,28 @@ function projectLabelForCwd(cwd) {
   const base = trimmed.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
 
   return base || trimmed
+}
+
+/**
+ * Kurzform eines Pfads für die Projekt-Gruppen-Subzeile — letzte `segments`
+ * Ordner, mit „…/" davor wenn welche abgeschnitten wurden. Der volle Pfad
+ * bleibt im `title`-Tooltip erhalten (siehe SectionHeader), das hier ist nur
+ * die sichtbare Kurzfassung unter dem Projektnamen.
+ */
+function shortPath(full, segments = 2) {
+  const trimmed = String(full || '').trim().replace(/[\\/]+$/, '')
+
+  if (!trimmed) {
+    return ''
+  }
+
+  const parts = trimmed.split(/[\\/]/).filter(Boolean)
+
+  if (parts.length <= segments) {
+    return parts.join('/')
+  }
+
+  return `…/${parts.slice(-segments).join('/')}`
 }
 
 /** Folgt der App-Einstellung zur Session-Listen-Dichte (Feature-Detect). */
@@ -1993,6 +2043,16 @@ const EN = {
   groupsAutoDate: 'By date',
   groupsAutoSource: 'By source',
   groupsAutoProject: 'By project folder',
+  groupsHeaderDensity: 'Header density',
+  groupsHeaderDensityDesc: 'How much a collapsible section header shows: Comfortable is bigger & bolder with the project folder as a subtext line; Detailed adds pinned/active counts too.',
+  headerDensityCompact: 'Compact',
+  headerDensityComfortable: 'Comfortable',
+  headerDensityDetailed: 'Detailed',
+  groupFactsPinned: n => `${n} pinned`,
+  groupFactsBusy: n => `${n} active`,
+  viewOptions: 'View options',
+  viewOptionsGrouping: 'Grouping',
+  viewOptionsDensity: 'Header density',
   groupsStackStyle: 'Stack style (collapsed)',
   groupsStackStyleDesc: 'Look of a collapsed group: spine, fanned cards, or a pill.',
   stackSpine: 'Spine',
@@ -2431,6 +2491,16 @@ const DE = {
   groupsAutoDate: 'Nach Datum',
   groupsAutoSource: 'Nach Quelle',
   groupsAutoProject: 'Nach Projekt-Ordner',
+  groupsHeaderDensity: 'Kopfzeilen-Dichte',
+  groupsHeaderDensityDesc: 'Wie viel eine einklappbare Sektions-Kopfzeile zeigt: Komfortabel ist größer & stärker mit dem Projekt-Ordner als Subzeile; Detailreich ergänzt außerdem angepinnt/aktiv-Kennzahlen.',
+  headerDensityCompact: 'Kompakt',
+  headerDensityComfortable: 'Komfortabel',
+  headerDensityDetailed: 'Detailreich',
+  groupFactsPinned: n => `${n} angepinnt`,
+  groupFactsBusy: n => `${n} aktiv`,
+  viewOptions: 'Ansichtsoptionen',
+  viewOptionsGrouping: 'Gruppierung',
+  viewOptionsDensity: 'Kopfzeilen-Dichte',
   groupsStackStyle: 'Stapel-Stil (eingeklappt)',
   groupsStackStyleDesc: 'Optik einer eingeklappten Gruppe: Rücken, gefächerte Karten oder Pille.',
   stackSpine: 'Rücken',
@@ -2672,23 +2742,37 @@ const CSS = `
 .sf-toolbar{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary);color:var(--ui-text-tertiary)}
 .sf-toolbar-count{flex:1;min-width:0;padding-left:2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ui-text-quaternary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sf-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 4px 12px}
-.sf-group-head{display:flex;align-items:center;gap:4px;height:24px;padding:0 4px 0 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none;transition:background-color .12s ease,box-shadow .12s ease}
+.sf-group-head{display:flex;align-items:center;gap:4px;min-height:27px;padding:2px 4px 2px 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none;transition:background-color .12s ease,box-shadow .12s ease}
 .sf-group-head:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
 .sf-group-head[data-drop=true]{background:color-mix(in srgb,var(--ui-accent) 14%,transparent);box-shadow:inset 0 0 0 1px var(--ui-accent)}
 .sf-group-caret{display:flex;align-items:center;justify-content:center;width:14px;flex-shrink:0;color:var(--ui-text-quaternary)}
 .sf-group-dot{width:8px;height:8px;border-radius:3px;flex-shrink:0}
 .sf-group-lead-icon{display:flex;align-items:center;justify-content:center;width:14px;flex-shrink:0;color:var(--ui-text-tertiary)}
-.sf-group-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;letter-spacing:.01em}
+/* Kopfzeile als Text-Spalte (Titel + optionale Subzeile) — wie die
+   Projekt-/Gruppen-Header von Hermes Desktop, nur hier IMMER sichtbar statt
+   per Hover-Tooltip, weil "Detaildichte" das ausdrücklich verlangt. */
+.sf-group-text{display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1;gap:1px}
+.sf-group-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:700;letter-spacing:.01em}
+.sf-group-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:500;line-height:1.25;color:var(--ui-text-quaternary)}
 .sf-group-count{flex-shrink:0;font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-group-drophint{flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:600;color:var(--ui-accent)}
 .sf-group-actions{display:flex;align-items:center;opacity:0;flex-shrink:0}
 .sf-group-head:hover .sf-group-actions,.sf-group-head:focus-within .sf-group-actions{opacity:1}
-.sf-group-unassigned .sf-group-name{font-weight:500;color:var(--ui-text-tertiary)}
+.sf-group-unassigned .sf-group-name{font-weight:600;color:var(--ui-text-tertiary)}
 /* Projekt-Ordner-Header (wie "Projekte" in Hermes Desktop): Caret erst beim
-   Überfahren sichtbar — der Ordner-Icon-Kopf bleibt sonst ruhig. */
+   Überfahren sichtbar — der Ordner-Icon-Kopf bleibt sonst ruhig. Der Name
+   trägt dasselbe Gewicht wie Typ-Header (CLI/Desktop/…) — keine Sonderrolle. */
 .sf-group-project .sf-group-caret{opacity:0;transition:opacity .12s ease}
 .sf-group-project:hover .sf-group-caret,.sf-group-project:focus-within .sf-group-caret{opacity:1}
-.sf-group-project .sf-group-name{font-weight:500}
+/* Zweizeilige Köpfe (Subzeile vorhanden) bekommen etwas mehr Luft, statt den
+   Text einzuquetschen — die Zeilenhöhe wächst nur, wenn wirklich zwei Zeilen
+   da sind (Projektpfad oder, in Detailreich, Kennzahlen). */
+.sf-group-head.sf-group-twoline{min-height:38px;padding-top:3px;padding-bottom:3px}
+/* Kopfzeilen-Dichte (groups.headerDensity) — steuert nur die Typografie; WAS
+   angezeigt wird (Subzeile/Kennzahlen) entscheidet React in SectionHeader. */
+html[data-sf-grpdensity='compact'] .sf-group-name{font-size:11px;font-weight:600}
+html[data-sf-grpdensity='compact'] .sf-group-head{min-height:24px}
+html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 /* Section-Rahmen beim Drag-over — klarer Hinweis, was ein Loslassen bewirkt. */
 .sf-section{margin-bottom:6px;border-radius:8px;transition:background-color .12s ease}
 .sf-section[data-drop=true]{background:color-mix(in srgb,var(--ui-accent) 6%,transparent)}
@@ -2786,6 +2870,8 @@ html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destr
 .sf-showmore:focus-visible{outline:1px solid var(--ui-accent);outline-offset:-1px}
 .sf-items[data-view=grid] .sf-showmore{grid-column:1/-1;margin-top:0}
 .sf-menu-item{display:flex;align-items:center;gap:8px}
+.sf-viewmenu{min-width:200px}
+.sf-menu-caption{padding:4px 8px 2px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ui-text-quaternary)}
 .sf-dialog-list{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow-y:auto}
 .sf-dialog-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:6px;background:transparent;color:var(--foreground);font-size:12px;text-align:left;cursor:pointer}
 .sf-dialog-item:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08))}
@@ -4133,13 +4219,43 @@ function Caret({ open }) {
 // UI — Sessions-Pane (Tabs + Gruppen)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive }) {
+function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive, density }) {
   const open = !section.collapsed
   const color = section.color || null
   const isProject = section.kind === 'project'
   const title = section.titleKey ? t(section.titleKey) : section.title || t('ungrouped')
   const collapsible = section.kind !== 'ungrouped'
   const editable = section.kind === 'manual'
+  const showDetail = section.kind !== 'ungrouped' && density !== 'compact'
+
+  // Subzeile: bei Projekt-Gruppen der (gekürzte) Ordnerpfad, sonst — nur in
+  // der Detailreich-Stufe — eine kurze Kennzahl (angepinnt/aktiv), wenn sie
+  // etwas Echtes zu sagen hat. Nie erfunden: ohne Treffer bleibt die Zeile weg.
+  const facts = []
+
+  if (showDetail && density === 'detailed') {
+    const pinnedCount = section.items.filter(row => row.pinned).length
+    const busyCount = section.items.filter(row =>
+      ['thinking', 'streaming', 'tool', 'working'].includes(activityFor(row, $liveMap.get(), $activity.get()).kind)
+    ).length
+
+    if (pinnedCount > 0) {
+      facts.push(t('groupFactsPinned', pinnedCount))
+    }
+
+    if (busyCount > 0) {
+      facts.push(t('groupFactsBusy', busyCount))
+    }
+  }
+
+  const subtextParts = []
+
+  if (isProject && showDetail && section.cwd) {
+    subtextParts.push(shortPath(section.cwd))
+  }
+
+  subtextParts.push(...facts)
+  const subtext = subtextParts.join(' · ')
 
   const lead = isProject
     ? jsx('span', {
@@ -4155,8 +4271,23 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive }) 
             style: { background: 'var(--ui-text-quaternary)', opacity: 0.5 }
           })
 
+  const nameBlock = subtext
+    ? jsxs('span', {
+        className: 'sf-group-text',
+        children: [
+          jsx('span', { className: 'sf-group-name', key: 'name', children: title }),
+          jsx('span', { className: 'sf-group-sub', key: 'sub', children: subtext })
+        ]
+      })
+    : jsx('span', { className: 'sf-group-text', children: jsx('span', { className: 'sf-group-name', children: title }) })
+
   return jsxs('div', {
-    className: cn('sf-group-head', section.kind === 'ungrouped' && 'sf-group-unassigned', isProject && 'sf-group-project'),
+    className: cn(
+      'sf-group-head',
+      section.kind === 'ungrouped' && 'sf-group-unassigned',
+      isProject && 'sf-group-project',
+      subtext && 'sf-group-twoline'
+    ),
     'data-drop': dropActive ? 'true' : undefined,
     onClick: collapsible ? () => onToggle() : undefined,
     onContextMenu: editable
@@ -4172,7 +4303,7 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive }) 
     children: [
       jsx('span', { className: 'sf-group-caret', children: jsx(Caret, { open }) }),
       lead,
-      jsx('span', { className: 'sf-group-name', children: title }),
+      nameBlock,
       dropActive
         ? jsx('span', { className: 'sf-group-drophint', children: t('dropHereHint', title) })
         : null,
@@ -5309,6 +5440,9 @@ function SessionsPane() {
             key: 'head',
             section,
             t,
+            density: ['compact', 'comfortable', 'detailed'].includes(settings.groups.headerDensity)
+              ? settings.groups.headerDensity
+              : 'comfortable',
             onToggle: () => {
               if (section.kind !== 'ungrouped') {
                 toggleSectionCollapsed(section.key)
@@ -5358,6 +5492,84 @@ function SessionsPane() {
     })
   })
 
+  // "Ansichtsoptionen" — Gruppierung + Kopfzeilen-Dichte direkt aus der Pane
+  // umschaltbar, ohne die volle Einstellungsseite zu öffnen. Spiegelt Hermes
+  // Desktops Sidebar-Filter-Icon (list-filter) in Form und Platzierung.
+  // Jede Zeile bleibt im proven-sicheren DropdownMenuItem-Rahmen (siehe
+  // moreRowMenu oben) — keine ungetesteten Radio-/Checkbox-Untermenüs.
+  const groupingChoices = [
+    { id: 'off', icon: 'circle-slash', label: t('groupsAutoOff') },
+    { id: 'date', icon: 'clock', label: t('groupsAutoDate') },
+    { id: 'source', icon: 'broadcast', label: t('groupsAutoSource') },
+    { id: 'project', icon: 'root-folder', label: t('groupsAutoProject') }
+  ]
+  const densityChoices = [
+    { id: 'compact', label: t('headerDensityCompact') },
+    { id: 'comfortable', label: t('headerDensityComfortable') },
+    { id: 'detailed', label: t('headerDensityDetailed') }
+  ]
+
+  const menuChoice = (active, label, onSelect, icon) =>
+    jsx(DropdownMenuItem, {
+      className: 'sf-menu-item',
+      key: `${icon || ''}-${label}`,
+      onSelect: event => {
+        event?.preventDefault?.()
+        onSelect()
+      },
+      children: [
+        jsx(Codicon, { key: 'c', name: 'check', size: '0.875rem', style: { opacity: active ? 1 : 0 } }),
+        jsx('span', { key: 'l', children: label })
+      ]
+    })
+
+  const viewOptionsMenu =
+    DropdownMenu && DropdownMenuContent && DropdownMenuItem && DropdownMenuSeparator && DropdownMenuTrigger
+      ? jsxs(DropdownMenu, {
+          children: [
+            jsx(DropdownMenuTrigger, {
+              asChild: true,
+              // WICHTIG: direkt der Button als Trigger-Kind — kein Tip/Wrapper
+              // dazwischen, sonst kann Radix den Ref nicht durchreichen und
+              // das Menü öffnet nie (siehe moreRowMenu oben, derselbe Bau).
+              children: jsx(Button, {
+                'aria-label': t('viewOptions'),
+                title: t('viewOptions'),
+                size: 'icon-xs',
+                variant: 'ghost',
+                children: jsx(Codicon, { name: 'list-filter', size: '0.875rem' })
+              })
+            }),
+            jsxs(DropdownMenuContent, {
+              align: 'start',
+              className: 'sf-viewmenu',
+              children: [
+                jsx('div', { className: 'sf-menu-caption', key: 'cap-group', children: t('viewOptionsGrouping') }),
+                ...groupingChoices.map(choice =>
+                  menuChoice(
+                    settings.groups.autoMode === choice.id,
+                    choice.label,
+                    () => patchSettings('groups', { autoMode: choice.id }),
+                    choice.icon
+                  )
+                ),
+                jsx(DropdownMenuSeparator, { key: 'sep-1' }),
+                jsx('div', { className: 'sf-menu-caption', key: 'cap-density', children: t('viewOptionsDensity') }),
+                ...densityChoices.map(choice =>
+                  menuChoice(settings.groups.headerDensity === choice.id, choice.label, () =>
+                    patchSettings('groups', { headerDensity: choice.id })
+                  )
+                ),
+                jsx(DropdownMenuSeparator, { key: 'sep-2' }),
+                menuChoice(settings.groups.showUngrouped, t('groupsShowUngrouped'), () =>
+                  patchSettings('groups', { showUngrouped: !settings.groups.showUngrouped })
+                )
+              ]
+            })
+          ]
+        })
+      : null
+
   const toolbar = jsxs('div', {
     className: 'sf-toolbar',
     children: [
@@ -5378,6 +5590,7 @@ function SessionsPane() {
           })
         })
       }),
+      viewOptionsMenu,
       jsx(Tip, {
         label: t('newSession'),
         children: jsx(Button, {
@@ -6309,6 +6522,20 @@ function SettingsPage() {
             })
           }),
           jsx(Row, {
+            title: t('groupsHeaderDensity'),
+            description: t('groupsHeaderDensityDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'compact', label: t('headerDensityCompact') },
+                { id: 'comfortable', label: t('headerDensityComfortable') },
+                { id: 'detailed', label: t('headerDensityDetailed') }
+              ],
+              value: groups.headerDensity,
+              disabled: !groups.enabled,
+              onChange: value => patch('groups', 'headerDensity', value)
+            })
+          }),
+          jsx(Row, {
             title: t('groupsStackStyle'),
             description: t('groupsStackStyleDesc'),
             action: jsx(Segment, {
@@ -6933,6 +7160,10 @@ export default {
     applyTabSelectorMode()
     const stopTabSelectorWatch = $settings.listen(() => applyTabSelectorMode())
 
+    // 2f) Gruppen-Kopfzeilen-Dichte (compact/comfortable/detailed).
+    applyGroupsDensity()
+    const stopGroupsDensityWatch = $settings.listen(() => applyGroupsDensity())
+
     // Versions-Stempel: belegt im Plugin-Storage, welche Version zuletzt sauber
     // geladen wurde (Hilfe beim Debuggen nach Kopie/Hot-Reload).
     try {
@@ -7114,6 +7345,8 @@ export default {
         clearUiTabs()
         stopTabSelectorWatch()
         clearTabSelectorMode()
+        stopGroupsDensityWatch()
+        clearGroupsDensity()
         stopGlassWatch()
         clearGlass()
         stopPersonalWatch()
