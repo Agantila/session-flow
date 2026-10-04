@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.15.0'
+const VERSION = '1.16.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1109,7 +1109,7 @@ const $sessionsError = atom(null)
 const $liveMap = atom({}) // runtimeId -> { storedId, status, at }
 const $activity = atom({}) // storedId -> { kind, name, at }
 const $appDensity = atom('compact') // App-Einstellung "Dichte der Session-Liste" (sessionListDensity)
-const $projectsList = atom([]) // [{ id, name, path }] — für die Projekt-Gruppierung (Label + Tooltip)
+const $projectsList = atom([]) // [{ id, name, path, color, icon }] — für die Projekt-Gruppierung (Label, Tooltip, Icon/Farbe)
 
 let projectsListInFlight = null
 
@@ -1129,7 +1129,12 @@ async function refreshProjectsList() {
           .map(entry => ({
             id: String(entry?.id || '').trim(),
             name: String(entry?.name || '').trim(),
-            path: String(entry?.primary_path || '').trim()
+            // Mehrordner-Projekte ohne primary_path: erster Ordner als Fallback
+            // (wie Hermes Desktops eigener Sidebar-Mapper — sonst fehlen genau
+            // die Projekte, die am ehesten eine eigene Farbe/Icon tragen).
+            path: String(entry?.primary_path || entry?.folders?.[0]?.path || '').trim(),
+            color: entry?.color ? String(entry.color).trim() : null,
+            icon: entry?.icon ? String(entry.icon).trim() : null
           }))
           .filter(entry => entry.path)
       )
@@ -1143,6 +1148,24 @@ async function refreshProjectsList() {
   return projectsListInFlight
 }
 
+/** Projekt-Treffer (projects.list) für eine Session-CWD, oder null. */
+function matchProjectForCwd(cwd) {
+  const trimmed = String(cwd || '').trim()
+
+  if (!trimmed) {
+    return null
+  }
+
+  return $projectsList.get().find(entry => entry.path === trimmed || trimmed.startsWith(`${entry.path}/`)) || null
+}
+
+/** Letztes Pfadsegment — Fallback-Anzeigename, wenn kein projects.list-Treffer existiert. */
+function basenameOf(path) {
+  const trimmed = String(path || '').trim().replace(/[\\/]+$/, '')
+
+  return trimmed.split(/[\\/]/).pop() || trimmed
+}
+
 /** Projekt-Anzeigename für eine Session-CWD: projects.list-Treffer, sonst Ordnername. */
 function projectLabelForCwd(cwd) {
   const trimmed = String(cwd || '').trim()
@@ -1151,15 +1174,7 @@ function projectLabelForCwd(cwd) {
     return ''
   }
 
-  const hit = $projectsList.get().find(entry => entry.path === trimmed || trimmed.startsWith(`${entry.path}/`))
-
-  if (hit?.name) {
-    return hit.name
-  }
-
-  const base = trimmed.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
-
-  return base || trimmed
+  return matchProjectForCwd(trimmed)?.name || basenameOf(trimmed)
 }
 
 /**
@@ -1786,13 +1801,17 @@ function buildSections() {
 
     for (const [bucketKey, items] of buckets) {
       const isNoProject = bucketKey === '__no_project__'
+      const match = isNoProject ? null : matchProjectForCwd(bucketKey)
       const key = `auto:project:${bucketKey}`
       sections.push({
         key,
         kind: 'project',
-        title: isNoProject ? null : projectLabelForCwd(bucketKey),
+        title: isNoProject ? null : match?.name || basenameOf(bucketKey),
         titleKey: isNoProject ? 'noProject' : null,
-        color: null,
+        // Übernimmt Farbe/Icon aus dem Hermes-Projekt-Datensatz (projects.list),
+        // genau wie unter Projekte in Hermes Desktop selbst — siehe SectionHeader.
+        color: match?.color || null,
+        icon: match?.icon || null,
         cwd: isNoProject ? '' : bucketKey,
         collapsed: Boolean(groupsState.collapsed[key]),
         items
@@ -2816,6 +2835,8 @@ html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-pl
 .sf-tab[data-active=true] .sf-tab-title{font-weight:600}
 .sf-tab-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:14px;color:var(--ui-text-quaternary)}
 .sf-tab-meta{display:flex;align-items:center;gap:4px;flex-shrink:0}
+/* Komfortabel-Dichte (Liste): einspaltig — Meta-Infos als letzte Zeile unter dem Text. */
+.sf-tab-meta-inline{margin-top:3px;flex-wrap:wrap;row-gap:2px}
 .sf-tab-ctx{flex-shrink:0;font-size:10px;line-height:14px;font-variant-numeric:tabular-nums;color:var(--ui-text-quaternary)}
 .sf-tab-ctx[data-level=warn]{color:#f59e0b}
 .sf-tab-ctx[data-level=high]{color:var(--destructive,#ef4444)}
@@ -3211,7 +3232,7 @@ html[data-sf-rowshadow~=strong] .sf-tab:not([data-drop=true]){box-shadow:0 4px 1
 /* Text oben ausrichten (Liste & Grid): Text-Spalte und Meta am Zeilenkopf. */
 html[data-sf-aligntop~=on] .sf-tab{align-items:flex-start}
 html[data-sf-aligntop~=on] .sf-tab-lead{margin-top:2px}
-html[data-sf-aligntop~=on] .sf-tab-meta{padding-top:2px}
+html[data-sf-aligntop~=on] .sf-tab-meta:not(.sf-tab-meta-inline){padding-top:2px}
 html[data-sf-aligntop~=on] .sf-items[data-view=grid] .sf-tab-meta{padding-top:0}
 /* Hover-Anhebung (App-Kachel-Optik): leicht anheben, Schlagschatten tiefer. */
 html[data-sf-hoverlift~=on] .sf-tab{transition:transform .13s ease,box-shadow .13s ease,background-color .13s ease}
@@ -4257,11 +4278,24 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive, de
   subtextParts.push(...facts)
   const subtext = subtextParts.join(' · ')
 
+  // Projekt-Identität aus Hermes Desktop übernehmen (projects.list → Farbe/
+  // Icon): eigenes Icon zuerst (optional eingefärbt), sonst ein Farbpunkt wie
+  // bei manuellen Gruppen, sonst unser Ordner-Icon mit Auf/Zu-Wechsel.
+  const customIcon = isProject ? section.icon || null : null
+
   const lead = isProject
-    ? jsx('span', {
-        className: 'sf-group-lead-icon',
-        children: jsx(Codicon, { name: open ? 'folder-opened' : 'folder', size: '0.8rem' })
-      })
+    ? customIcon
+      ? jsx('span', {
+          className: 'sf-group-lead-icon',
+          style: color ? { color } : undefined,
+          children: jsx(Codicon, { name: customIcon, size: '0.8rem' })
+        })
+      : color
+        ? jsx('span', { className: 'sf-group-dot', style: { background: color } })
+        : jsx('span', {
+            className: 'sf-group-lead-icon',
+            children: jsx(Codicon, { name: open ? 'folder-opened' : 'folder', size: '0.8rem' })
+          })
     : color
       ? jsx('span', { className: 'sf-group-dot', style: { background: color } })
       : section.kind === 'ungrouped'
@@ -4580,6 +4614,10 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     if (timeNode) meta.push(timeNode)
   }
 
+  // Komfortabel (Listen-Ansicht): EINE Spalte — Zähler · Zeit · Kontext wandern
+  // als letzte Zeile unter den Text statt in die rechte Meta-Spalte.
+  const metaInline = tabsCfg.view === 'list' && infoDensity === 'comfortable'
+
   const moreItems = [
     { icon: 'browser', key: 'tab', label: t('openTab'), run: () => onOpen(row, 'tab') },
     { icon: 'link-external', key: 'window', label: t('openWindow'), run: () => onOpen(row, 'window') },
@@ -4671,10 +4709,13 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
           row.preview)
             ? jsx('div', { className: 'sf-tab-preview', children: row.preview })
             : null,
-          statsLine ? jsx('div', { className: 'sf-tab-stats', children: statsLine }) : null
+          statsLine ? jsx('div', { className: 'sf-tab-stats', children: statsLine }) : null,
+          metaInline && meta.length
+            ? jsx('div', { className: 'sf-tab-meta sf-tab-meta-inline', children: meta })
+            : null
         ]
       }),
-      meta.length ? jsx('div', { className: 'sf-tab-meta', children: meta }) : null,
+      !metaInline && meta.length ? jsx('div', { className: 'sf-tab-meta', children: meta }) : null,
       moreRowMenu
     ]
   })

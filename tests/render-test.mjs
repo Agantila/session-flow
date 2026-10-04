@@ -346,7 +346,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions }\n'
+    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -866,6 +866,73 @@ try {
   )
 } catch (error) {
   check('v1.15.0-Tests durchgelaufen', false, error && error.message)
+}
+
+// 19) v1.15.1: Komfortabel einspaltig — Meta-Infos als letzte Zeile im Textblock
+try {
+  // Die v1.15.0-Sektion hat $sessions auf 2 Demo-Zeilen reduziert — für die
+  // 30-Zeilen-Zählung die normalisierte Fixture-Form wiederherstellen.
+  mod.$sessions.set(
+    Array.from({ length: 30 }, (_, i) => ({
+      id: `s${i + 1}`,
+      title: `Session ${i + 1}`,
+      preview: `Vorschau ${i + 1}`,
+      cwd: '',
+      branch: 'main',
+      model: 'test/model',
+      toolCount: i,
+      pinned: false,
+      source: 'desktop',
+      startedAt: (1000000 - i) * 1000,
+      messageCount: 10 + i,
+      live: 0
+    }))
+  )
+
+  const rawKids = p => {
+    const c = p ? p.children : null
+    if (Array.isArray(c)) return c.filter(x => x !== null && x !== undefined && x !== false)
+    return c === null || c === undefined || c === false ? [] : [c]
+  }
+  const rawHas = (n, cls) =>
+    Boolean(n && n.p && typeof n.p.className === 'string' && n.p.className.split(/\s+/).includes(cls))
+  const renderFirstRow = () => {
+    stub.__resetSlots()
+    const out = { el: [], text: [] }
+    walk(pane.render(), out)
+    const rowEl = out.el.find(e => e.cls.includes('sf-tab'))
+    const kids = rawKids(rowEl && rowEl.props)
+    const mainRaw = kids.find(n => rawHas(n, 'sf-tab-main'))
+    return { rowEl, kids, mainKids: rawKids(mainRaw && mainRaw.p), out }
+  }
+
+  mod.patchSettings('tabs', { infoDensity: 'comfortable', view: 'list', maxVisible: 0, showPreview: false, density: 'compact' })
+  let R = renderFirstRow()
+  check(
+    'v1.15.1: Komfortabel/Liste — Meta-Zeile liegt IM Textblock (einspaltig)',
+    R.mainKids.some(n => rawHas(n, 'sf-tab-meta-inline')) && !R.kids.some(n => rawHas(n, 'sf-tab-meta')),
+    `mainKids=${R.mainKids.length}`
+  )
+  const inlineCount = R.out.el.filter(e => e.cls.includes('sf-tab-meta-inline')).length
+  check('v1.15.1: Komfortabel/Liste — Inline-Meta an allen Zeilen', inlineCount === 30, `n=${inlineCount}`)
+
+  mod.patchSettings('tabs', { infoDensity: 'detailed' })
+  R = renderFirstRow()
+  check(
+    'v1.15.1: Detailreich/Liste — Meta bleibt rechte Spalte',
+    R.kids.some(n => rawHas(n, 'sf-tab-meta')) && !R.mainKids.some(n => rawHas(n, 'sf-tab-meta-inline'))
+  )
+
+  mod.patchSettings('tabs', { infoDensity: 'comfortable', view: 'grid' })
+  R = renderFirstRow()
+  check(
+    'v1.15.1: Grid — Meta bleibt am Karten-Ende (nicht inline)',
+    R.kids.some(n => rawHas(n, 'sf-tab-meta')) && !R.mainKids.some(n => rawHas(n, 'sf-tab-meta-inline'))
+  )
+
+  mod.patchSettings('tabs', { infoDensity: 'auto', view: 'list' })
+} catch (error) {
+  check('v1.15.1-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

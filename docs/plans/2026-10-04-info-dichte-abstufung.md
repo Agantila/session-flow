@@ -9,7 +9,7 @@
   `tests/style-test.mjs`, `docs/SETTINGS.md`, `docs/DEVELOPMENT.md`,
   `docs/APP-INTEGRATION.md`, `docs/ROADMAP.md`, `CHANGELOG.md`
 - **Version**: 1.14.0 (Haupt-Commit `1f5ce45`; dieser Plan ist der
-  Doku-Nachlauf dazu)
+  Doku-Nachlauf dazu); Nachtrag „Komfortabel einspaltig“ in 1.15.1
 
 ## Anforderung
 
@@ -176,3 +176,21 @@ Haupt-Commit inklusive beider Runden: `1f5ce45` (v1.14.0).
 - **Visuelle Abnahme durch den Nutzer** (Sichtprüfung in der App):
   Info-Dichte auf „Detailreich“ stellen und Zweizeiler + „Kontext %“
   ansehen — steht beim Nutzer noch aus (Stand dieses Plans).
+
+## Nachtrag (2026-10-04, v1.15.1): Komfortabel einspaltig
+
+**Anschlussauftrag:** „Die Info-Dichte ‚Komfortabel‘ soll alle in einer Spalte
+darstellen, so dass die zweite Spalte mit den Nachrichten-Count und Zeit sowie
+Context-Window-Indicator in die letzte Zeile unter dem Text [kommt].“
+
+- Umsetzung: `TabRow` legt bei `infoDensity === 'comfortable'` in der
+  Listen-Ansicht die Meta-Infos (Quelle · Zähler · Zeit · Kontext-Donut) als
+  letzte Zeile IN den Textblock (`.sf-tab-meta-inline`) statt in die rechte
+  Spalte (`.sf-tab-meta`). Gilt nur Komfortabel + Liste; Detailreich behält
+  die zwei Spalten, das Grid hatte die Meta-Infos schon immer unter dem Text.
+- CSS: `.sf-tab-meta-inline{margin-top:3px;flex-wrap:wrap;row-gap:2px}`; die
+  alignTop-Regel wirkt per `:not(.sf-tab-meta-inline)` nicht auf die Fußzeile.
+- Verifikation: Render-Smoketest (Inline-Meta in allen Komfortabel-Zeilen im
+  Textblock, rechte Spalte bei Detailreich, Grid unverändert) + Style-Test
+  (Flex-Zeile, 3 px Abstand, Position unter der Detail-Zeile);
+  `check`/`test`/`test:style` grün. Version 1.15.1.

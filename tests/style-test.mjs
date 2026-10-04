@@ -94,6 +94,10 @@ const row = (id, label, extra = '') =>
 const densityRow = (id, level) =>
   `<div class="sf-tab" id="${id}" data-density="${level}"><span class="sf-tab-lead"></span><div class="sf-tab-main"><div class="sf-tab-title">Dichte ${level}</div><div class="sf-tab-details">deepseek-flash · 152 Nachrichten · 45 Tool-Aufrufe · zuletzt aktiv 11m · Branch main · Projekt Session-Flow</div><div class="sf-tab-preview">Die Einstellungen für die Info Dichte komfortabel und detailreich anpassen — ein längerer Vorschautext für den Umbruchtest.</div><div class="sf-tab-stats">Kontext 22%</div></div><span class="sf-tab-meta"><span class="sf-tab-time">now</span></span></div>`
 
+// Komfortabel einspaltig: Meta-Zeile IM Textblock (v1.15.1).
+const inlineMetaRow = id =>
+  `<div class="sf-tab" id="${id}" data-density="comfortable"><span class="sf-tab-lead"></span><div class="sf-tab-main"><div class="sf-tab-title">Dichte komfortabel einspaltig</div><div class="sf-tab-details">deepseek-flash · 152 Nachrichten · zuletzt aktiv 11m</div><div class="sf-tab-meta sf-tab-meta-inline"><span class="sf-tab-time">11m</span><span class="sf-tab-ctx" data-level="ok" style="--sf-ctx-pct:22%">22%</span></div></div></div>`
+
 const html = `<!doctype html>
 <html lang="de"
   data-sf-rowgrad="on" data-sf-rowshadow="medium" data-sf-titlegrad="on"
@@ -129,6 +133,7 @@ const html = `<!doctype html>
         <div class="sf-items" data-view="list">
           ${densityRow('dc', 'comfortable')}
           ${densityRow('dd', 'detailed')}
+          ${inlineMetaRow('dk')}
         </div>
         <div class="sf-items" data-view="grid">
           ${densityRow('dg', 'detailed')}
@@ -452,6 +457,23 @@ try {
     D.dg.details && D.dg.details.whiteSpace === 'normal' && D.dg.details.clamp === '2',
     JSON.stringify(D.dg.details)
   )
+
+  // ── 14) v1.15.1: Komfortabel einspaltig — Inline-Meta unter dem Text ─────
+  const IM = await page.evaluate(() => {
+    const el = document.getElementById('dk')
+    const meta = el.querySelector('.sf-tab-meta-inline')
+    const details = el.querySelector('.sf-tab-details')
+    const cs = getComputedStyle(meta)
+    return {
+      display: cs.display,
+      marginTop: cs.marginTop,
+      paddingTop: cs.paddingTop,
+      below: meta.offsetTop >= details.offsetTop + details.offsetHeight,
+      gap: meta.offsetTop - (details.offsetTop + details.offsetHeight)
+    }
+  })
+  check('Dichte einspaltig: Meta-Zeile als Flex-Zeile unter dem Text', IM.display === 'flex' && IM.below, JSON.stringify(IM))
+  check('Dichte einspaltig: 3 px Abstand, alignTop-Padding ausgesetzt', IM.marginTop === '3px' && IM.paddingTop === '0px', JSON.stringify(IM))
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }

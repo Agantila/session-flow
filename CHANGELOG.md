@@ -5,6 +5,36 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-10-04
+
+### Added
+- **Projekt-Ordner-Gruppierung übernimmt jetzt Name, Farbe UND Icon** aus
+  dem Hermes-Projekt-Datensatz (`projects.list`) — genau wie unter „Projekte"
+  in Hermes Desktops eigener Sidebar: ein Projekt mit eigenem Icon zeigt
+  dieses Icon (optional in der Projektfarbe eingefärbt) statt des
+  generischen Ordner-Symbols; ein Projekt mit Farbe, aber ohne eigenes Icon,
+  zeigt einen Farbpunkt wie bei manuellen Gruppen. Ohne Anpassung bleibt der
+  bisherige Ordner-Auf/Zu-Icon-Wechsel bestehen.
+- `projects.list`-Fallback erweitert: Projekte ohne `primary_path`
+  (Mehrordner-Setups) werden jetzt über ihren ersten Ordner gefunden, statt
+  aus der Zuordnung zu fallen — betrifft gerade die Projekte, die am
+  ehesten eine eigene Farbe/ein Icon tragen.
+
+## [1.15.1] — 2026-10-04
+
+### Changed
+- **Info-Dichte „Komfortabel“ rendert einspaltig** (Listen-Ansicht): Die
+  rechte Meta-Spalte (Zähler · Zeit · Kontext-Indikator, ggf. Quelle) wandert
+  als letzte Zeile unter den Text — Titel, Detail-Zeile und Meta laufen in
+  einer Spalte. Detailreich behält die zwei Spalten; im Grid lagen die
+  Meta-Infos schon immer unter dem Text (unverändert).
+
+### Intern
+- Render-Smoketest: Layout-Checks für das Einspaltig-Layout (Inline-Meta im
+  Textblock bei Komfortabel, rechte Spalte bei Detailreich, Grid unverändert).
+- Style-Test (Chromium): Inline-Meta-Zeile ist eine Flex-Zeile mit 3 px
+  Abstand direkt unter der Detail-Zeile; das alignTop-Padding gilt dort nicht.
+
 ## [1.15.0] — 2026-10-04
 
 ### Added

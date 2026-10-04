@@ -162,6 +162,9 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   Kontext-Auslastung (`.sf-tab-stats`; dafür läuft der Kontext-Fetch auch
   ohne `showContext`, Gate: `contextInfoNeeded()`). Detail- und Vorschau-Zeile
   laufen in Detailreich zweizeilig (`-webkit-line-clamp:2`, Grid eingeschlossen).
+  In der Liste rendert **Komfortabel einspaltig**: Meta-Infos (Quelle · Zähler ·
+  Zeit · Kontext) sitzen als letzte Zeile im Textblock (`.sf-tab-meta-inline`),
+  nicht mehr als rechte Spalte; Detailreich behält die Spalten.
   **Datenlage**:
   `session.list` liefert derzeit nur id/title/preview/started_at/
   message_count/source — `git_branch`, `model` und `tool_call_count` erreichen
