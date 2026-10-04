@@ -118,7 +118,7 @@ const html = `<!doctype html>
     </div>
     <h4 style="color:#9ca3af;font:600 11px/1 system-ui;margin:14px 4px 6px">Content-Abgrenzung</h4>
     <div id="paneBody" style="position:relative;overflow:hidden;width:320px;height:120px">
-      <div data-pane-host="session-tile:x" id="host1" style="position:absolute;inset:0"><div style="height:100%;background:#2a2a2e"></div></div>
+      <div data-chat-surface id="chatSurface" style="height:60px"></div>
       <div class="sf-shell-frame" data-sf-shell-frame id="frame1"></div>
     </div>
     <div id="zoneSurface" style="background:var(--ui-editor-surface-background);height:40px;position:relative">
@@ -146,6 +146,7 @@ const probeExpr = `(() => {
     const tcs = title ? getComputedStyle(title) : null
     const ctxEl = el.querySelector('.sf-tab-ctx')
     const ccs = ctxEl ? getComputedStyle(ctxEl) : null
+    const crs = ctxEl ? getComputedStyle(ctxEl, '::before') : null
     const fcs = getComputedStyle(el, '::after')
     return {
       bgImage: cs.backgroundImage,
@@ -163,6 +164,9 @@ const probeExpr = `(() => {
       ctxColor: ccs ? ccs.color : '',
       ctxShadow: ccs ? ccs.textShadow : '',
       ctxWidth: ccs ? ccs.width : '',
+      ctxRing: crs ? crs.backgroundImage : '',
+      ctxRingMask: crs ? (crs.maskImage || '') + '|' + (crs.webkitMaskImage || '') : '',
+      ctxIsolation: ccs ? ccs.isolation : '',
       frameContent: fcs ? fcs.content : '',
       frameAnim: fcs ? fcs.animationName : ''
     }
@@ -289,15 +293,25 @@ try {
     P.l1.alignItems === 'flex-start' && P.g1.alignItems !== 'center',
     `list=${P.l1.alignItems} grid=${P.g1.alignItems}`
   )
-  check('Kontext-Pie: conic-gradient als Hintergrund', has(P.g1.ctxBg, 'conic-gradient'), P.g1.ctxBg.slice(0, 80))
+  check('Kontext-Donut: Ring als ::before mit conic-gradient', has(P.g1.ctxRing, 'conic-gradient'), P.g1.ctxRing.slice(0, 80))
+  check(
+    'Kontext-Donut: Loch ausgespart (radiale Maske: transparent bis 50%, Ring ab 52%)',
+    has(P.g1.ctxRingMask, 'radial-gradient') &&
+      (has(P.g1.ctxRingMask, 'transparent') || has(P.g1.ctxRingMask, 'rgba(0, 0, 0, 0)')) &&
+      has(P.g1.ctxRingMask, '50%') &&
+      has(P.g1.ctxRingMask, '52%'),
+    P.g1.ctxRingMask.slice(0, 140)
+  )
+  check('Kontext-Donut: eigener Stacking-Kontext (Ring liegt unter der Zahl)', P.g1.ctxIsolation === 'isolate', P.g1.ctxIsolation)
+  check('Kontext-Donut: Wert-Fläche ohne eigenen Pie', P.g1.ctxBg === 'none', P.g1.ctxBg)
   check(
     'Kontext-Pie: mehrlagiger Text-Schatten (Kontur + Glow)',
     (P.g1.ctxShadow.match(/rgba\(/g) || []).length >= 4 && has(P.g1.ctxShadow, '1px 1px') && has(P.g1.ctxShadow, '-1px'),
     P.g1.ctxShadow
   )
   check('Kontext-Pie: Wert weiß', P.g1.ctxColor === 'rgb(255, 255, 255)', P.g1.ctxColor)
-  check('Kontext-Pie: kompakte Größe (24px)', P.g1.ctxWidth === '24px', P.g1.ctxWidth)
-  check('Parität: Kontext-Pie Liste==Grid', P.l1.ctxBg === P.g1.ctxBg, '')
+  check('Kontext-Donut: kompakte Größe (24px)', P.g1.ctxWidth === '24px', P.g1.ctxWidth)
+  check('Parität: Kontext-Donut Liste==Grid', P.l1.ctxRing === P.g1.ctxRing, '')
   check('Live-Rahmen: glühender Ring am busy-Eintrag', P.g3.frameContent !== 'none' && has(P.g3.frameAnim, 'sf-arc-turn'), `${P.g3.frameContent} / ${P.g3.frameAnim}`)
   check('Live-Rahmen: kein Ring am normalen Eintrag', P.g1.frameContent === 'none', P.g1.frameContent)
   check('Hover-Anhebung: Transition auf transform', has(P.g1.transition, 'transform'), P.g1.transition)
@@ -339,26 +353,22 @@ try {
   check('Design aus: Listenzeile ohne Hintergrund', P.l1.bgImage === 'none' && P.l1.bgColor === 'rgba(0, 0, 0, 0)', P.l1.bgColor)
   check('Design aus: keine Schatten/Kontur am Auswahl-Eintrag', P.g2.shadow === 'none' && has(P.g2.outline, 'none'), `${P.g2.shadow} / ${P.g2.outline}`)
 
-  // ── 11) v1.13.1: Content-Abgrenzung — Inset + Rahmen-Overlay im Pane-Body ──
-  const shell = await page.evaluate(() => {
-    const host = getComputedStyle(document.getElementById('host1'))
+  // ── 11) v1.13.3: Content-Abgrenzung entfernt — Attribute/Variablen bleiben inert ──
+  const removedShell = await page.evaluate(() => {
     const frame = getComputedStyle(document.getElementById('frame1'))
+    const surface = getComputedStyle(document.getElementById('chatSurface'))
     return {
-      hostPad: `${host.paddingTop}/${host.paddingLeft}`,
-      frameInset: `${frame.top}/${frame.left}`,
-      frameBorder: `${frame.borderTopWidth} ${frame.borderTopColor}`,
-      frameShadow: frame.boxShadow,
-      frameRadius: frame.borderTopLeftRadius,
-      framePointer: frame.pointerEvents,
-      frameZ: frame.zIndex
+      framePos: frame.position,
+      frameZ: frame.zIndex,
+      surfacePad: `${surface.paddingTop}/${surface.paddingLeft}`
     }
   })
-  check('Abgrenzung: Inhalt um 8px eingesetzt (Abstand)', shell.hostPad === '8px/8px', shell.hostPad)
-  check('Abgrenzung: Rahmen-Overlay deckungsgleich auf 8px', shell.frameInset === '8px/8px', shell.frameInset)
-  check('Abgrenzung: feine Kontur (1px, nicht transparent)', shell.frameBorder.startsWith('1px') && !/rgba\(0, 0, 0, 0\)/.test(shell.frameBorder), shell.frameBorder)
-  check('Abgrenzung: Schlagschatten liegt am Overlay', shell.frameShadow !== 'none' && has(shell.frameShadow, '0.12'), shell.frameShadow)
-  check('Abgrenzung: Radius übernommen (10px)', shell.frameRadius === '10px', shell.frameRadius)
-  check('Abgrenzung: Overlay fängt keine Klicks', shell.framePointer === 'none' && shell.frameZ === '2', `${shell.framePointer}/${shell.frameZ}`)
+  check(
+    'Abgrenzung entfernt: .sf-shell-frame ohne Plugin-Stil (statisch, kein z-index)',
+    removedShell.framePos === 'static' && removedShell.frameZ === 'auto',
+    `${removedShell.framePos}/${removedShell.frameZ}`
+  )
+  check('Abgrenzung entfernt: Chat-Surface bekommt keinen Innenabstand', removedShell.surfacePad === '0px/0px', removedShell.surfacePad)
 
   // ── 12) v1.13.2: Chat-Hintergrund — Layer hinter dem Inhalt + Flächen-Override ──
   const wallpaper = await page.evaluate(() => {

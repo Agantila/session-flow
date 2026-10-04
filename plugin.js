@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.13.2'
+const VERSION = '1.13.3'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -246,12 +246,6 @@ const DEFAULT_SETTINGS = {
     bgDim: 35,
     bgBlur: 0,
     bgScope: 'chat',
-    shellOn: false,
-    shellRadius: 10,
-    shellPad: 8,
-    shellShadow: 'subtle',
-    shellBorder: true,
-    shellScope: 'all'
   }
 }
 
@@ -430,18 +424,8 @@ const SF_PERSONAL_VARS = [
   '--sf-bg-url',
   '--sf-bg-fit',
   '--sf-bg-dim',
-  '--sf-bg-blur',
-  '--sf-shell-radius',
-  '--sf-shell-pad',
-  '--sf-shell-shadow'
+  '--sf-bg-blur'
 ]
-
-const SHELL_SHADOWS = {
-  off: 'none',
-  subtle: '0 1px 2px color-mix(in srgb, #000 10%, transparent), 0 6px 16px color-mix(in srgb, #000 9%, transparent)',
-  medium: '0 2px 4px color-mix(in srgb, #000 12%, transparent), 0 10px 28px color-mix(in srgb, #000 13%, transparent)',
-  strong: '0 3px 10px color-mix(in srgb, #000 16%, transparent), 0 18px 44px color-mix(in srgb, #000 20%, transparent)'
-}
 
 /** URL für lokale Dateien über das App-Protokoll (Range-fähig, Video-tauglich). */
 function mediaStreamUrl(filePath) {
@@ -457,69 +441,6 @@ function removePaneBackgrounds() {
   }
 }
 
-function removePaneShell() {
-  try {
-    document.querySelectorAll('[data-sf-shell-frame]').forEach(frame => frame.remove())
-  } catch {
-    /* DOM evtl. schon weg — egal */
-  }
-}
-
-/**
- * Content-Abgrenzung: setzt je Pane-Body ein Rahmen-Overlay (.sf-shell-frame).
- * Warum am Body und nicht am Host: der Pane-Host ist per anchor-size exakt so groß
- * wie die Pane-Fläche — ein Rahmen läge dort direkt an Sash/Fensterrand, und sein
- * Schlagschatten würde vom `overflow:hidden` des Bodys abgeschnitten. Der Body ist
- * der tatsächliche Inhaltsbereich der Zone; das Overlay als Geschwister des Hosts
- * bleibt deckungsgleich mit dem eingesetzten Bereich (Padding = --sf-shell-pad) und
- * scrollt nicht mit. Scope `chat` zeichnet nur Bodies mit Session-Tile-Panes.
- */
-function syncPaneShell() {
-  try {
-    const p = $settings.get().personal || {}
-    const on = Boolean(p.shellOn)
-    const scopeAll = p.shellScope === 'all'
-    const inHiddenPane = element => Boolean(element.closest('[data-pane-hidden]'))
-
-    // Dieselben Anker wie der Hintergrund: Chat-Surfaces (stabiler Marker) und — bei
-    // Geltungsbereich „alle" — Pane-Hosts (Plugin-Panes, dort wird der Host-Inhalt per
-    // padding eingesetzt) sowie Zonen ohne Chat-Surface.
-    const targets = [...document.querySelectorAll('[data-chat-surface]')]
-
-    if (scopeAll) {
-      targets.push(...document.querySelectorAll('[data-pane-host]:not([data-pane-overlay])'))
-      targets.push(
-        ...[...document.querySelectorAll('[data-tree-group]')].filter(zone => !zone.querySelector('[data-chat-surface]'))
-      )
-    }
-
-    const wanted = new Set(targets.filter(target => !inHiddenPane(target)))
-
-    for (const frame of [...document.querySelectorAll('[data-sf-shell-frame]')]) {
-      if (!on || !wanted.has(frame.parentElement)) {
-        frame.remove()
-      }
-    }
-
-    if (!on) {
-      return
-    }
-
-    for (const target of wanted) {
-      if (target.querySelector(':scope > [data-sf-shell-frame]')) {
-        continue
-      }
-
-      const frame = document.createElement('div')
-      frame.className = 'sf-shell-frame'
-      frame.setAttribute('data-sf-shell-frame', '')
-      target.appendChild(frame)
-    }
-  } catch (error) {
-    console.warn(`[${ID}] shell sync failed`, error)
-  }
-}
-
 function clearPersonal() {
   const root = document.documentElement
 
@@ -527,18 +448,13 @@ function clearPersonal() {
     'data-sf-accent',
     'data-sf-bg',
     'data-sf-bg-kind',
-    'data-sf-bg-scope',
-    'data-sf-shell',
-    'data-sf-shell-shadow',
-    'data-sf-shell-border',
-    'data-sf-shell-scope'
+    'data-sf-bg-scope'
   ]) {
     root.removeAttribute(attr)
   }
 
   for (const name of SF_PERSONAL_VARS) root.style.removeProperty(name)
   removePaneBackgrounds()
-  removePaneShell()
 }
 
 function applyPersonal() {
@@ -579,27 +495,6 @@ function applyPersonal() {
       for (const name of ['--sf-bg-url', '--sf-bg-fit', '--sf-bg-dim', '--sf-bg-blur']) {
         root.style.removeProperty(name)
       }
-    }
-
-    // 3) Content-Abgrenzung (Abstand + runde Ecken + Schlagschatten + Kontur).
-    if (p.shellOn) {
-      root.setAttribute('data-sf-shell', 'on')
-      root.setAttribute('data-sf-shell-shadow', SHELL_SHADOWS[p.shellShadow] ? p.shellShadow : 'subtle')
-      root.setAttribute('data-sf-shell-border', p.shellBorder ? 'on' : 'off')
-      root.setAttribute('data-sf-shell-scope', p.shellScope === 'chat' ? 'chat' : 'all')
-      root.style.setProperty('--sf-shell-radius', `${clampNumber(p.shellRadius, 4, 24, 10)}px`)
-      root.style.setProperty('--sf-shell-pad', `${clampNumber(p.shellPad, 0, 32, 8)}px`)
-      root.style.setProperty('--sf-shell-shadow', SHELL_SHADOWS[p.shellShadow] || SHELL_SHADOWS.subtle)
-      syncPaneShell()
-    } else {
-      for (const attr of ['data-sf-shell', 'data-sf-shell-shadow', 'data-sf-shell-border', 'data-sf-shell-scope']) {
-        root.removeAttribute(attr)
-      }
-
-      root.style.removeProperty('--sf-shell-radius')
-      root.style.removeProperty('--sf-shell-pad')
-      root.style.removeProperty('--sf-shell-shadow')
-      removePaneShell()
     }
 
     syncPaneBackgrounds()
@@ -2144,14 +2039,6 @@ const EN = {
   personalBgScopeDesc: 'Only session chats, or every pane view.',
   personalBgScopeChat: 'Chats',
   personalBgScopeAll: 'All panes',
-  personalShellOn: 'Frame content area',
-  personalShellOnDesc: 'Sets the tab content area off with rounded corners, a subtle border, a shadow and a spacing from the layout edge.',
-  personalShellRadius: 'Corner radius px',
-  personalShellRadiusDesc: 'Roundness of the content area corners.',
-  personalShellPad: 'Spacing px',
-  personalShellPadDesc: 'Inset of the content area from the layout edge — this also gives the shadow room.',
-  personalShellShadow: 'Shadow',
-  personalShellShadowDesc: 'Strength of the drop shadow.',
   personalShellShadowOff: 'Off',
   personalShellShadowSubtle: 'Subtle',
   personalShellShadowMedium: 'Medium',
@@ -2573,14 +2460,6 @@ const DE = {
   personalBgScopeDesc: 'Nur Chat-Sessions oder alle Pane-Ansichten.',
   personalBgScopeChat: 'Chats',
   personalBgScopeAll: 'Alle Panes',
-  personalShellOn: 'Content-Bereich abgrenzen',
-  personalShellOnDesc: 'Setzt den Ansichtsbereich der Tabs mit runden Ecken, feiner Kontur, Schlagschatten und Abstand vom Layout-Rand ab.',
-  personalShellRadius: 'Ecken-Radius px',
-  personalShellRadiusDesc: 'Rundung der Ecken des Content-Bereichs.',
-  personalShellPad: 'Abstand px',
-  personalShellPadDesc: 'Abstand des Content-Bereichs vom Layout-Rand — gibt zugleich dem Schatten Platz.',
-  personalShellShadow: 'Schatten',
-  personalShellShadowDesc: 'Stärke des Schlagschattens.',
   personalShellShadowOff: 'Aus',
   personalShellShadowSubtle: 'Dezent',
   personalShellShadowMedium: 'Mittel',
@@ -2646,10 +2525,14 @@ const CSS = `
 .sf-tab-ctx{flex-shrink:0;font-size:10px;line-height:14px;font-variant-numeric:tabular-nums;color:var(--ui-text-quaternary)}
 .sf-tab-ctx[data-level=warn]{color:#f59e0b}
 .sf-tab-ctx[data-level=high]{color:var(--destructive,#ef4444)}
-/* Kontextfenster als Torten-Diagramm: der Wert liegt MIT Text-Schatten über dem Pie.
-   Der Schatten ist mehrlagig (Kontur + Glow), damit die weiße Zahl auch auf hellen
-   Füllungen (Bernstein/Rot) und im hellen Theme lesbar bleibt. */
-html[data-sf-ctxpie~=on] .sf-tab-ctx{position:relative;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:9px;line-height:1;font-weight:800;letter-spacing:-.03em;color:#fff;background:conic-gradient(from -90deg,var(--sf-ctx-color,var(--ui-accent)) var(--sf-ctx-pct,0%),color-mix(in srgb,var(--sf-ctx-color,var(--ui-accent)) 18%,transparent) 0deg);text-shadow:0 0 1px rgba(0,0,0,.95),0 0 2px rgba(0,0,0,.9),0 0 4px rgba(0,0,0,.6),0 1px 1px rgba(0,0,0,.85),0 -1px 1px rgba(0,0,0,.75),0 1px 2px rgba(0,0,0,.7)}
+/* Kontextfenster als Donut: Außenring = Füllstand, Innenkreis ausgespart (Loch).
+   Der Ring liegt als ::before mit z-index:-1 im EIGENEN Stacking-Kontext
+   (isolation:isolate) — dadurch über der Elementfläche, aber unter der Zahl. Die
+   radiale Maske schneidet das Loch aus, durch das die Zeilenfläche scheint. Der
+   mehrlagige Text-Schatten (Kontur + Glow) hält die weiße Zahl auch auf hellen
+   Füllungen (Bernstein/Rot) und im hellen Theme lesbar. */
+html[data-sf-ctxpie~=on] .sf-tab-ctx{position:relative;isolation:isolate;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:9px;line-height:1;font-weight:800;letter-spacing:-.03em;color:#fff;background:transparent;text-shadow:0 0 1px rgba(0,0,0,.95),0 0 2px rgba(0,0,0,.9),0 0 4px rgba(0,0,0,.6),0 1px 1px rgba(0,0,0,.85),0 -1px 1px rgba(0,0,0,.75),0 1px 2px rgba(0,0,0,.7)}
+html[data-sf-ctxpie~=on] .sf-tab-ctx::before{content:'';position:absolute;inset:0;z-index:-1;border-radius:50%;background:conic-gradient(from -90deg,var(--sf-ctx-color,var(--ui-accent)) var(--sf-ctx-pct,0%),color-mix(in srgb,var(--sf-ctx-color,var(--ui-accent)) 18%,transparent) 0deg);-webkit-mask:radial-gradient(closest-side,transparent 0 50%,#000 52%);mask:radial-gradient(closest-side,transparent 0 50%,#000 52%)}
 html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=warn]{--sf-ctx-color:#d97706}
 html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destructive,#dc2626)}
 .sf-tab-time{font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
@@ -2960,31 +2843,6 @@ html[data-sf-accent~='on']{--ui-accent:var(--sf-accent-color,#7c3aed)}
    er hinter der opaken Zonen-Fläche (--ui-editor-surface-background). */
 html[data-sf-bg~='on'][data-sf-bg-scope='all']{
   --ui-editor-surface-background:transparent
-}
-
-/* Content-Abgrenzung: Der Pane-Inhalt wird um --sf-shell-pad eingesetzt (Abstand)
-   und der Rahmen liegt als Overlay (.sf-shell-frame) direkt im jeweiligen Anker:
-   in der Chat-Surface bzw. im Pane-Host. Beide Anker sind kleiner/anders als die
-   Pane-Fläche selbst — ein Rahmen am Pane-Host-Rand klebte am Sash/Fensterrand und
-   sein Schatten würde vom overflow:hidden des Bodys abgeschnitten. */
-html[data-sf-shell~='on'] [data-chat-surface],
-html[data-sf-shell~='on'] [data-pane-host]:not([data-pane-overlay]){
-  padding:var(--sf-shell-pad,0px)
-}
-.sf-shell-frame{
-  position:absolute;
-  inset:var(--sf-shell-pad,0px);
-  z-index:2;
-  pointer-events:none;
-  border:1px solid transparent;
-  border-radius:var(--sf-shell-radius,10px);
-  box-shadow:var(--sf-shell-shadow,none)
-}
-html[data-sf-shell~='on'][data-sf-shell-border='on'] .sf-shell-frame{
-  border-color:var(--ui-stroke-tertiary,color-mix(in srgb,currentColor 14%,transparent))
-}
-html:not([data-sf-shell~='on']) .sf-shell-frame{
-  display:none
 }
 
 .sf-bg-layer{
@@ -4260,26 +4118,35 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   }
 
   const ctx = tabsCfg.showContext ? ctxInfo[row.id] : null
+  let ctxNode = null
 
   if (ctx) {
     const ctxLevel = ctx.percent >= 90 ? 'high' : ctx.percent >= 70 ? 'warn' : 'ok'
     const usedLabel = `${ctx.est ? '~' : ''}${compactNumber ? compactNumber(ctx.used) : String(ctx.used)}`
     const maxLabel = compactNumber ? compactNumber(ctx.max) : String(ctx.max)
 
-    meta.push(
-      jsx('span', {
-        className: 'sf-tab-ctx',
-        'data-level': ctxLevel,
-        key: 'ctx',
-        style: { '--sf-ctx-pct': `${Math.max(0, Math.min(100, Number(ctx.percent) || 0))}%` },
-        title: t('ctxTooltip', usedLabel, maxLabel, String(ctx.percent)),
-        children: `${ctx.percent}%`
-      })
-    )
+    ctxNode = jsx('span', {
+      className: 'sf-tab-ctx',
+      'data-level': ctxLevel,
+      key: 'ctx',
+      style: { '--sf-ctx-pct': `${Math.max(0, Math.min(100, Number(ctx.percent) || 0))}%` },
+      title: t('ctxTooltip', usedLabel, maxLabel, String(ctx.percent)),
+      children: `${ctx.percent}%`
+    })
   }
 
-  if (tabsCfg.showTime) {
-    meta.push(jsx('span', { className: 'sf-tab-time', key: 'time', children: fmtAge(row.startedAt, t) }))
+  const timeNode = tabsCfg.showTime
+    ? jsx('span', { className: 'sf-tab-time', key: 'time', children: fmtAge(row.startedAt, t) })
+    : null
+
+  // Listen-Ansicht: der Kontext-Donut steht ganz rechts am Ende (nach der Zeit).
+  // Grid-Ansicht: wie bisher vor der Zeit.
+  if (tabsCfg.view === 'list') {
+    if (timeNode) meta.push(timeNode)
+    if (ctxNode) meta.push(ctxNode)
+  } else {
+    if (ctxNode) meta.push(ctxNode)
+    if (timeNode) meta.push(timeNode)
   }
 
   const moreItems = [
@@ -6475,66 +6342,6 @@ function SettingsPage() {
               onChange: value => patch('personal', 'bgScope', value)
             })
           }),
-          jsx(ToggleRow, {
-            label: t('personalShellOn'),
-            description: t('personalShellOnDesc'),
-            checked: personal.shellOn,
-            onChange: value => patch('personal', 'shellOn', value)
-          }),
-          jsx(Row, {
-            title: t('personalShellRadius'),
-            description: t('personalShellRadiusDesc'),
-            action: jsx(NumberInput, {
-              min: 4,
-              max: 24,
-              step: 1,
-              value: personal.shellRadius,
-              onChange: value => patch('personal', 'shellRadius', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('personalShellPad'),
-            description: t('personalShellPadDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 32,
-              step: 1,
-              value: personal.shellPad,
-              onChange: value => patch('personal', 'shellPad', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('personalShellShadow'),
-            description: t('personalShellShadowDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'off', label: t('personalShellShadowOff') },
-                { id: 'subtle', label: t('personalShellShadowSubtle') },
-                { id: 'medium', label: t('personalShellShadowMedium') },
-                { id: 'strong', label: t('personalShellShadowStrong') }
-              ],
-              value: personal.shellShadow,
-              onChange: value => patch('personal', 'shellShadow', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('personalShellBorder'),
-            description: t('personalShellBorderDesc'),
-            checked: personal.shellBorder,
-            onChange: value => patch('personal', 'shellBorder', value)
-          }),
-          jsx(Row, {
-            title: t('personalShellScope'),
-            description: t('personalShellScopeDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'all', label: t('personalBgScopeAll') },
-                { id: 'chat', label: t('personalBgScopeChat') }
-              ],
-              value: personal.shellScope,
-              onChange: value => patch('personal', 'shellScope', value)
-            })
-          })
         ]
       }),
 
@@ -6625,7 +6432,6 @@ export default {
     applyPersonal()
     const stopPersonalWatch = $settings.listen(() => applyPersonal())
     ctx.setInterval(() => syncPaneBackgrounds(), 2500)
-    ctx.setInterval(() => syncPaneShell(), 2500)
 
     // 2b-4) Session-Ansicht (Liste/Grid): Layout-Variablen auf <html>.
     applyGrid()

@@ -140,7 +140,7 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
   Bereiche (Eingabefeld / Chips / Statusleiste).
 - **Individualisierung**: Akzent-Tönung (Swatch oder Hex), Chat-Hintergrund
   (Bild/Video über nativen Datei-Picker, Darstellung/Abdunkeln/Weichzeichnen/
-  Geltungsbereich), Content-Bereich abgrenzen (Radius/Abstand/Schatten/Kontur/Bereich).
+  Geltungsbereich).
 
 ## Projektstruktur
 

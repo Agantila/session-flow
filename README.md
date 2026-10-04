@@ -46,11 +46,8 @@ A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    from the sidebar engine**: sessions that are working (thinking / writing /
    tools) get the travelling glow ring on their tab.
 6. **Personalization** — pick your own **accent color** for core UI elements
-   (buttons, active states, hovers, focus rings), set a **chat background**
-   (your own image or video file, with fit / dimming / blur and scope), and
-   **frame the content area** of tabs — rounded corners, a hairline outline,
-   a spacing from the layout edge and a drop shadow (radius, spacing, shadow
-   strength, scope).
+   (buttons, active states, hovers, focus rings) and set a **chat background**
+   (your own image or video file, with fit / dimming / blur and scope).
 
 Everything is adjustable on the **plugin settings page** — `Session Flow` in
 the sidebar, ⌘K/Ctrl+K → “Session Flow: Einstellungen”, or the gear icon in the

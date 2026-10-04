@@ -3,6 +3,30 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.13.3] — 2026-10-04
+
+### Removed
+- **Content-Abgrenzung komplett entfernt.** Die Option samt Rahmen, Radius, Abstand,
+  Schatten, Kontur und Geltungsbereich ist raus — das Plugin fasst den Pane-Inhalt
+  nicht mehr an (kein Padding, kein Overlay, keine `--sf-shell-*`-Variablen). In
+  bestehenden Einstellungen gespeicherte Werte werden ignoriert.
+
+### Changed
+- **Kontext-Anzeige ist jetzt ein Donut:** Der Ring (Außenkreis = Füllstand) hat ein
+  ausgespartes Loch in der Mitte, durch das die Zeilenfläche scheint; die Zahl steht
+  frei im Loch (weiterhin mit mehrlagigem Text-Schatten). Technik: Ring als
+  `::before` mit `z-index:-1` im eigenen Stacking-Kontext (`isolation:isolate`) plus
+  radialer Maske (transparent bis 50 %, Ring ab 52 %) — so liegt der Ring über der
+  Elementfläche, aber unter der Zahl.
+- **Listen-Ansicht: der Kontext-Donut steht ganz rechts am Ende** (nach der Zeit).
+  In der Grid-Ansicht bleibt die Reihenfolge (Donut vor der Zeit) unverändert.
+
+### Intern
+- Render-Smoketest prüft, dass die Abgrenzung wirklich weg ist (keine Rahmen im DOM,
+  keine Shell-Attribute, keine `--sf-shell-*`-Wirkung); Style-Test prüft die
+  Donut-Maske (Loch 50 %/Ring ab 52 %), `isolation`, die neutralisierten
+  Shell-Regeln und behält die Hintergrund-Checks.
+
 ## [1.13.2] — 2026-10-04
 
 ### Fixed

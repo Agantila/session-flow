@@ -345,7 +345,7 @@ const rewritten = src
   .replace("from 'react/jsx-runtime'", `from '${stubUrl}'`)
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
-  .concat('\nexport { patchSettings, applyPersonal, syncPaneShell, syncPaneBackgrounds }\n')
+  .concat('\nexport { patchSettings, applyPersonal, syncPaneBackgrounds }\n')
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
 
@@ -581,31 +581,19 @@ try {
   check('Übernehmen-Klick: persistiert + wendet an (kein Crash)', false, error.message)
 }
 
-// 14) v1.13.1: Content-Abgrenzung — Rahmen-Overlay je Anker (Chat-Surface/Host/Zone)
-const frameChat = makeNode({ 'data-chat-surface': '' })
-const frameHost = makeNode({ 'data-pane-host': 'session-flow' })
-const frameZoneChat = makeNode({ 'data-tree-group': 'z-chat' })
-const frameZonePlain = makeNode({ 'data-tree-group': 'z-plain' })
-frameZoneChat.appendChild(frameChat)
-frameZoneChat.appendChild(frameHost)
-domRoot.appendChild(frameZoneChat)
-domRoot.appendChild(frameZonePlain)
-const frameCount = () => globalThis.document.querySelectorAll('[data-sf-shell-frame]').length
-const hasOwnFrame = node => node.children.some(child => 'data-sf-shell-frame' in child.attrs)
-
-mod.patchSettings('personal', { shellOn: true, shellScope: 'chat', shellPad: 10 })
-check('v1.13.1: --sf-shell-pad gespiegelt', rootHtml.props['--sf-shell-pad'] === '10px', `got=${rootHtml.props['--sf-shell-pad']}`)
-check('v1.13.1: Rahmen an der Chat-Surface (Scope chat)', hasOwnFrame(frameChat))
-check('v1.13.1: Scope=chat → kein Rahmen an Host/Zone', !hasOwnFrame(frameHost) && !hasOwnFrame(frameZonePlain))
-mod.syncPaneShell()
-check('v1.13.1: Sync ist idempotent (kein Doppel-Overlay)', frameCount() === 1, `frames=${frameCount()}`)
-mod.patchSettings('personal', { shellScope: 'all' })
-mod.syncPaneShell()
-check('v1.13.1: Scope=alle → Chat + Host + chat-lose Zone', hasOwnFrame(frameChat) && hasOwnFrame(frameHost) && hasOwnFrame(frameZonePlain))
-check('v1.13.1: Scope=alle → genau drei Rahmen', frameCount() === 3, `frames=${frameCount()}`)
-mod.patchSettings('personal', { shellOn: false })
-mod.syncPaneShell()
-check('v1.13.1: Shell aus → Rahmen entfernt + Variable weg', frameCount() === 0 && rootHtml.props['--sf-shell-pad'] === undefined, `frames=${frameCount()} pad=${rootHtml.props['--sf-shell-pad']}`)
+// 14) v1.13.3: Content-Abgrenzung entfernt — keine Rahmen/Overlays mehr im DOM
+const noFrameZone = makeNode({ 'data-tree-group': 'z-noframe' })
+const noFrameChat = makeNode({ 'data-chat-surface': '' })
+noFrameZone.appendChild(noFrameChat)
+domRoot.appendChild(noFrameZone)
+mod.patchSettings('personal', { shellOn: true, shellScope: 'all', shellPad: 10 })
+mod.applyPersonal()
+check(
+  'v1.13.3: Abgrenzung entfernt → kein Rahmen, keine Variable',
+  globalThis.document.querySelectorAll('[data-sf-shell-frame]').length === 0 && rootHtml.props['--sf-shell-pad'] === undefined,
+  `frames=${globalThis.document.querySelectorAll('[data-sf-shell-frame]').length} pad=${rootHtml.props['--sf-shell-pad']}`
+)
+check('v1.13.3: keine Shell-Attribute auf <html>', !('data-sf-shell' in rootHtml.attrs) && !('data-sf-shell-scope' in rootHtml.attrs))
 
 // 15) v1.13.2: Chat-Hintergrund — Layer an der Chat-Surface (nicht mehr am Pane-Host)
 const bgChat = makeNode({ 'data-chat-surface': '' })
@@ -625,8 +613,8 @@ mod.patchSettings('personal', { bgScope: 'all' })
 mod.syncPaneBackgrounds()
 check('v1.13.2: Scope=alle → Layer zusätzlich in der Zone', hasOwnLayer(bgZonePlain))
 check(
-  'v1.13.2: Scope=alle → 4 Layer (2 Chat-Surfaces + 2 chat-lose Zonen)',
-  layerCount() === 4,
+  'v1.13.2: Scope=alle → 3 Layer (2 Chat-Surfaces + 1 chat-lose Zone)',
+  layerCount() === 3,
   `layers=${layerCount()}`
 )
 const layerNodes = globalThis.document.querySelectorAll('[data-sf-bg-layer]')
