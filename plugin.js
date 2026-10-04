@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.10.0'
+const VERSION = '1.11.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -190,7 +190,8 @@ const DEFAULT_SETTINGS = {
     selColor: '#7c3aed',
     selBorder: false,
     selShadow: 'off',
-    rowLive: false
+    rowLive: false,
+    maxVisible: 0
   },
   groups: {
     enabled: true,
@@ -1771,6 +1772,8 @@ const EN = {
   tabsOpenIntentTab: 'Tab',
   tabsMaxItems: 'Max sessions',
   tabsMaxItemsDesc: 'Upper limit of sessions listed.',
+  tabsMaxVisible: 'Max visible entries',
+  tabsMaxVisibleDesc: 'Per group: hide everything beyond this many sessions behind a "Show more" button. 0 = show all.',
   tabsHideCron: 'Hide cron sessions',
   tabsHideCronDesc: 'Cron runs would fill the list; the sidebar also shows them separately.',
   tabsLivePoll: 'Live status poll (s)',
@@ -1825,6 +1828,8 @@ const EN = {
   errOpen: 'Could not open the session',
   ageNow: 'now',
   paneCount: n => `${n} sessions`,
+  showMore: n => `Show more (${n})`,
+  showLess: 'Show less',
 
   // Settings navigation + UI-tab presets
   navChat: 'Chat',
@@ -2175,6 +2180,8 @@ const DE = {
   tabsOpenIntentTab: 'Tab',
   tabsMaxItems: 'Max. Sessions',
   tabsMaxItemsDesc: 'Obergrenze der aufgelisteten Sessions.',
+  tabsMaxVisible: 'Max. sichtbare Einträge',
+  tabsMaxVisibleDesc: 'Je Gruppe: alles über dieser Anzahl verschwindet hinter „Mehr anzeigen". 0 = alle anzeigen.',
   tabsHideCron: 'Cron-Sessions ausblenden',
   tabsHideCronDesc: 'Cron-Läufe füllen sonst die Liste; die Sidebar zeigt sie ebenfalls separat.',
   tabsLivePoll: 'Live-Status-Abfrage (s)',
@@ -2227,6 +2234,8 @@ const DE = {
   errOpen: 'Session konnte nicht geöffnet werden',
   ageNow: 'jetzt',
   paneCount: n => `${n} Sessions`,
+  showMore: n => `Mehr anzeigen (${n})`,
+  showLess: 'Weniger anzeigen',
 
   // Einstellungs-Navigation + UI-Tabs-Presets
   navChat: 'Chat',
@@ -2486,6 +2495,11 @@ const CSS = `
 .sf-more:hover{background:color-mix(in srgb,var(--ui-text-primary) 12%,transparent);color:var(--foreground)}
 .sf-items[data-view=grid] .sf-tab{padding-right:30px}
 .sf-items[data-view=grid] .sf-more{position:absolute;top:6px;right:6px}
+/* „Mehr anzeigen“ — Begrenzung der sichtbaren Einträge je Gruppe (v1.11) */
+.sf-showmore{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;min-height:24px;margin-top:4px;padding:3px 8px;border:1px solid var(--ui-stroke-tertiary);border-radius:6px;background:transparent;color:var(--ui-text-tertiary);font-size:11px;cursor:pointer;transition:background .12s ease,color .12s ease,border-color .12s ease}
+.sf-showmore:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground);border-color:var(--ui-stroke-secondary)}
+.sf-showmore:focus-visible{outline:1px solid var(--ui-accent);outline-offset:-1px}
+.sf-items[data-view=grid] .sf-showmore{grid-column:1/-1;margin-top:0}
 .sf-menu-item{display:flex;align-items:center;gap:8px}
 .sf-dialog-list{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow-y:auto}
 .sf-dialog-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:6px;background:transparent;color:var(--foreground);font-size:12px;text-align:left;cursor:pointer}
@@ -4577,6 +4591,20 @@ function GroupDialog({ state, setState, t }) {
   })
 }
 
+/** „Mehr anzeigen/Weniger anzeigen“ — Begrenzung der sichtbaren Einträge je Gruppe (v1.11). */
+function ShowMoreRow({ hidden, expanded, onClick, t }) {
+  return jsxs('button', {
+    type: 'button',
+    className: 'sf-showmore',
+    'data-expanded': expanded ? 'true' : 'false',
+    onClick,
+    children: [
+      jsx(Codicon, { name: expanded ? 'chevron-up' : 'chevron-down', size: '0.75rem' }),
+      jsx('span', { children: expanded ? t('showLess') : t('showMore', hidden) })
+    ]
+  })
+}
+
 function SessionsPane() {
   const t = usePluginI18n(ID)
   const rows = useValue($sessions)
@@ -4588,9 +4616,11 @@ function SessionsPane() {
   const [dialog, setDialog] = useState(() => newGroupDialogState())
   const [rowDialog, setRowDialog] = useState(null)
   const [dragging, setDragging] = useState(null)
+  const [showAllSections, setShowAllSections] = useState(() => new Set())
 
   const sections = useMemo(() => buildSections(), [rows, groupsState, settings])
   const totalCount = sections.reduce((sum, section) => sum + section.items.length, 0)
+  const maxVisible = Math.floor(clampNumber(settings.tabs.maxVisible, 0, 200, 0))
 
   // More-Menü: direkte Aktionen oder Dialog (Umbenennen/Farbe/Projekt/Löschen).
   const onMore = (action, row) => {
@@ -4654,6 +4684,21 @@ function SessionsPane() {
     setDragging(null)
   }
 
+  const toggleShowAll = key => {
+    haptic('tap')
+    setShowAllSections(prev => {
+      const next = new Set(prev)
+
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+
+      return next
+    })
+  }
+
   const editGroup = section => {
     if (section.kind !== 'manual') {
       return
@@ -4699,6 +4744,9 @@ function SessionsPane() {
       const expanded = !section.collapsed
       const stackStyle = settings.groups.stackStyle
       const showStack = !expanded && stackStyle !== 'pill' && section.items.length > 0 && section.kind !== 'ungrouped'
+      const overLimit = maxVisible > 0 && section.items.length > maxVisible
+      const showingAll = overLimit && showAllSections.has(section.key)
+      const visibleItems = overLimit && !showingAll ? section.items.slice(0, maxVisible) : section.items
 
       return jsxs('div', {
         className: 'sf-section',
@@ -4722,21 +4770,32 @@ function SessionsPane() {
                 className: 'sf-items',
                 'data-view': settings.tabs.view === 'grid' ? 'grid' : 'list',
                 key: 'items',
-                children: section.items.map(row =>
-                  jsx(TabRow, {
-                    key: row.id,
-                    row,
-                    active: row.id === (focused || active),
-                    section,
-                    t,
-                    onOpen: open,
-                    onMore,
-                    groupsState,
-                    onAssign: assign,
-                    dragging,
-                    setDragging
-                  })
-                )
+                children: [
+                  ...visibleItems.map(row =>
+                    jsx(TabRow, {
+                      key: row.id,
+                      row,
+                      active: row.id === (focused || active),
+                      section,
+                      t,
+                      onOpen: open,
+                      onMore,
+                      groupsState,
+                      onAssign: assign,
+                      dragging,
+                      setDragging
+                    })
+                  ),
+                  overLimit
+                    ? jsx(ShowMoreRow, {
+                        key: 'sf-showmore',
+                        hidden: section.items.length - visibleItems.length,
+                        expanded: showingAll,
+                        onClick: () => toggleShowAll(section.key),
+                        t
+                      })
+                    : null
+                ]
               })
             : null
         ]
@@ -5492,6 +5551,17 @@ function SettingsPage() {
               step: 10,
               value: tabs.maxItems,
               onChange: value => patch('tabs', 'maxItems', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsMaxVisible'),
+            description: t('tabsMaxVisibleDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 200,
+              step: 1,
+              value: tabs.maxVisible,
+              onChange: value => patch('tabs', 'maxVisible', value)
             })
           }),
           jsx(ToggleRow, {

@@ -67,6 +67,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.showSource` | `true` | Quellen-Badge (Telegram, Discord, Cron …). |
 | `tabs.openIntent` | `in-place` | `in-place` (ersetzen), `stack` (neben dran), `tab`. |
 | `tabs.maxItems` | `60` | Maximal geladene Sessions. |
+| `tabs.maxVisible` | `0` | Max. sichtbare Einträge je Gruppe in Liste & Grid; der Rest erscheint hinter „Mehr anzeigen (n)" — erneuter Klick klappt wieder ein („Weniger anzeigen"). `0` = aus. |
 | `tabs.hideCron` | `true` | Cron-Sessions ausblenden. |
 | `tabs.livePollSec` | `30` | Intervall der Live-Status-Abfrage (`session.active_list`). Min. 10s. |
 | `tabs.refreshSec` | `45` | Intervall des Listen-Refresh (`session.list`). Min. 15s. |

@@ -165,7 +165,11 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   ab — **immer über die Runtime-ID** (Key der Live-Map; die Stored-ID lehnt das
   Gateway ab), Ergebnis wird unter der Stored-ID in `$ctxInfo` abgelegt und als
   `.sf-tab-ctx`-Chip gerendert. Läuft nur bei aktiver Option, gedrosselt über
-  den regulären Refresh-Zyklus, max. 10 Sessions.
+  den regulären Refresh-Zyklus, max. 10 Sessions. **Max. sichtbare Einträge**
+  (`tabs.maxVisible`, v1.11): `SessionsPane` slict je Gruppe auf N Einträge
+  (`showAllSections`-Set merkt sich aufgeklappte Gruppen; der Button
+  `.sf-showmore` toggelt, im Grid per `grid-column:1/-1` über die volle
+  Breite) — rein client-seitig, es wird nichts nachgeladen.
 - **Close-Button-Fix (v1.7)**: deckender Kontrast-Chip
   (`color-mix(foreground 9%, dt-card)`) statt gestapelter Transparenzen +
   Hover-Label-Mask für ALLE Tab-Varianten (die App maskiert nur

@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.11.0] — 2026-10-04
+
+### Neu
+- **Max. sichtbare Einträge (je Gruppe)**: Neue Option „Max. sichtbare Einträge" —
+  zeigt je Gruppe höchstens N Sessions (Liste **und** Grid); der Rest
+  verschwindet hinter einem **„Mehr anzeigen (n)"**-Button, der ihn einblendet
+  (erneuter Klick: „Weniger anzeigen"). `0` = aus (alles anzeigen). Ohne
+  Gruppen entspricht die Grenze der Gesamtliste.
+
 ## [1.10.0] — 2026-10-04
 
 ### Neu
