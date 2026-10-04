@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.11.0'
+const VERSION = '1.12.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -190,6 +190,7 @@ const DEFAULT_SETTINGS = {
     selColor: '#7c3aed',
     selBorder: false,
     selShadow: 'off',
+    selHover: 'soft',
     rowLive: false,
     maxVisible: 0
   },
@@ -540,6 +541,7 @@ function clearRows() {
     'data-sf-seltint',
     'data-sf-selborder',
     'data-sf-selshadow',
+    'data-sf-selhover',
     'data-sf-rowlive'
   ]) {
     root.removeAttribute(attr)
@@ -553,13 +555,14 @@ function applyRows() {
 
   try {
     const root = document.documentElement
-    const safeHex = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '').trim()) ? String(value).trim() : fallback)
+    // Hex-Farben: #RGB, #RRGGBB oder #RRGGBBAA (Alpha → Verläufe mit Transparenz).
+    const safeColor = (value, fallback) => (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(value || '').trim()) ? String(value).trim() : fallback)
 
     // 1) Hintergrund-Verlauf der Zeilen (Liste) und Karten (Grid).
     if (tabs.rowGradOn) {
       root.setAttribute('data-sf-rowgrad', 'on')
-      root.style.setProperty('--sf-row-from', safeHex(tabs.rowGradFrom, '#7c3aed'))
-      root.style.setProperty('--sf-row-to', safeHex(tabs.rowGradTo, '#00dbda'))
+      root.style.setProperty('--sf-row-from', safeColor(tabs.rowGradFrom, '#7c3aed'))
+      root.style.setProperty('--sf-row-to', safeColor(tabs.rowGradTo, '#00dbda'))
       root.style.setProperty('--sf-row-angle', `${clampNumber(tabs.rowGradAngle, 0, 360, 135)}deg`)
     } else {
       root.removeAttribute('data-sf-rowgrad')
@@ -574,8 +577,8 @@ function applyRows() {
     // 3) Titel als Verlauf.
     if (tabs.titleGradOn) {
       root.setAttribute('data-sf-titlegrad', 'on')
-      root.style.setProperty('--sf-title-from', safeHex(tabs.titleGradFrom, '#e4e4e7'))
-      root.style.setProperty('--sf-title-to', safeHex(tabs.titleGradTo, '#8b8b93'))
+      root.style.setProperty('--sf-title-from', safeColor(tabs.titleGradFrom, '#e4e4e7'))
+      root.style.setProperty('--sf-title-to', safeColor(tabs.titleGradTo, '#8b8b93'))
       root.style.setProperty('--sf-title-angle', `${clampNumber(tabs.titleGradAngle, 0, 360, 90)}deg`)
     } else {
       root.removeAttribute('data-sf-titlegrad')
@@ -584,11 +587,12 @@ function applyRows() {
       root.style.removeProperty('--sf-title-angle')
     }
 
-    // 4) Auswahl-Zustand (Tönung, Kontur, Schatten).
+    // 4) Auswahl-Zustand (Tönung, Kontur, Schatten, Hover-Stärke).
     root.setAttribute('data-sf-seltint', ['standard', 'accent', 'custom'].includes(tabs.selTint) ? tabs.selTint : 'standard')
-    root.style.setProperty('--sf-sel-color', safeHex(tabs.selColor, '#7c3aed'))
+    root.style.setProperty('--sf-sel-color', safeColor(tabs.selColor, '#7c3aed'))
     root.setAttribute('data-sf-selborder', tabs.selBorder ? 'on' : 'off')
     root.setAttribute('data-sf-selshadow', SF_ROW_SHADOWS.includes(tabs.selShadow) ? tabs.selShadow : 'off')
+    root.setAttribute('data-sf-selhover', ['off', 'soft', 'strong'].includes(tabs.selHover) ? tabs.selHover : 'soft')
 
     // 5) Live-Status: Aktiv/Wartend wie im Tab-Design hervorheben.
     root.setAttribute('data-sf-rowlive', tabs.rowLive ? 'on' : 'off')
@@ -1723,9 +1727,9 @@ const EN = {
   tabsRowGrad: 'Row background gradient',
   tabsRowGradDesc: 'Paints session rows (list) and cards (grid) with a two-color gradient.',
   tabsRowGradFrom: 'Gradient start color',
-  tabsRowGradFromDesc: 'First color of the row gradient (left/top depending on angle).',
+  tabsRowGradFromDesc: 'First color of the row gradient (left/top depending on angle). Optional alpha via 8-digit hex (#RRGGBBAA).',
   tabsRowGradTo: 'Gradient end color',
-  tabsRowGradToDesc: 'Second color of the row gradient.',
+  tabsRowGradToDesc: 'Second color of the row gradient. Optional alpha via 8-digit hex (#RRGGBBAA).',
   tabsRowGradAngle: 'Gradient angle',
   tabsRowGradAngleDesc: 'Direction of the gradient in degrees (0–360).',
   tabsRowShadow: 'Row drop shadow',
@@ -1733,9 +1737,9 @@ const EN = {
   tabsTitleGrad: 'Gradient title',
   tabsTitleGradDesc: 'Renders session titles as two-color gradient text.',
   tabsTitleGradFrom: 'Title gradient start',
-  tabsTitleGradFromDesc: 'First color of the title gradient.',
+  tabsTitleGradFromDesc: 'First color of the title gradient. Optional alpha via 8-digit hex (#RRGGBBAA).',
   tabsTitleGradTo: 'Title gradient end',
-  tabsTitleGradToDesc: 'Second color of the title gradient.',
+  tabsTitleGradToDesc: 'Second color of the title gradient. Optional alpha via 8-digit hex (#RRGGBBAA).',
   tabsTitleGradAngle: 'Title gradient angle',
   tabsTitleGradAngleDesc: 'Direction of the title gradient in degrees (0–360).',
   tabsSelHead: 'Selected state',
@@ -1745,11 +1749,16 @@ const EN = {
   tabsSelTintAccent: 'Accent',
   tabsSelTintCustom: 'Custom color',
   tabsSelColor: 'Selection color',
-  tabsSelColorDesc: 'Custom tint color for the selected state.',
+  tabsSelColorDesc: 'Custom tint color for the selected state. Optional alpha via 8-digit hex (#RRGGBBAA).',
   tabsSelBorder: 'Selection outline',
   tabsSelBorderDesc: 'Thin outline around the selected row (uses the selection tint).',
   tabsSelShadow: 'Selection shadow',
   tabsSelShadowDesc: 'Selectable shadow depth for the selected row/card.',
+  tabsSelHover: 'Selection: hover',
+  tabsSelHoverDesc: 'How the selected entry reacts to hover (deepening its tint) — identical in list and grid.',
+  selHoverOff: 'Unchanged',
+  selHoverSoft: 'Deepen',
+  selHoverStrong: 'Strong',
   tabsLiveHead: 'Live status',
   tabsRowLive: 'Highlight active & waiting',
   tabsRowLiveDesc: 'Sessions that are working or waiting get an accent glow and a pulsing status icon — the same visual language as the tab design.',
@@ -2131,9 +2140,9 @@ const DE = {
   tabsRowGrad: 'Zeilen-Hintergrund als Verlauf',
   tabsRowGradDesc: 'Färbt Session-Zeilen (Liste) und Karten (Grid) mit einem Zwei-Farben-Verlauf.',
   tabsRowGradFrom: 'Verlauf Startfarbe',
-  tabsRowGradFromDesc: 'Erste Farbe des Zeilen-Verlaufs (links/oben je nach Winkel).',
+  tabsRowGradFromDesc: 'Erste Farbe des Zeilen-Verlaufs (links/oben je nach Winkel). Optional Alpha per 8-stelligem Hex (#RRGGBBAA).',
   tabsRowGradTo: 'Verlauf Endfarbe',
-  tabsRowGradToDesc: 'Zweite Farbe des Zeilen-Verlaufs.',
+  tabsRowGradToDesc: 'Zweite Farbe des Zeilen-Verlaufs. Optional Alpha per 8-stelligem Hex (#RRGGBBAA).',
   tabsRowGradAngle: 'Verlaufswinkel',
   tabsRowGradAngleDesc: 'Richtung des Verlaufs in Grad (0–360).',
   tabsRowShadow: 'Zeilen-Schlagschatten',
@@ -2141,9 +2150,9 @@ const DE = {
   tabsTitleGrad: 'Titel als Verlauf',
   tabsTitleGradDesc: 'Stellt Session-Titel als Zwei-Farben-Verlauf dar.',
   tabsTitleGradFrom: 'Titel Verlauf-Start',
-  tabsTitleGradFromDesc: 'Erste Farbe des Titel-Verlaufs.',
+  tabsTitleGradFromDesc: 'Erste Farbe des Titel-Verlaufs. Optional Alpha per 8-stelligem Hex (#RRGGBBAA).',
   tabsTitleGradTo: 'Titel Verlauf-Ende',
-  tabsTitleGradToDesc: 'Zweite Farbe des Titel-Verlaufs.',
+  tabsTitleGradToDesc: 'Zweite Farbe des Titel-Verlaufs. Optional Alpha per 8-stelligem Hex (#RRGGBBAA).',
   tabsTitleGradAngle: 'Titel Verlaufswinkel',
   tabsTitleGradAngleDesc: 'Richtung des Titel-Verlaufs in Grad (0–360).',
   tabsSelHead: 'Auswahl-Zustand',
@@ -2153,11 +2162,16 @@ const DE = {
   tabsSelTintAccent: 'Akzent',
   tabsSelTintCustom: 'Eigene Farbe',
   tabsSelColor: 'Auswahl-Farbe',
-  tabsSelColorDesc: 'Eigene Tönungsfarbe für den Auswahl-Zustand.',
+  tabsSelColorDesc: 'Eigene Tönungsfarbe für den Auswahl-Zustand. Optional Alpha per 8-stelligem Hex (#RRGGBBAA).',
   tabsSelBorder: 'Auswahl-Kontur',
   tabsSelBorderDesc: 'Dünne Kontur um die ausgewählte Zeile (nutzt die Auswahl-Tönung).',
   tabsSelShadow: 'Auswahl-Schatten',
   tabsSelShadowDesc: 'Auswählbare Schattenstärke für die ausgewählte Zeile/Karte.',
+  tabsSelHover: 'Auswahl: Hover',
+  tabsSelHoverDesc: 'Wie der ausgewählte Eintrag auf Hover reagiert (Tönung vertiefen) — identisch in Liste und Grid.',
+  selHoverOff: 'Unverändert',
+  selHoverSoft: 'Verstärken',
+  selHoverStrong: 'Stark',
   tabsLiveHead: 'Live-Status',
   tabsRowLive: 'Aktiv & Wartend hervorheben',
   tabsRowLiveDesc: 'Arbeitende oder wartende Sessions erhalten einen Akzent-Glow und ein pulsierendes Status-Icon — die gleiche Bildsprache wie im Tab-Design.',
@@ -2480,9 +2494,12 @@ const CSS = `
 /* Session-Ansicht: Liste (Standard) oder Grid-Karten */
 .sf-items{display:flex;flex-direction:column;gap:2px}
 .sf-items[data-view=grid]{display:grid;grid-template-columns:repeat(var(--sf-grid-cols,auto-fill),minmax(var(--sf-grid-min,150px),1fr));gap:var(--sf-grid-gap,6px);padding:2px 2px 8px}
-.sf-items[data-view=grid] .sf-tab{flex-direction:column;align-items:stretch;height:auto;gap:3px;padding:8px;border-radius:8px;background:color-mix(in srgb,var(--ui-text-primary) 4%,transparent)}
-.sf-items[data-view=grid] .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08))}
-.sf-items[data-view=grid] .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12))}
+.sf-items[data-view=grid] .sf-tab{flex-direction:column;align-items:stretch;height:auto;gap:3px;padding:8px;border-radius:8px}
+/* Karten-Flächen via :where() = null-spezifisch: die Design-Optionen
+   (Zeilen-Verlauf, Auswahl-Tönung, Live-Status) greifen so in Liste UND Grid. */
+:where(.sf-items[data-view=grid]) .sf-tab{background:color-mix(in srgb,var(--ui-text-primary) 4%,transparent)}
+:where(.sf-items[data-view=grid]) .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08))}
+:where(.sf-items[data-view=grid]) .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12))}
 .sf-items[data-view=grid] .sf-tab-lead{align-self:flex-start;width:auto}
 .sf-items[data-view=grid] .sf-tab-main{flex:1 1 auto;width:100%}
 .sf-items[data-view=grid] .sf-tab-title{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--sf-grid-lines,2);overflow:hidden;overflow-wrap:anywhere}
@@ -2820,22 +2837,31 @@ html[data-sf-shell~='on'][data-sf-shell-border='on'] [data-pane-host]:not([data-
 .sf-settings section{scroll-margin-top:46px}
 .sf-preset-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .sf-subhead{margin:10px 2px 2px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ui-text-quaternary)}
+html[data-sf-rowgrad~=on]{--sf-row-layer:linear-gradient(var(--sf-row-angle,135deg),var(--sf-row-from,#7c3aed),var(--sf-row-to,#00dbda))}
 html[data-sf-rowgrad~=on] .sf-tab{background:linear-gradient(var(--sf-row-angle,135deg),var(--sf-row-from,#7c3aed),var(--sf-row-to,#00dbda))}
 html[data-sf-rowgrad~=on] .sf-tab:hover{filter:brightness(1.07)}
 html[data-sf-rowshadow~=subtle] .sf-tab:not([data-drop=true]){box-shadow:0 1px 2px rgba(0,0,0,.22)}
 html[data-sf-rowshadow~=medium] .sf-tab:not([data-drop=true]){box-shadow:0 2px 6px rgba(0,0,0,.3)}
 html[data-sf-rowshadow~=strong] .sf-tab:not([data-drop=true]){box-shadow:0 4px 14px rgba(0,0,0,.42)}
 html[data-sf-titlegrad~=on] .sf-tab-title{background-image:linear-gradient(var(--sf-title-angle,90deg),var(--sf-title-from,#e4e4e7),var(--sf-title-to,#8b8b93));-webkit-background-clip:text;background-clip:text;color:transparent}
-html[data-sf-rowlive~=on] .sf-tab[data-live=busy]{background:color-mix(in srgb,var(--ui-accent) 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 28%,transparent)}
-html[data-sf-rowlive~=on] .sf-tab[data-live=waiting]{background:color-mix(in srgb,#f59e0b 9%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,#f59e0b 30%,transparent)}
+html[data-sf-rowlive~=on] .sf-tab[data-live=busy]{background:linear-gradient(color-mix(in srgb,var(--ui-accent) 9%,transparent),color-mix(in srgb,var(--ui-accent) 9%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 28%,transparent)}
+html[data-sf-rowlive~=on] .sf-tab[data-live=waiting]{background:linear-gradient(color-mix(in srgb,#f59e0b 9%,transparent),color-mix(in srgb,#f59e0b 9%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,#f59e0b 30%,transparent)}
 html[data-sf-rowlive~=on] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on] .sf-tab[data-live=waiting] .sf-tab-lead{animation:sf-live-pulse 1.6s ease-in-out infinite}
 @keyframes sf-live-pulse{0%,100%{opacity:1}50%{opacity:.4}}
 @media (prefers-reduced-motion:reduce){html[data-sf-rowlive~=on] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on] .sf-tab[data-live=waiting] .sf-tab-lead{animation:none}}
 html[data-sf-rowlive~=on][data-renderer-animations-paused] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on][data-renderer-animations-paused] .sf-tab[data-live=waiting] .sf-tab-lead{animation-play-state:paused}
 html[data-sf-seltint~=accent]{--sf-sel-tone:var(--ui-accent)}
 html[data-sf-seltint~=custom]{--sf-sel-tone:var(--sf-sel-color,#7c3aed)}
-html:is([data-sf-seltint~=accent],[data-sf-seltint~=custom]) .sf-tab[data-active=true]{background:color-mix(in srgb,var(--sf-sel-tone) 16%,transparent)}
-html:is([data-sf-seltint~=accent],[data-sf-seltint~=custom]) .sf-tab[data-active=true]:hover{background:color-mix(in srgb,var(--sf-sel-tone) 24%,transparent)}
+/* Auswahl-Zustand (Liste UND Grid): Tönung als Layer ÜBER dem optionalen
+   Zeilen-Verlauf — der konfigurierte Verlauf bleibt im Auswahl-Zustand sichtbar. */
+html[data-sf-seltint~=standard] .sf-tab[data-active=true]{background:linear-gradient(var(--ui-row-active-background,rgba(127,127,127,.12)),var(--ui-row-active-background,rgba(127,127,127,.12))),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)))}
+html:is([data-sf-seltint~=accent],[data-sf-seltint~=custom]) .sf-tab[data-active=true]{background:linear-gradient(color-mix(in srgb,var(--sf-sel-tone) 16%,transparent),color-mix(in srgb,var(--sf-sel-tone) 16%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)))}
+/* Hover auf dem ausgewählten Eintrag — Stärke über tabs.selHover (off/soft/strong). */
+html[data-sf-selhover] .sf-tab[data-active=true]:hover{filter:none}
+html[data-sf-selhover~=soft][data-sf-seltint~=standard] .sf-tab[data-active=true]:hover{background:linear-gradient(var(--ui-row-hover-background,rgba(127,127,127,.08)),var(--ui-row-hover-background,rgba(127,127,127,.08))),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)))}
+html[data-sf-selhover~=soft]:is([data-sf-seltint~=accent],[data-sf-seltint~=custom]) .sf-tab[data-active=true]:hover{background:linear-gradient(color-mix(in srgb,var(--sf-sel-tone) 24%,transparent),color-mix(in srgb,var(--sf-sel-tone) 24%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)))}
+html[data-sf-selhover~=strong][data-sf-seltint~=standard] .sf-tab[data-active=true]:hover{background:linear-gradient(color-mix(in srgb,var(--ui-text-primary) 12%,transparent),color-mix(in srgb,var(--ui-text-primary) 12%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)))}
+html[data-sf-selhover~=strong]:is([data-sf-seltint~=accent],[data-sf-seltint~=custom]) .sf-tab[data-active=true]:hover{background:linear-gradient(color-mix(in srgb,var(--sf-sel-tone) 36%,transparent),color-mix(in srgb,var(--sf-sel-tone) 36%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)))}
 html[data-sf-selborder~=on] .sf-tab[data-active=true]{outline:1px solid color-mix(in srgb,var(--sf-sel-tone,var(--ui-accent)) 55%,transparent);outline-offset:-1px}
 html[data-sf-selshadow~=subtle] .sf-tab[data-active=true]{box-shadow:0 1px 3px rgba(0,0,0,.25)}
 html[data-sf-selshadow~=medium] .sf-tab[data-active=true]{box-shadow:0 2px 8px rgba(0,0,0,.35)}
@@ -3704,22 +3730,57 @@ function GroupSwatches({ value, onChange, clearLabel }) {
   })
 }
 
-/** Farbwahl-Zeile (Swatches + Hex-Eingabe) für Design-Farben. */
-function colorRowControl(value, onChange, resetLabel) {
+/** Zerlegt #RGB/#RRGGBB/#RRGGBBAA in { base, alpha (0–100) }; null, wenn ungültig. */
+function parseColorValue(value) {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(String(value || '').trim())
+  if (!match) return null
+  let hex = match[1]
+  if (hex.length === 3) hex = hex.split('').map(char => char + char).join('')
+  return {
+    base: `#${hex.slice(0, 6)}`,
+    alpha: hex.length === 8 ? Math.round((parseInt(hex.slice(6, 8), 16) / 255) * 100) : 100
+  }
+}
+
+/** Setzt Alpha (0–100 %) auf eine #RRGGBB(A)-Farbe; 100 % kürzt zurück auf 6 Stellen. */
+function withAlpha(value, percent) {
+  const parsed = parseColorValue(value)
+  const base = parsed ? parsed.base : '#000000'
+  const clamped = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)))
+  if (clamped >= 100) return base
+  return `${base}${Math.round((clamped / 100) * 255).toString(16).padStart(2, '0')}`
+}
+
+/** Farbwahl-Zeile (Swatches + Hex-Eingabe) für Design-Farben; opts.alpha erlaubt Transparenz. */
+function colorRowControl(value, onChange, resetLabel, opts = {}) {
+  const parsed = parseColorValue(value)
   return jsxs('div', {
     className: 'sf-row-control',
     children: [
       jsx(GroupSwatches, {
-        value: value || null,
-        onChange: next => onChange(next || ''),
+        value: parsed ? parsed.base : value || null,
+        onChange: next => {
+          const base = next || ''
+          if (opts.alpha && base && parsed && parsed.alpha < 100) onChange(withAlpha(base, parsed.alpha))
+          else onChange(base)
+        },
         clearLabel: resetLabel
       }),
       jsx(Input, {
         className: 'sf-num',
-        maxLength: 7,
+        maxLength: opts.alpha ? 9 : 7,
         onChange: event => onChange(String(event.target.value || '').trim()),
         value: value || ''
-      })
+      }),
+      opts.alpha
+        ? jsx(NumberInput, {
+            min: 0,
+            max: 100,
+            step: 5,
+            value: parsed ? parsed.alpha : 100,
+            onChange: percent => onChange(withAlpha(value, percent))
+          })
+        : null
     ]
   })
 }
@@ -5400,12 +5461,12 @@ function SettingsPage() {
           jsx(Row, {
             title: t('tabsRowGradFrom'),
             description: t('tabsRowGradFromDesc'),
-            action: colorRowControl(tabs.rowGradFrom, value => patch('tabs', 'rowGradFrom', value), t('personalAccentReset'))
+            action: colorRowControl(tabs.rowGradFrom, value => patch('tabs', 'rowGradFrom', value), t('personalAccentReset'), { alpha: true })
           }),
           jsx(Row, {
             title: t('tabsRowGradTo'),
             description: t('tabsRowGradToDesc'),
-            action: colorRowControl(tabs.rowGradTo, value => patch('tabs', 'rowGradTo', value), t('personalAccentReset'))
+            action: colorRowControl(tabs.rowGradTo, value => patch('tabs', 'rowGradTo', value), t('personalAccentReset'), { alpha: true })
           }),
           jsx(Row, {
             title: t('tabsRowGradAngle'),
@@ -5441,12 +5502,12 @@ function SettingsPage() {
           jsx(Row, {
             title: t('tabsTitleGradFrom'),
             description: t('tabsTitleGradFromDesc'),
-            action: colorRowControl(tabs.titleGradFrom, value => patch('tabs', 'titleGradFrom', value), t('personalAccentReset'))
+            action: colorRowControl(tabs.titleGradFrom, value => patch('tabs', 'titleGradFrom', value), t('personalAccentReset'), { alpha: true })
           }),
           jsx(Row, {
             title: t('tabsTitleGradTo'),
             description: t('tabsTitleGradToDesc'),
-            action: colorRowControl(tabs.titleGradTo, value => patch('tabs', 'titleGradTo', value), t('personalAccentReset'))
+            action: colorRowControl(tabs.titleGradTo, value => patch('tabs', 'titleGradTo', value), t('personalAccentReset'), { alpha: true })
           }),
           jsx(Row, {
             title: t('tabsTitleGradAngle'),
@@ -5476,7 +5537,7 @@ function SettingsPage() {
           jsx(Row, {
             title: t('tabsSelColor'),
             description: t('tabsSelColorDesc'),
-            action: colorRowControl(tabs.selColor, value => patch('tabs', 'selColor', value), t('personalAccentReset'))
+            action: colorRowControl(tabs.selColor, value => patch('tabs', 'selColor', value), t('personalAccentReset'), { alpha: true })
           }),
           jsx(ToggleRow, {
             label: t('tabsSelBorder'),
@@ -5496,6 +5557,19 @@ function SettingsPage() {
               ],
               value: tabs.selShadow,
               onChange: value => patch('tabs', 'selShadow', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsSelHover'),
+            description: t('tabsSelHoverDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'off', label: t('selHoverOff') },
+                { id: 'soft', label: t('selHoverSoft') },
+                { id: 'strong', label: t('selHoverStrong') }
+              ],
+              value: tabs.selHover,
+              onChange: value => patch('tabs', 'selHover', value)
             })
           }),
           jsx('p', { className: 'sf-subhead', children: t('tabsLiveHead') }),

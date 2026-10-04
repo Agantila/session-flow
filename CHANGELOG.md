@@ -3,6 +3,44 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.12.0] — 2026-10-04
+
+### Neu
+- **Auswahl: Hover-Stufe**: Neue Option „Auswahl: Hover" (`tabs.selHover`) —
+  bestimmt, wie der ausgewählte Eintrag auf Hover reagiert: **Verstärken**
+  (Standard; Tönung vertieft, z. B. 16 % → 24 %), **Stark** (36 %) oder
+  **Unverändert** (Auswahl bleibt exakt beim konfigurierten Design).
+- **Alpha in Verläufen**: Verlaufsfarben (Zeilen-/Titel-Verlauf) und die
+  Auswahl-Farbe akzeptieren jetzt 8-stelliges Hex `#RRGGBBAA` — Verläufe
+  können transparent auslaufen. Die Farbzeilen erhalten dafür einen
+  Alpha-Regler (0–100 %); ein Swatch-Klick behält den eingestellten Alpha-Wert.
+
+### Fixed
+- **Grid-Parität (Liste == Grid)**: Die Grid-Kartenansicht übernahm die
+  Design-Optionen nicht — Karten-Flächen (Standard, Hover, Aktiv) hatten per
+  Spezifität Verlauf, Auswahl-Tönung und Live-Status überschrieben. Die
+  Flächen laufen jetzt über `:where()` (null-spezifisch): **alle**
+  Design-Optionen wirken identisch in Liste UND Grid (im Computed-Style-Test
+  zeilenweise abgesichert).
+- **Auswahl-Zustand über dem Verlauf**: Die Auswahl-Tönung (Standard/Akzent/
+  Eigene Farbe) liegt jetzt als Layer ÜBER dem Zeilen-Verlauf — der
+  konfigurierte Verlauf bleibt auch im ausgewählten Zustand sichtbar (vorher
+  ersetzte die Tönung den Verlauf). Ebenso der Live-Status (Akzent-Layer
+  über Verlauf statt Ersatz).
+- **Hover auf der Auswahl**: Die Verlaufs-Brightness überschreibt den
+  Auswahl-Zustand nicht mehr — das Hover-Feedback folgt der neuen
+  `selHover`-Stufe.
+
+### Intern
+- **Computed-Style-Test**: `tests/style-test.mjs` (optional, Playwright/
+  Chromium) extrahiert die echte CSS aus `plugin.js` und prüft am echten
+  Chromium die **berechneten Styles** — Liste-vs-Grid-Parität, Alpha-Werte,
+  Auswahl-Layer, Hover-Stufen, „Design aus". Skip ohne Playwright
+  (CI-sicher); Aufruf: `npm run test:style` bzw.
+  `PLAYWRIGHT_PKG=… node tests/style-test.mjs`.
+- **Render-Smoketest erweitert**: prüft zusätzlich den `selHover`-Mirror
+  (`data-sf-selhover` inkl. Fallback) und Alpha-Hex in `applyRows()`.
+
 ## [1.11.0] — 2026-10-04
 
 ### Neu

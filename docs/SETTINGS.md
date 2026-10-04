@@ -52,12 +52,13 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.gridLines` | `2` | Grid: max. Zeilen für den Kartentitel (1–4). |
 | `tabs.gridPreview` | `true` | Grid: Vorschau der letzten Nachricht auf den Karten. |
 | `tabs.infoDensity` | `auto` | Info-Dichte: `auto` (wie Hermes), `compact`, `comfortable`, `detailed`. Komfortabel = Detail-Zeile (Branch·Modell·Zähler), Detailreich = + Vorschau; gilt für Liste und Grid. |
-| `tabs.rowGradOn` | `false` | Hintergrund-Verlauf für Zeilen (Liste) & Karten (Grid); Farben `rowGradFrom`/`rowGradTo`, Winkel `rowGradAngle` (0–360°). |
+| `tabs.rowGradOn` | `false` | Hintergrund-Verlauf für Zeilen (Liste) & Karten (Grid); Farben `rowGradFrom`/`rowGradTo` (optional mit Alpha `#RRGGBBAA`), Winkel `rowGradAngle` (0–360°). |
 | `tabs.rowShadow` | `off` | Auswählbarer Schlagschatten: `off`/`subtle`/`medium`/`strong`. |
-| `tabs.titleGradOn` | `false` | Titel als Verlauf (`titleGradFrom`/`titleGradTo`, Winkel `titleGradAngle`) via Background-Clip Text. |
-| `tabs.selTint` | `standard` | Auswahl-Tönung: `standard` (App-Optik), `accent` (Akzentfarbe), `custom` (eigene Farbe `selColor`). |
+| `tabs.titleGradOn` | `false` | Titel als Verlauf (`titleGradFrom`/`titleGradTo`, optional mit Alpha `#RRGGBBAA`; Winkel `titleGradAngle`) via Background-Clip Text. |
+| `tabs.selTint` | `standard` | Auswahl-Tönung: `standard` (App-Optik), `accent` (Akzentfarbe), `custom` (eigene Farbe `selColor`, optional mit Alpha `#RRGGBBAA`). Die Tönung liegt als Layer **über** dem Zeilen-Verlauf — der Verlauf bleibt sichtbar. |
 | `tabs.selBorder` | `false` | Kontur um die ausgewählte Zeile/Karte (in der Tönungsfarbe). |
 | `tabs.selShadow` | `off` | Schattenstufe für den Auswahl-Zustand: `off`/`subtle`/`medium`/`strong`. |
+| `tabs.selHover` | `soft` | Hover-Verhalten des ausgewählten Eintrags (Liste & Grid): `soft` (Tönung vertiefen), `strong` (stärker), `off` (unverändert). |
 | `tabs.rowLive` | `false` | Aktiv & Wartend hervorheben: Akzent-Glow + pulsierendes Status-Icon (Bildsprache wie im Tab-Design). |
 | `tabs.showContext` | `false` | Kontextfenster (kompakt): Prozent-Label je Zeile/Karte für **Live-Sessions** (read-only `session.context_breakdown`, kein Provider-Call). Ab 70 % bernstein, ab 90 % rot; Tooltip zeigt used/max. |
 | `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |

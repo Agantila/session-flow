@@ -123,8 +123,9 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
   Kartenbreite, Abstand, Titel-Zeilen, Vorschau, Info-Dichte wie Hermes,
   kompakte Kontextfenster-Auslastung für Live-Sessions, max. sichtbare
   Einträge je Gruppe mit „Mehr anzeigen“),
-  Zeilen-/Karten-Design (Hintergrund-Verlauf, Schlagschatten, Titel-Verlauf,
-  Auswahl-Tönung/-Kontur/-Schatten, Live-Glow für Aktiv & Wartend),
+  Zeilen-/Karten-Design (Hintergrund-Verlauf, Schlagschatten, Titel-Verlauf —
+  Farben optional mit Alpha (#RRGGBBAA) —, Auswahl-Tönung/-Kontur/-Schatten
+  inkl. Hover-Stufe, Live-Glow für Aktiv & Wartend),
   Status-Darstellung (Icon/Punkt/beides),
   Zeit, Vorschau, Nachrichtenanzahl, Quelle, Öffnen-als (Ersetzen/Stapeln/Tab),
   max. Sessions, Cron ausblenden, Live-Poll, Refresh.

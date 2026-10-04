@@ -1,6 +1,6 @@
 {
   "name": "session-flow",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Hermes Desktop plugin — smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style session tab groups, glass readability for chips and the input field, and sidebar-style content tabs. Live-configurable settings page included.",
   "type": "module",
   "private": true,
@@ -24,6 +24,7 @@
     "test": "node tests/render-test.mjs",
     "install:plugin": "bash install.sh",
     "install:link": "bash install.sh --link",
-    "uninstall:plugin": "bash uninstall.sh"
+    "uninstall:plugin": "bash uninstall.sh",
+    "test:style": "node tests/style-test.mjs"
   }
 }

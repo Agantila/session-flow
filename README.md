@@ -115,8 +115,9 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
   width, gap, title lines, preview, info density like Hermes, compact
   context-window % for live sessions, max visible entries per group with
   “show more”), row/card design
-  (gradient background, drop shadows, gradient titles, selected-state
-  tint/outline/shadow, live active & waiting glow), status style
+  (gradient background, drop shadows, gradient titles — colors optionally with
+  alpha via #RRGGBBAA —, selected-state
+  tint/outline/shadow incl. hover strength, live active & waiting glow), status style
   (icon/dot/both), time, preview, message
   count, source badge, open-as (replace/stack/tab), max sessions, hide cron,
   live poll, refresh.

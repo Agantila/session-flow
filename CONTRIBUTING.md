@@ -16,6 +16,8 @@ cd session-flow
 # Nach jeder Änderung prüfen (Syntax + i18n-Parität + Render-Smoketest):
 npm run check
 npm test
+# Optional (lokal, mit Playwright/Chromium): echte Computed-Styles inkl. Liste/Grid-Parität
+npm run test:style
 ```
 
 Mit `--link` lädt die App das Plugin bei jedem Speichern neu (Hot-Reload).
@@ -87,6 +89,7 @@ Empfehlungen für das Repo:
 | `docs/ROADMAP.md` | Ideen & bekannte Grenzen. |
 | `scripts/check.mjs` | Pre-Flight-Check (Syntax + i18n). |
 | `tests/render-test.mjs` | Render-Smoketest (Pane + Einstellungen, Stub-basiert, `npm test`). |
+| `tests/style-test.mjs` | Computed-Style-Test (echtes Chromium; optional, skip ohne Playwright, `npm run test:style`). |
 
 ## Lizenz
 

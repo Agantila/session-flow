@@ -106,8 +106,41 @@ const el = () => ({
   querySelectorAll: () => [],
   querySelector: () => null
 })
+// Aufzeichnender <html>-Stub: merkt sich Attribute/CSS-Variablen aus applyRows().
+const __rootAttrs = {}
+const __rootProps = {}
+const rootEl = {
+  tagName: 'HTML',
+  attrs: __rootAttrs,
+  props: __rootProps,
+  setAttribute(k, v) {
+    __rootAttrs[k] = v
+  },
+  removeAttribute(k) {
+    delete __rootAttrs[k]
+  },
+  getAttribute: k => (k in __rootAttrs ? __rootAttrs[k] : null),
+  hasAttribute: k => k in __rootAttrs,
+  appendChild() {},
+  remove() {},
+  style: {
+    props: __rootProps,
+    setProperty(k, v) {
+      __rootProps[k] = v
+    },
+    removeProperty(k) {
+      delete __rootProps[k]
+    },
+    getPropertyValue: k => (k in __rootProps ? __rootProps[k] : '')
+  },
+  classList: { add() {}, remove() {} },
+  textContent: '',
+  querySelectorAll: () => [],
+  querySelector: () => null
+}
+globalThis.__SF__.rootEl = rootEl
 globalThis.document = {
-  documentElement: el(),
+  documentElement: rootEl,
   body: el(),
   head: { append() {}, appendChild() {} },
   createElement: () => el(),
@@ -395,6 +428,32 @@ try {
   )
 } catch (error) {
   check('Einstellungs-Seite rendert (kein Crash)', false, error.message)
+}
+
+// 10) v1.12: SelHover-Mirror + alpha-fähige Hex-Farben (applyRows)
+const rootHtml = globalThis.__SF__.rootEl
+mod.patchSettings('tabs', { selHover: 'strong' })
+check('v1.12: selHover=strong → data-sf-selhover=strong', rootHtml.attrs['data-sf-selhover'] === 'strong', `got=${rootHtml.attrs['data-sf-selhover']}`)
+mod.patchSettings('tabs', { selHover: 'quatsch' })
+check('v1.12: ungültiger selHover → Fallback soft', rootHtml.attrs['data-sf-selhover'] === 'soft', `got=${rootHtml.attrs['data-sf-selhover']}`)
+mod.patchSettings('tabs', { rowGradOn: true, rowGradFrom: '#7c3aed80' })
+check('v1.12: Alpha-Hex #RRGGBBAA übernommen', rootHtml.props['--sf-row-from'] === '#7c3aed80', `got=${rootHtml.props['--sf-row-from']}`)
+mod.patchSettings('tabs', { rowGradFrom: '#nope' })
+check('v1.12: ungültige Farbe → Fallback #7c3aed', rootHtml.props['--sf-row-from'] === '#7c3aed', `got=${rootHtml.props['--sf-row-from']}`)
+mod.patchSettings('tabs', { rowGradOn: false, rowGradFrom: '#7c3aed' })
+
+// 11) Einstellungs-Seite: neue Auswahl-Hover-Zeile + Optionen
+try {
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  walk(settingsPage.render(), { el: [], text: [] })
+  check('Einstellungs-Seite enthält tabsSelHover-Zeile', globalThis.__SF__.tCalls.some(([k]) => k === 'tabsSelHover'))
+  check(
+    'Einstellungs-Seite enthält selHover-Optionen',
+    globalThis.__SF__.tCalls.some(([k]) => k === 'selHoverSoft') && globalThis.__SF__.tCalls.some(([k]) => k === 'selHoverStrong')
+  )
+} catch (error) {
+  check('Einstellungs-Seite (v1.12) rendert', false, error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

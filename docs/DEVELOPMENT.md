@@ -6,6 +6,7 @@
 ./install.sh --link   # einmal: Symlink ~/.hermes/desktop-plugins/session-flow -> Repo
 npm run check         # Syntaxcheck + i18n-Audit (Node, keine Dependencies)
 npm test              # Render-Smoketest: Pane + Einstellungen (Stub-basiert, ohne App)
+npm run test:style    # optional: Computed-Style-Test am echten Chromium (skip ohne Playwright)
 ```
 
 Danach: `plugin.js` speichern → die App hot-reloaded das Plugin (keine
@@ -227,6 +228,26 @@ Trick für echte Interaktionen: `useState` ist im Stub **slot-basiert**
 (Map + `__resetSlots()` pro Render) — ein per Walk eingesammelter
 `props.onClick()` wirkt damit im nächsten Render, Klicks sind echt simulierbar.
 Bei neuen interaktiven UI-Teilen einfach Assertions ergänzen.
+
+## Computed-Style-Test (`npm run test:style`, optional)
+
+`tests/style-test.mjs` extrahiert die echte CSS aus `plugin.js` und lädt sie in
+eine minimale Test-Seite (`.sf-items[data-view=list|grid]`); geprüft werden die
+**berechneten Styles am echten Chromium** — genau das, was der Render-Smoketest
+nicht sieht:
+
+- Liste-vs-Grid-**Parität** für Verlauf, Schatten, Titel-Verlauf, Auswahl-Zustand,
+- Auswahl-Tönung als Layer über dem Zeilen-Verlauf, Hover-Stufen (`tabs.selHover`),
+- Alpha in Verläufen (`#RRGGBBAA`), Live-Status, „Design aus"-Zustand.
+
+Braucht Playwright + Chromium (z. B. aus einem Hermes-Desktop-Checkout) — ohne
+Playwright endet der Test mit SKIP (Exit 0, CI-sicher). Bibliothek vorgeben:
+`PLAYWRIGHT_PKG=<…/node_modules/playwright> npm run test:style`.
+Screenshot zur Sichtprüfung: `SF_STYLE_SHOTS=<ordner> npm run test:style`.
+
+> Faustregel: Änderungen am Design-CSS (`.sf-tab`-Flächen, Verläufe, Auswahl,
+> Grid-Overrides) immer mit dem Style-Test absichern — Spezifitäts-Fallen
+> (`:where()`-Overrides, Layer-Reihenfolge) sieht man nur in berechneten Styles.
 
 ## Troubleshooting
 
