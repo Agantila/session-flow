@@ -3,6 +3,29 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.13.1] — 2026-10-04
+
+### Fixed
+- **„Content-Bereich abgrenzen" wirkte nicht**: Der Rahmen lag auf dem Pane-Host,
+  dessen Box per `anchor-size` exakt der Pane-Fläche entspricht — die Kontur klebte
+  dadurch am Sash/Fensterrand, der Schlagschatten wurde vom `overflow:hidden` des
+  Pane-Bodys abgeschnitten, und es gab keinen Abstand. Der Rahmen ist jetzt ein
+  **Overlay im Pane-Body** (Geschwister des Pane-Hosts: scrollt nicht mit, bleibt
+  deckungsgleich mit dem eingesetzten Bereich, `pointer-events:none`), und der
+  Inhalt wird um den neuen Abstand eingesetzt.
+
+### Neu
+- **Abstand px** (`personal.shellPad`, 0–32, Standard 8): Innenabstand des
+  Content-Bereichs vom Layout-Rand — gibt zugleich dem Schlagschatten Platz
+  (größerer Abstand = sichtbarerer Schatten).
+
+### Intern
+- **Render-Smoketest**: prüft die Overlay-Injektion über ein Mini-DOM — ein Overlay
+  je Pane-Body, idempotent, Scope `chat` nur für Session-Tiles, vollständiges
+  Aufräumen bei „aus" samt Variable.
+- **Computed-Style-Test**: prüft am echten Chromium Inset, feine Kontur, Schlag-
+  schatten, Radius und Klick-Durchlässigkeit des Overlays.
+
 ## [1.13.0] — 2026-10-04
 
 ### Neu

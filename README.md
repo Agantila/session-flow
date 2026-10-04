@@ -48,8 +48,9 @@ A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
 6. **Personalization** — pick your own **accent color** for core UI elements
    (buttons, active states, hovers, focus rings), set a **chat background**
    (your own image or video file, with fit / dimming / blur and scope), and
-   **frame the content area** of tabs with rounded corners and a soft drop
-   shadow (radius, shadow strength, hairline outline, scope).
+   **frame the content area** of tabs — rounded corners, a hairline outline,
+   a spacing from the layout edge and a drop shadow (radius, spacing, shadow
+   strength, scope).
 
 Everything is adjustable on the **plugin settings page** — `Session Flow` in
 the sidebar, ⌘K/Ctrl+K → “Session Flow: Einstellungen”, or the gear icon in the

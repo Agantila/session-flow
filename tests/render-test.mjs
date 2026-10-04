@@ -139,15 +139,86 @@ const rootEl = {
   querySelector: () => null
 }
 globalThis.__SF__.rootEl = rootEl
+
+// ── Mini-DOM: nur was syncPaneShell/syncPaneBackgrounds anfassen ────────────
+const shellMatchers = {
+  '[data-pane-host]': node => 'data-pane-host' in node.attrs,
+  '[data-pane-host]:not([data-pane-overlay])': node => 'data-pane-host' in node.attrs && !('data-pane-overlay' in node.attrs),
+  '[data-sf-shell-frame]': node => 'data-sf-shell-frame' in node.attrs,
+  '[data-sf-bg-layer]': node => 'data-sf-bg-layer' in node.attrs
+}
+
+function domWalk(node, out) {
+  for (const child of node.children) {
+    out.push(child)
+    domWalk(child, out)
+  }
+
+  return out
+}
+
+function makeNode(attrs = {}) {
+  const node = {
+    attrs: { ...attrs },
+    children: [],
+    className: '',
+    textContent: '',
+    parentElement: null,
+    getAttribute(key) {
+      return key in node.attrs ? node.attrs[key] : null
+    },
+    hasAttribute(key) {
+      return key in node.attrs
+    },
+    setAttribute(key, value) {
+      node.attrs[key] = value
+    },
+    removeAttribute(key) {
+      delete node.attrs[key]
+    },
+    appendChild(child) {
+      child.parentElement = node
+      node.children.push(child)
+      return child
+    },
+    remove() {
+      if (node.parentElement) {
+        node.parentElement.children = node.parentElement.children.filter(candidate => candidate !== node)
+      }
+
+      node.parentElement = null
+    },
+    querySelectorAll(selector) {
+      if (selector.startsWith(':scope > ')) {
+        const scoped = shellMatchers[selector.slice(9)]
+        return scoped ? node.children.filter(scoped) : []
+      }
+
+      const test = shellMatchers[selector]
+      return test ? domWalk(node, []).filter(test) : []
+    },
+    querySelector(selector) {
+      return node.querySelectorAll(selector)[0] || null
+    }
+  }
+
+  return node
+}
+
+const domRoot = makeNode()
+
 globalThis.document = {
   documentElement: rootEl,
   body: el(),
   head: { append() {}, appendChild() {} },
-  createElement: () => el(),
+  createElement: () => makeNode(),
   createElementNS: () => el(),
   getElementById: () => null,
   querySelector: () => null,
-  querySelectorAll: () => [],
+  querySelectorAll: selector => {
+    const test = shellMatchers[selector]
+    return test ? domWalk(domRoot, []).filter(test) : []
+  },
   addEventListener() {},
   removeEventListener() {}
 }
@@ -253,7 +324,7 @@ const rewritten = src
   .replace("from 'react/jsx-runtime'", `from '${stubUrl}'`)
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
-  .concat('\nexport { patchSettings }\n')
+  .concat('\nexport { patchSettings, applyPersonal, syncPaneShell }\n')
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
 
@@ -488,6 +559,28 @@ try {
 } catch (error) {
   check('Übernehmen-Klick: persistiert + wendet an (kein Crash)', false, error.message)
 }
+
+// 14) v1.13.1: Content-Abgrenzung — ein Shell-Overlay je Pane-Body
+const shellBody = makeNode()
+const shellBody2 = makeNode()
+domRoot.appendChild(shellBody)
+domRoot.appendChild(shellBody2)
+shellBody.appendChild(makeNode({ 'data-pane-host': 'session-tile:abc' }))
+shellBody2.appendChild(makeNode({ 'data-pane-host': 'logs' }))
+const frameCount = () => globalThis.document.querySelectorAll('[data-sf-shell-frame]').length
+const hasOwnFrame = body => body.children.some(child => 'data-sf-shell-frame' in child.attrs)
+
+mod.patchSettings('personal', { shellOn: true, shellScope: 'all', shellPad: 10 })
+check('v1.13.1: --sf-shell-pad gespiegelt', rootHtml.props['--sf-shell-pad'] === '10px', `got=${rootHtml.props['--sf-shell-pad']}`)
+check('v1.13.1: ein Shell-Overlay je Pane-Body', frameCount() === 2, `frames=${frameCount()}`)
+mod.syncPaneShell()
+check('v1.13.1: Sync ist idempotent (kein Doppel-Overlay)', frameCount() === 2, `frames=${frameCount()}`)
+mod.patchSettings('personal', { shellScope: 'chat' })
+mod.syncPaneShell()
+check('v1.13.1: Scope=chat → nur Tile-Body behält das Overlay', hasOwnFrame(shellBody) && !hasOwnFrame(shellBody2), `b1=${hasOwnFrame(shellBody)} b2=${hasOwnFrame(shellBody2)}`)
+mod.patchSettings('personal', { shellOn: false })
+mod.syncPaneShell()
+check('v1.13.1: Shell aus → Overlays entfernt + Variable weg', frameCount() === 0 && rootHtml.props['--sf-shell-pad'] === undefined, `frames=${frameCount()} pad=${rootHtml.props['--sf-shell-pad']}`)
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)

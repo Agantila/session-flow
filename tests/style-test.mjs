@@ -92,7 +92,8 @@ const html = `<!doctype html>
   data-sf-seltint="custom" data-sf-selborder="on" data-sf-selshadow="medium"
   data-sf-selhover="soft" data-sf-rowlive="on" data-sf-liveframe="glow"
   data-sf-aligntop="on" data-sf-hoverlift="on" data-sf-ctxpie="on"
-  style="--sf-row-from:#7c3aed80;--sf-row-to:#00dbda20;--sf-row-angle:120deg;--sf-sel-color:#ff00ff;--sf-title-from:#e4e4e7;--sf-title-to:#8b8b93;--sf-title-angle:90deg">
+  data-sf-shell="on" data-sf-shell-border="on" data-sf-shell-shadow="medium"
+  style="--sf-row-from:#7c3aed80;--sf-row-to:#00dbda20;--sf-row-angle:120deg;--sf-sel-color:#ff00ff;--sf-title-from:#e4e4e7;--sf-title-to:#8b8b93;--sf-title-angle:90deg;--sf-shell-pad:8px;--sf-shell-radius:10px;--sf-shell-shadow:0 2px 4px rgba(0,0,0,.12), 0 10px 28px rgba(0,0,0,.13)">
 <head><meta charset="utf-8">
 <style>:root{${tokens}}body{background:#1c1c1e;padding:16px;margin:0}</style>
 <style id="sf-css">${css}</style>
@@ -112,6 +113,11 @@ const html = `<!doctype html>
         ${row('g2', 'Grid aktiv', ' data-active="true"')}
         ${row('g3', 'Grid busy', ' data-live="busy"')}
       </div>
+    </div>
+    <h4 style="color:#9ca3af;font:600 11px/1 system-ui;margin:14px 4px 6px">Content-Abgrenzung</h4>
+    <div id="paneBody" style="position:relative;overflow:hidden;width:320px;height:120px">
+      <div data-pane-host="session-tile:x" id="host1" style="position:absolute;inset:0"><div style="height:100%;background:#2a2a2e"></div></div>
+      <div class="sf-shell-frame" data-sf-shell-frame id="frame1"></div>
     </div>
   </div>
 </body></html>`
@@ -322,6 +328,27 @@ try {
   check('Design aus: Grid-Karte = App-Fläche @4 %', P.g1.bgImage === 'none' && has(P.g1.bgColor, '0.04'), `${P.g1.bgImage} / ${P.g1.bgColor}`)
   check('Design aus: Listenzeile ohne Hintergrund', P.l1.bgImage === 'none' && P.l1.bgColor === 'rgba(0, 0, 0, 0)', P.l1.bgColor)
   check('Design aus: keine Schatten/Kontur am Auswahl-Eintrag', P.g2.shadow === 'none' && has(P.g2.outline, 'none'), `${P.g2.shadow} / ${P.g2.outline}`)
+
+  // ── 11) v1.13.1: Content-Abgrenzung — Inset + Rahmen-Overlay im Pane-Body ──
+  const shell = await page.evaluate(() => {
+    const host = getComputedStyle(document.getElementById('host1'))
+    const frame = getComputedStyle(document.getElementById('frame1'))
+    return {
+      hostPad: `${host.paddingTop}/${host.paddingLeft}`,
+      frameInset: `${frame.top}/${frame.left}`,
+      frameBorder: `${frame.borderTopWidth} ${frame.borderTopColor}`,
+      frameShadow: frame.boxShadow,
+      frameRadius: frame.borderTopLeftRadius,
+      framePointer: frame.pointerEvents,
+      frameZ: frame.zIndex
+    }
+  })
+  check('Abgrenzung: Inhalt um 8px eingesetzt (Abstand)', shell.hostPad === '8px/8px', shell.hostPad)
+  check('Abgrenzung: Rahmen-Overlay deckungsgleich auf 8px', shell.frameInset === '8px/8px', shell.frameInset)
+  check('Abgrenzung: feine Kontur (1px, nicht transparent)', shell.frameBorder.startsWith('1px') && !/rgba\(0, 0, 0, 0\)/.test(shell.frameBorder), shell.frameBorder)
+  check('Abgrenzung: Schlagschatten liegt am Overlay', shell.frameShadow !== 'none' && has(shell.frameShadow, '0.12'), shell.frameShadow)
+  check('Abgrenzung: Radius übernommen (10px)', shell.frameRadius === '10px', shell.frameRadius)
+  check('Abgrenzung: Overlay fängt keine Klicks', shell.framePointer === 'none' && shell.frameZ === '2', `${shell.framePointer}/${shell.frameZ}`)
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }

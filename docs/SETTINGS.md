@@ -222,9 +222,13 @@ nichts, bis du sie einschaltest.
 
 ### Content-Bereich abgrenzen (Keys `personal.shell*`)
 
-- **Content-Bereich abgrenzen** (`shellOn`): runde Ecken + Schlagschatten auf
-  dem Ansichtsbereich der Tabs; Overlay-/schwebende Panes bleiben ausgenommen.
+- **Content-Bereich abgrenzen** (`shellOn`): setzt den Inhaltsbereich der Panes
+  vom Layout-Rand ab — Innenabstand, runde Ecken, feine Kontur und Schlagschatten.
+  Der Rahmen liegt als Overlay im Pane-Body (über dem Inhalt, klick-durchlässig);
+  Overlay-/schwebende Panes bleiben ausgenommen.
 - **Ecken-Radius px** (`shellRadius`, 4–24): Rundung der Ecken.
+- **Abstand px** (`shellPad`, 0–32): Innenabstand des Inhalts vom Layout-Rand —
+  schafft zugleich Platz für den Schlagschatten (mehr Abstand = sichtbarerer Schatten).
 - **Schatten** (`shellShadow`): aus / dezent / mittel / stark.
 - **Feine Kontur** (`shellBorder`): zusätzliche Hairline um den Bereich.
 - **Gilt für** (`shellScope`): alle Panes oder nur Chats.

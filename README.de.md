@@ -53,9 +53,9 @@ Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
 6. **Individualisierung** — eigene **Akzentfarbe** für elementare UI-Elemente
    (Buttons, aktive Zustände, Hover, Fokusringe), eigener **Chat-Hintergrund**
    (eigene Bild- oder Videodatei, mit Darstellung / Abdunkeln / Weichzeichnen
-   und Geltungsbereich) und der **Content-Bereich der Tabs** mit runden Ecken
-   und dezentem Schlagschatten (Radius, Schattenstärke, feine Kontur,
-   Geltungsbereich).
+   und Geltungsbereich) und der **Content-Bereich der Tabs** wird mit runden
+   Ecken, feiner Kontur, Abstand zum Layout-Rand und dezentem Schlagschatten
+   abgesetzt (Radius, Abstand, Schattenstärke, Geltungsbereich).
 
 Alles ist in den **Plugin-Einstellungen** anpassbar: `Session Flow`-Seite in der
 Sidebar, ⌘K/Ctrl+K → „Session Flow: Einstellungen", oder das Zahnrad in der Pane.
@@ -140,7 +140,7 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
   Bereiche (Eingabefeld / Chips / Statusleiste).
 - **Individualisierung**: Akzent-Tönung (Swatch oder Hex), Chat-Hintergrund
   (Bild/Video über nativen Datei-Picker, Darstellung/Abdunkeln/Weichzeichnen/
-  Geltungsbereich), Content-Bereich abgrenzen (Radius/Schatten/Kontur/Bereich).
+  Geltungsbereich), Content-Bereich abgrenzen (Radius/Abstand/Schatten/Kontur/Bereich).
 
 ## Projektstruktur
 
