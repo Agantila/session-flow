@@ -9,7 +9,8 @@ npm test              # Render-Smoketest: Pane + Einstellungen (Stub-basiert, oh
 ```
 
 Danach: `plugin.js` speichern → die App hot-reloaded das Plugin (keine
-Neustarts). Falls es klemmt: ⌘K/Ctrl+K → „Reload desktop plugins".
+Neustarts). Das gilt auch im `--link`-Modus — der File-Watch folgt dem
+Symlink. Falls es klemmt: ⌘K/Ctrl+K → „Reload desktop plugins".
 Beim ersten Laden eines fehlerhaften Stands zeigt die App einen Toast mit der
 Fehlermeldung; `hermes logs gui -f` tailt das Desktop-Log.
 
@@ -234,6 +235,7 @@ Bei neuen interaktiven UI-Teilen einfach Assertions ergänzen.
 | Toast „Plugin session-flow failed to load" | Syntaxfehler im letzten Save → `npm run check`, dann speichern |
 | Plugin taucht nicht auf | Ordnername ≠ `session-flow`? Datei unter `~/.hermes/desktop-plugins/session-flow/plugin.js`? ⌘K → Reload |
 | Hot-Reload belegen (Erfolg ist still) | Temporär `console.error(...)` in `register()` setzen + speichern → erscheint als `[renderer console:main] [session-flow] …` in `~/.hermes/logs/desktop.log` (nur Fehler-Level wird geloggt). Alternativ: `_meta`-Stempel im Plugin-Storage (`hermes.plugin.session-flow._meta`) — nach ~1 min im leveldb sichtbar: `strings *.ldb *.log \| grep hermes.plugin` |
+| Auto-Reload stoppt nach Ordner-Tausch | Ein Wechsel Kopie ⇄ Symlink (bzw. Ordner-Ersetzen) lässt die alte File-Watch verwaisen — der Ordner-Reconcile bindet Watches für bekannte Einträge nicht neu. Einmal ⌘K → „Reload desktop plugins" (oder App-Neustart), danach reloaded Speichern wieder automatisch. |
 | Glass-Effekt fehlt | `glass.enabled`? Bereichs-Toggles? System-„Transparenz reduzieren" aktiv (Blur wird dann global genullt)? Modell-Pill gibt es nur im Primär-Chat |
 | Animation passiert nichts | `prefers-reduced-motion` aktiv? Animation in den Einstellungen aus? Nur Assistant-Nachrichten werden animiert |
 | Strg+Scroll reagiert nicht | Fokus in Zoom-Fläche (Bild/Editor)? Andere App-Sektion? `wheel.enabled`? |

@@ -106,7 +106,7 @@ Live-Doors (`SessionParams`: `session.title`, `session.usage`,
 | **Ladefehler sehen** | `~/.hermes/logs/desktop.log`: `[renderer console:main] [plugins] runtime load failed (session-flow) …`. Fehler → Toast + Logzeile. |
 | **Positiver Ladebeweis** | Nur `console.error` erreicht das Log — temporär eine `console.error`-Marke in `register()` setzen, speichern/kopieren, ~10 s warten, Log prüfen. |
 | **Version live prüfen** | `strings ~/.config/Hermes/Local\ Storage/leveldb/*.ldb | grep -A1 'hermes.plugin.session-flow._meta'` → `{"loadedAt":…,"version":"x.y.z"}` (Flush ~1 min). |
-| **Hot-Reload** | Feuert auf Datei-Überschreiben (`cp`) im Plugin-Ordner; erfolgreicher Load ist still. Die LevelDB schreibt zudem **alle ~60 s periodisch** — ein mtime-Bump allein ist KEIN Reload-Beweis. |
+| **Hot-Reload** | Feuert auf Datei-Überschreiben (`cp`/Speichern) im Plugin-Ordner — auch bei **Symlink-Install** (`install.sh --link`; die Watch folgt dem Symlink, verifiziert 2026-10-04). Nach einem **Ordner-Tausch** (Kopie ⇄ Symlink, Ordner-Ersetzen) hängt die alte Watch: einmal ⌘K → „Reload desktop plugins". Erfolgreicher Load ist still; die LevelDB schreibt zudem **alle ~60 s periodisch** — ein mtime-Bump allein ist KEIN Reload-Beweis. |
 | **DOM-Zustand messen** | Temporären Debug per `console.error` + `getComputedStyle`/`querySelectorAll` in ein Intervall hängen; Ausgabe im Log lesen (Screenshot geht unter Wayland nicht). |
 
 ## Wartungs-Checkliste bei App-Updates
