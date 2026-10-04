@@ -5,6 +5,23 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+## [1.17.1] — 2026-10-05
+
+### Changed
+- **Schnellfilter „Aktiv" sortiert jetzt, statt herauszufiltern** — der
+  Subtab zeigt weiterhin ALLE Sessions (aktive und inaktive), ordnet die
+  Liste aber absteigend nach der letzten Aktivität: Live-Liste
+  (`last_active`) → zuletzt gesehenes Gateway-Event → Startzeit. Aktive
+  Sessions stehen dadurch automatisch oben; nichts verschwindet mehr aus
+  der Liste. Die Textsuche kombiniert sich unverändert; Zähler und
+  Leerzustand werten nur noch die Suche als aktiven Filter. `Alle` bleibt
+  die Startzeit-Reihenfolge.
+
+### Intern
+- Render-Smoketest (Sektion 23): Aktiv-Modus zeigt alle Zeilen, hebt die
+  Live-Session nach oben (frisches `last_active` schlägt alte Startzeit)
+  und fällt ohne Live-/Event-Daten sauber auf die Startzeit zurück.
+
 ## [1.17.0] — 2026-10-05
 
 ### Added

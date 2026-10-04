@@ -86,13 +86,17 @@ Pane-Besuch startet die Filter immer frisch):
 
 - **Suche**: Textfeld, durchsucht Titel, Branch und Vorschau (klein-/
   großschreibungsunabhängig). Ein ✕ im Feld leert die Suche.
-- **Schnellfilter**: `Alle` / `Angepinnt` / `Aktiv` (busy/waiting laut
-  Aktivitäts-Engine) als Segmented-Control.
-- Trifft ein Filter keine Sessions, erscheint ein eigener Leerzustand
+- **Schnellfilter**: `Alle` / `Aktiv` als Segmented-Control (der frühere
+  `Angepinnt`-Chip ist seit v1.17.0 die feste Angepinnt-Sektion). `Alle`
+  zeigt die Startzeit-Reihenfolge; `Aktiv` blendet seit v1.17.1 **nichts
+  mehr aus**, sondern sortiert alle Sessions absteigend nach der letzten
+  Aktivität (Live-Liste → Gateway-Events → Startzeit) — aktive Sessions
+  stehen dadurch automatisch oben.
+- Trifft die **Suche** keine Sessions, erscheint ein eigener Leerzustand
   („Keine Sessions passen zu diesem Filter") statt des generischen
   „keine Sessions"-Hinweises.
-- Gruppen, deren gesamter Inhalt durch den Filter fällt, verschwinden aus
-  der Liste (keine leeren Header).
+- Gruppen, deren gesamter Inhalt durch Suche/Filter fällt, verschwinden
+  aus der Liste (keine leeren Header).
 
 ### Pane-Buttons & More-Menü
 

@@ -1326,5 +1326,90 @@ try {
   check('v1.17.0-Tests durchgelaufen', false, error && error.message)
 }
 
+// 23) v1.17.1: „Aktiv"-Subtab sortiert ALLE Sessions nach letzter Aktivität
+try {
+  // Fixtures: rec-b hat die ÄLTESTE Startzeit, ist aber laut Live-Liste
+  // zuletzt aktiv — im Aktiv-Modus muss sie nach oben wandern.
+  mod.$sessions.set([
+    { id: 'rec-a', title: 'Recent Alpha', preview: '', cwd: '', branch: 'main', model: 'test/model', toolCount: 0, pinned: false, source: 'desktop', startedAt: 3000, messageCount: 1, live: 0 },
+    { id: 'rec-b', title: 'Recent Beta', preview: '', cwd: '', branch: 'main', model: 'test/model', toolCount: 0, pinned: false, source: 'desktop', startedAt: 1000, messageCount: 1, live: 0 },
+    { id: 'rec-c', title: 'Recent Gamma', preview: '', cwd: '', branch: 'main', model: 'test/model', toolCount: 0, pinned: false, source: 'desktop', startedAt: 2000, messageCount: 1, live: 0 }
+  ])
+  mod.$liveMap.set({
+    'rt-recb': { storedId: 'rec-b', status: 'streaming', at: Date.now(), model: 'test/model', lastActive: Date.now() - 300000 }
+  })
+  mod.patchSettings('tabs', { maxVisible: 0, view: 'list' })
+  mod.patchSettings('groups', { enabled: false, autoMode: 'off', showUngrouped: true })
+
+  const rawKids = p => {
+    const c = p ? p.children : null
+    if (Array.isArray(c)) return c.filter(x => x !== null && x !== undefined && x !== false)
+    return c === null || c === undefined || c === false ? [] : [c]
+  }
+  const rawHas = (n, cls) =>
+    Boolean(n && n.p && typeof n.p.className === 'string' && n.p.className.split(/\s+/).includes(cls))
+  const renderRaw = () => {
+    stub.__resetSlots()
+    const out = { el: [], text: [] }
+    walk(pane.render(), out)
+    return out
+  }
+  const rowTitle = rowEl => {
+    const kids = rawKids(rowEl && rowEl.props)
+    const mainRaw = kids.find(n => rawHas(n, 'sf-tab-main'))
+    const mainKids = rawKids(mainRaw && mainRaw.p)
+    const titleRaw = mainKids.find(n => rawHas(n, 'sf-tab-title'))
+    return rawKids(titleRaw && titleRaw.p).map(x => (typeof x === 'string' ? x : rawKids(x && x.p).join(''))).join('')
+  }
+  const titlesOf = out => out.el.filter(e => e.cls.includes('sf-tab')).map(rowTitle)
+
+  const outAll = renderRaw()
+  const titlesAll = titlesOf(outAll)
+  check(
+    'v1.17.1: „Alle" behält die gespeicherte Reihenfolge (Startzeit)',
+    titlesAll.length === 3 && titlesAll.join('|') === 'Recent Alpha|Recent Beta|Recent Gamma',
+    titlesAll.join(' | ')
+  )
+
+  // Schnellfilter „Aktiv" umschalten (Segment-Knoten aus dem Filterbar-Baum).
+  const filterbarEl = outAll.el.find(e => e.cls.includes('sf-filterbar'))
+  const segNode = rawKids(filterbarEl && filterbarEl.props).find(
+    n => n && n.p && Array.isArray(n.p.options) && typeof n.p.onChange === 'function'
+  )
+  check('v1.17.1: Aktiv-Segment im Filterbar gefunden', Boolean(segNode))
+
+  if (segNode) {
+    segNode.p.onChange('active')
+    const outActive = renderRaw()
+    const titlesActive = titlesOf(outActive)
+    check(
+      'v1.17.1: Aktiv zeigt ALLE Sessions (nichts wird ausgeblendet)',
+      titlesActive.length === 3,
+      titlesActive.join(' | ')
+    )
+    check(
+      'v1.17.1: Aktiv sortiert absteigend nach letzter Aktivität (Live zuerst)',
+      titlesActive[0] === 'Recent Beta' && titlesActive[1] === 'Recent Alpha' && titlesActive[2] === 'Recent Gamma',
+      titlesActive.join(' | ')
+    )
+
+    // Ohne Live-/Event-Daten fällt die Sortierung auf die Startzeit zurück.
+    mod.$liveMap.set({})
+    const outFallback = renderRaw()
+    const titlesFallback = titlesOf(outFallback)
+    check(
+      'v1.17.1: ohne Live-Daten sortiert Aktiv nach Startzeit (Fallback)',
+      titlesFallback[0] === 'Recent Alpha' && titlesFallback[1] === 'Recent Gamma' && titlesFallback[2] === 'Recent Beta',
+      titlesFallback.join(' | ')
+    )
+
+    segNode.p.onChange('all')
+  }
+
+  mod.$liveMap.set({})
+} catch (error) {
+  check('v1.17.1-Tests durchgelaufen', false, error && error.message)
+}
+
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)

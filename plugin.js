@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.17.0'
+const VERSION = '1.17.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -3462,6 +3462,18 @@ function activityFor(row, live, activity) {
   return { kind: 'idle', name: '', labelKey: null }
 }
 
+/** Zeitstempel der letzten Aktivität für die „Aktiv"-Sortierung:
+ *  Live-Liste (Server-`last_active`) → zuletzt gesehenes Gateway-Event →
+ *  Startzeit (Bestand ganz ohne Live-Signal). */
+function lastActivityAt(row, live, activity) {
+  const runtimeEntry = Object.values(live || {}).find(entry => entry && entry.storedId === row.id)
+  const liveAt = Number(runtimeEntry && runtimeEntry.lastActive) || 0
+  const detail = (activity || {})[row.id]
+  const eventAt = Number(detail && detail.at) || 0
+
+  return Math.max(liveAt, eventAt, Number(row.startedAt) || 0)
+}
+
 function activityLabel(t, detail) {
   const glyph = ACTIVITY_GLYPHS[detail.kind] || ACTIVITY_GLYPHS.idle
   let label = t(glyph.labelKey)
@@ -5392,6 +5404,9 @@ function SessionsPane() {
   const error = useValue($sessionsError)
   const groupsState = useValue($groupsState)
   const settings = useValue($settings)
+  // Abo für die „Aktiv"-Sortierung: hält die Reihenfolge bei jedem Live-Poll
+  // (30 s) frisch; die Event-Zeiten liest lastActivityAt beim Berechnen.
+  const liveForSort = useValue($liveMap)
   const focused = useValue(host.state.focusedStoredSessionId)
   const active = useValue(host.state.activeSessionId)
   const [dialog, setDialog] = useState(() => newGroupDialogState())
@@ -5411,11 +5426,10 @@ function SessionsPane() {
   // Vorschau + Schnellfilter (alle/angepinnt/aktiv). Rein clientseitig, nichts
   // wird persistiert — ein Pane-Reload setzt sie zurück, genau wie die App.
   const needle = filterText.trim().toLowerCase()
+  // „Aktiv" filtert seit v1.17.1 nichts mehr heraus: Der Subtab zeigt ALLE
+  // Sessions und ordnet sie absteigend nach der letzten Aktivität — aktive
+  // Sessions stehen dadurch automatisch oben, inaktive folgen darunter.
   const matchesFilter = row => {
-    if (filterMode === 'active' && activityFor(row, $liveMap.get(), $activity.get()).kind === 'idle') {
-      return false
-    }
-
     if (!needle) {
       return true
     }
@@ -5423,16 +5437,27 @@ function SessionsPane() {
     return [row.title, row.branch, row.preview].some(value => String(value || '').toLowerCase().includes(needle))
   }
 
-  const filterActive = Boolean(needle) || filterMode !== 'all'
+  // Nur die Textsuche gilt noch als „aktiver Filter" (Zähler, Leerzustand).
+  const filterActive = Boolean(needle)
   const filteredSections = useMemo(() => {
-    if (!filterActive) {
+    if (!needle && filterMode !== 'active') {
       return sections
     }
 
+    const activityNow = $activity.get()
+    const sortActive = filterMode === 'active'
+
     return sections
-      .map(section => ({ ...section, items: section.items.filter(matchesFilter) }))
+      .map(section => {
+        const items = section.items.filter(matchesFilter)
+        const ordered = sortActive
+          ? [...items].sort((a, b) => lastActivityAt(b, liveForSort, activityNow) - lastActivityAt(a, liveForSort, activityNow))
+          : items
+
+        return { ...section, items: ordered }
+      })
       .filter(section => section.items.length > 0)
-  }, [sections, filterActive, needle, filterMode])
+  }, [sections, needle, filterMode, liveForSort])
 
   // Ein kurzer "Gelandet"-Flash auf der Zeile zeigt deutlich, wo eine Session
   // nach einem Drag&Drop angekommen ist (Zuordnung/Projekt-Verschieben).

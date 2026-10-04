@@ -11,8 +11,11 @@ zugesagt.
   Tabs auf einen Projekt-Header ruft `session.workspace.move` auf — echte
   Verschiebung, nicht nur Anzeige. Hover-Hervorhebung + Inline-Zielhinweis +
   „Gelandet"-Flash machen den DnD-Ausgang vorab und danach sichtbar.
-- **Filter-Leiste** (v1.14.0): Textsuche + Schnellfilter (Alle/Angepinnt/
-  Aktiv) über der Liste, clientseitig, eigener Leerzustand bei 0 Treffern.
+- **Filter-Leiste** (v1.14.0, v1.17.1): Textsuche + Schnellfilter
+  (Alle/Aktiv) über der Liste, clientseitig, eigener Leerzustand bei 0
+  Treffern; `Aktiv` sortiert seit v1.17.1 alles absteigend nach der letzten
+  Aktivität (früher: blendete Inaktive aus), `Alle` bleibt die
+  Startzeit-Reihenfolge.
 - **Tab-Selektor-Modus** (v1.14.0): `tabs.asTabSelector` blendet die native
   Content-Tab-Leiste für Session-Tabs aus (`:has()`-Selektor), wenn
   Liste/Grid dieselbe Navigation schon abdecken.
@@ -96,6 +99,6 @@ und docs/plans/2026-10-04-info-dichte-abstufung.md.
 | Kontext-Donut | Der Wert sitzt im Loch; bei drei Stellen (100 %) berührt er den Ring (Text-Schatten hält ihn lesbar). |
 | Projekt-Label | Kommt aus `projects.list` (60-s-Cache) — ein frisch angelegtes Projekt kann bis zu 60 s als Ordnername statt Projektname erscheinen. |
 | Tab-Selektor-Modus | `tabs.asTabSelector` blendet **jeden** Streifen mit Session-Tabs aus — auch gestapelte Tabs im Content-Bereich (`tabs.openIntent: 'stack'`/`'tab'`) verlieren damit ihre eigene Leiste; bewusster Trade-off laut Anforderung. |
-| Filter-Leiste | Rein clientseitig, nicht persistiert; filtert nur die bereits geladenen Sessions (`tabs.maxItems`), kein Server-Side-Search. |
+| Filter-Leiste | Rein clientseitig, nicht persistiert; wirkt nur auf die bereits geladenen Sessions (`tabs.maxItems`), kein Server-Side-Search. „Aktiv" sortiert clientseitig nach letzter Aktivität (Bestand ohne Live-Signal: Startzeit). |
 | `session.list`-Payload | Liefert dem Plugin nur `id/title/preview/started_at/message_count/source` — Branch/`tool_call_count` fehlen (Modell + „zuletzt aktiv“ werden für Live-Sessions aus `session.active_list` nachgereicht). |
 
