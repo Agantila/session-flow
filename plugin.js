@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.16.2'
+const VERSION = '1.17.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1395,10 +1395,27 @@ async function refreshSessions() {
       const limit = Math.max(10, Math.min(200, Number(readSetting('tabs', 'maxItems')) || 60))
       const result = await host.request('session.list', { limit, include_hidden: false })
       const raw = Array.isArray(result?.sessions) ? result.sessions : Array.isArray(result) ? result : []
+      const pinned = new Set($pinnedRows.get().map(row => row.id))
       const rows = raw
         .map(normalizeRow)
+        .map(row => ({ ...row, pinned: row.pinned || pinned.has(row.id) }))
         .filter(row => row.id)
         .sort((a, b) => b.startedAt - a.startedAt)
+
+      // Gepinnte Sessions, die das session.list-Limit verpasst haben (alt und
+      // tief unten), aus dem REST-Spiegel ergänzen — ein Pin heißt „immer
+      // erreichbar", genau wie in der Desktop-Sidebar (pageWindow-Backfill).
+      const seen = new Set(rows.map(row => row.id))
+      const missed = $pinnedRows.get()
+        .filter(row => !seen.has(row.id))
+        .map(normalizeRow)
+        .map(row => ({ ...row, pinned: true }))
+        .filter(row => row.id)
+
+      if (missed.length) {
+        rows.push(...missed.sort((a, b) => b.startedAt - a.startedAt))
+      }
+
       $sessions.set(rows)
       $sessionsError.set(null)
       scheduleContextRefresh(1200)
@@ -1414,6 +1431,56 @@ async function refreshSessions() {
 
 let refreshDebounce = 0
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Angepinnt-Status: `session.list` liefert KEIN `pinned` pro Zeile (der
+// Gateway-RPC baut die Rows ohne die Flagge — dieselbe Wire-Lücke wie ehemals
+// bei cwd). Die App selbst liest die Pins über REST `GET /api/sessions` (liefert
+// `pinned: bool` je Zeile inkl. include_pinned-Backfill) und schreibt sie über
+// PATCH. Wir spiegeln den Lese-Weg: einmalige Abfrage der gepinnten IDs über
+// `window.hermesDesktop.api` (Plugin-Renderer hat die Bridge), gemerged in
+// jede session.list-Seite. Fällt die Bridge aus (ältere Shell), bleibt
+// `pinned` schlicht false — der Filter zeigt dann nichts, statt zu crashen.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const $pinnedRows = atom([]) // volle REST-Rows der gepinnten Sessions (gespiegelt)
+
+let pinnedRefreshInFlight = null
+let pinnedSucceededAt = 0
+
+/** Gepinnte Session-IDs über REST `GET /api/sessions` nachziehen. */
+function refreshPinnedIds() {
+  if (pinnedRefreshInFlight) {
+    return pinnedRefreshInFlight
+  }
+
+  pinnedRefreshInFlight = (async () => {
+    try {
+      const bridge = globalThis.window?.hermesDesktop
+
+      if (!bridge || typeof bridge.api !== 'function') {
+        return
+      }
+
+      // order=created&limit=1 hält die Seite minimal; der Endpoint verdrahtet
+      // include_pinned=True serverseitig fest und fügt ALLE gepinnten Rows
+      // wieder an — genau der Trick, den auch `hermes sessions pinned` nutzt.
+      const result = await bridge.api({ path: '/api/sessions?limit=1&offset=0&order=created', timeoutMs: 8000 })
+      const rows = (Array.isArray(result?.sessions) ? result.sessions : [])
+        .filter(row => row && row.pinned === true && row.id)
+        .map(row => ({ ...row, id: String(row.id) }))
+
+      $pinnedRows.set(rows)
+      pinnedSucceededAt = Date.now()
+    } catch {
+      // Bridge nicht da / Netzwerk — alter Stand bleibt, kein Crash.
+    } finally {
+      pinnedRefreshInFlight = null
+    }
+  })()
+
+  return pinnedRefreshInFlight
+}
+
 function scheduleSessionsRefresh(delay = 1500) {
   window.clearTimeout(refreshDebounce)
   refreshDebounce = window.setTimeout(() => {
@@ -1424,6 +1491,11 @@ function scheduleSessionsRefresh(delay = 1500) {
     // aktuell; der Inflight-Guard + 15-s-Mindestabstand verhindern Spam.
     if (Date.now() - projectsListSucceededAt > 15_000) {
       void refreshProjectsList()
+    }
+    // Angepinnt-Spiegel ebenso nachziehen (PIN-Schreibzugriffe erfolgen über
+    // den SDK-Speicher der App; der REST-Flaggen-Stand braucht einen Moment).
+    if (Date.now() - pinnedSucceededAt > 5_000) {
+      void refreshPinnedIds()
     }
   }, delay)
 }
@@ -1719,6 +1791,25 @@ function buildSections() {
   const assigned = new Set()
   const sections = []
 
+  // Angepinnte Sessions bilden IMMER die erste Sektion — wie „Pinned" in
+  // Hermes Desktops Sidebar. Eine gepinnte Zeile erscheint ausschließlich
+  // hier, nicht zusätzlich in Datums-/Quell-/Projekt-Gruppen. Der
+  // „Angepinnt"-Schnellfilter der Filterleiste ist dafür entfallen.
+  const pinnedItems = filtered.filter(row => row.pinned)
+  const pinnedIds = new Set(pinnedItems.map(row => row.id))
+
+  if (pinnedItems.length) {
+    sections.push({
+      key: 'pinned',
+      kind: 'pinned',
+      title: null,
+      titleKey: 'pinnedSection',
+      color: null,
+      collapsed: Boolean(groupsState.collapsed['pinned']),
+      items: pinnedItems
+    })
+  }
+
   if (groupsCfg.enabled) {
     for (const group of groupsState.groups) {
       const items = []
@@ -1743,7 +1834,7 @@ function buildSections() {
     }
   }
 
-  const rest = filtered.filter(row => !assigned.has(row.id))
+  const rest = filtered.filter(row => !assigned.has(row.id) && !pinnedIds.has(row.id))
 
   if (groupsCfg.enabled && groupsCfg.autoMode === 'date' && rest.length) {
     const buckets = { today: [], yesterday: [], week: [], older: [] }
@@ -1840,15 +1931,19 @@ function buildSections() {
       })
     }
   } else if (rest.length && (groupsCfg.showUngrouped || sections.length === 0)) {
-    sections.push({
-      key: 'ungrouped',
-      kind: 'ungrouped',
-      title: null,
-      titleKey: 'ungrouped',
-      color: null,
-      collapsed: false,
-      items: rest
-    })
+    // „Nur angepinnt"-Modus: verschwindet der Rest komplett, bleibt die
+    // Angepinnt-Sektion trotzdem sichtbar — sie wurde oben bereits gepusht.
+    if (rest.length) {
+      sections.push({
+        key: 'ungrouped',
+        kind: 'ungrouped',
+        title: null,
+        titleKey: 'ungrouped',
+        color: null,
+        collapsed: false,
+        items: rest
+      })
+    }
   }
 
   return sections
@@ -2105,6 +2200,10 @@ const EN = {
   noProject: 'No project',
   newSessionHere: 'New session in this project',
   dropHereHint: label => `→ Move to "${label}"`,
+  pinnedSection: 'Pinned',
+  pinnedSectionTip: 'Pinned sessions — drop here to pin',
+  dropPinHint: () => '→ Pin',
+  unpinAll: 'Unpin all',
 
   // Settings — about
   secAbout: 'About',
@@ -2553,6 +2652,10 @@ const DE = {
   noProject: 'Kein Projekt',
   newSessionHere: 'Neue Session in diesem Projekt',
   dropHereHint: label => `→ Nach „${label}" verschieben`,
+  pinnedSection: 'Angepinnt',
+  pinnedSectionTip: 'Angepinnte Sessions — hier ablegen zum Anpinnen',
+  dropPinHint: () => '→ Anpinnen',
+  unpinAll: 'Alle lösen',
 
   secAbout: 'Über',
   secAboutDesc: 'Version, Zähler und die Zurücksetzen-Aktionen.',
@@ -4262,10 +4365,11 @@ function Caret({ open }) {
 // UI — Sessions-Pane (Tabs + Gruppen)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive, density }) {
+function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, dropActive, density }) {
   const open = !section.collapsed
   const color = section.color || null
   const isProject = section.kind === 'project'
+  const isPinned = section.kind === 'pinned'
   const title = section.titleKey ? t(section.titleKey) : section.title || t('ungrouped')
   const collapsible = section.kind !== 'ungrouped'
   const editable = section.kind === 'manual'
@@ -4276,7 +4380,7 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive, de
   // etwas Echtes zu sagen hat. Nie erfunden: ohne Treffer bleibt die Zeile weg.
   const facts = []
 
-  if (showDetail && density === 'detailed') {
+  if (showDetail && density === 'detailed' && !isPinned) {
     const pinnedCount = section.items.filter(row => row.pinned).length
     const busyCount = section.items.filter(row =>
       ['thinking', 'streaming', 'tool', 'working'].includes(activityFor(row, $liveMap.get(), $activity.get()).kind)
@@ -4305,7 +4409,15 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive, de
   // bei manuellen Gruppen, sonst unser Ordner-Icon mit Auf/Zu-Wechsel.
   const customIcon = isProject ? section.icon || null : null
 
-  const lead = isProject
+  // Angepinnt-Sektion: Pin-Glyph als Lead, KEIN Caret — die Zeilen tragen
+  // ihr Order/Anpinnen-Symbol bereits; ein zusätzliches Auf/Zu-Dreieck wäre
+  // doppelt. Eingeklappt übernimmt das Pin-Icon selbst die Auf/Zu-Optik.
+  const lead = isPinned
+    ? jsx('span', {
+        className: 'sf-group-lead-icon sf-group-lead-pin',
+        children: jsx(Codicon, { name: open ? 'pin' : 'pin', size: '0.8rem' })
+      })
+    : isProject
     ? customIcon
       ? jsx('span', {
           className: 'sf-group-lead-icon',
@@ -4342,6 +4454,7 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive, de
       'sf-group-head',
       section.kind === 'ungrouped' && 'sf-group-unassigned',
       isProject && 'sf-group-project',
+      isPinned && 'sf-group-pinned',
       subtext && 'sf-group-twoline'
     ),
     'data-drop': dropActive ? 'true' : undefined,
@@ -4355,13 +4468,13 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive, de
     onDoubleClick: editable ? () => onEdit() : undefined,
     role: collapsible ? 'button' : undefined,
     'aria-expanded': collapsible ? open : undefined,
-    title: isProject ? section.cwd || title : editable ? t('editGroup') : open ? t('collapse') : t('expand'),
+    title: isProject ? section.cwd || title : isPinned ? t('pinnedSectionTip') : editable ? t('editGroup') : open ? t('collapse') : t('expand'),
     children: [
-      jsx('span', { className: 'sf-group-caret', children: jsx(Caret, { open }) }),
+      isPinned ? null : jsx('span', { className: 'sf-group-caret', children: jsx(Caret, { open }) }),
       lead,
       nameBlock,
       dropActive
-        ? jsx('span', { className: 'sf-group-drophint', children: t('dropHereHint', title) })
+        ? jsx('span', { className: 'sf-group-drophint', children: t(isPinned ? 'dropPinHint' : 'dropHereHint', title) })
         : null,
       isProject && onNewHere
         ? jsx('span', {
@@ -4373,7 +4486,17 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, dropActive, de
             title: t('newSessionHere'),
             children: jsx(Codicon, { name: 'add', size: '0.75rem' })
           })
-        : editable
+        : isPinned
+          ? jsx('span', {
+              className: 'sf-group-actions',
+              title: t('unpinAll'),
+              onClick: event => {
+                event.stopPropagation()
+                onPinToggle && onPinToggle()
+              },
+              children: jsx(Codicon, { name: 'clear-all', size: '0.75rem' })
+            })
+          : editable
           ? jsx('span', {
               className: 'sf-group-actions',
               onClick: event => {
@@ -4469,12 +4592,17 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         key: 'pin',
         onSelect: () => {
           try {
-            host.sessions.pin(row.id, true)
+            host.sessions.pin(row.id, !row.pinned)
           } catch (error) {
             host.notifyError(error, t('pin'))
           }
+          // Eigener REST-Spiegel sofort nachziehen, damit der Pin-Filter ohne
+          // Verzögerung reagiert (der SDK-Store schreibt die App-Ansicht, unsere
+          // Zeilen bekommen die Flagge sonst erst beim nächsten Refreshtakt).
+          pinnedSucceededAt = 0
+          void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
         },
-        children: t('pin')
+        children: row.pinned ? t('unpin') || 'Unpin' : t('pin')
       })
     )
   }
@@ -5284,10 +5412,6 @@ function SessionsPane() {
   // wird persistiert — ein Pane-Reload setzt sie zurück, genau wie die App.
   const needle = filterText.trim().toLowerCase()
   const matchesFilter = row => {
-    if (filterMode === 'pinned' && !row.pinned) {
-      return false
-    }
-
     if (filterMode === 'active' && activityFor(row, $liveMap.get(), $activity.get()).kind === 'idle') {
       return false
     }
@@ -5424,7 +5548,11 @@ function SessionsPane() {
   // Containment-Check) treibt die Hervorhebung + den Zielhinweis im Header,
   // damit beim Ziehen sofort klar ist, was ein Loslassen bewirkt.
   const sectionHandlers = section => {
-    const canDrop = section.kind === 'manual' || section.kind === 'ungrouped' || (section.kind === 'project' && section.cwd)
+    const canDrop =
+      section.kind === 'manual' ||
+      section.kind === 'ungrouped' ||
+      section.kind === 'pinned' ||
+      (section.kind === 'project' && section.cwd)
 
     if (!canDrop) {
       return {}
@@ -5463,6 +5591,23 @@ function SessionsPane() {
           event.dataTransfer?.getData('text/session-flow-session') || event.dataTransfer?.getData('text/plain')
 
         if (!sessionId) {
+          return
+        }
+
+        if (section.kind === 'pinned') {
+          const targetRow = rows.find(entry => entry.id === sessionId)
+
+          if (targetRow && !targetRow.pinned) {
+            try {
+              host.sessions.pin(sessionId, true)
+            } catch {
+              /* SDK-Pin fehlgeschlagen — Refresh zieht den Rest nach */
+            }
+            pinnedSucceededAt = 0
+            void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
+            flashJustMoved(sessionId)
+          }
+
           return
         }
 
@@ -5513,6 +5658,20 @@ function SessionsPane() {
             },
             onEdit: () => editGroup(section),
             onNewHere: section.kind === 'project' ? newSessionHere : undefined,
+            onPinToggle:
+              section.kind === 'pinned'
+                ? () => {
+                    for (const row of section.items) {
+                      try {
+                        host.sessions.pin(row.id, false)
+                      } catch {
+                        /* einzelne Failed-Pins bleiben, Refresh räumt auf */
+                      }
+                    }
+                    pinnedSucceededAt = 0
+                    void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
+                  }
+                : undefined,
             dropActive: dragOverKey === section.key
           }),
           showStack ? jsx(StackLayers, { key: 'stack', style: stackStyle, color: section.color }) : null,
@@ -5728,7 +5887,6 @@ function SessionsPane() {
         onChange: setFilterMode,
         options: [
           { id: 'all', label: t('filterAll') },
-          { id: 'pinned', label: t('filterPinned') },
           { id: 'active', label: t('filterActive') }
         ],
         value: filterMode
@@ -7242,6 +7400,7 @@ export default {
 
 
     // 3) Session-Daten: initial + bei Events + Polls.
+    void refreshPinnedIds()
     void refreshSessions()
     void pollLiveSessions()
     void refreshProjectsList()

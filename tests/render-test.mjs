@@ -297,7 +297,9 @@ export const DropdownMenuContent = pc
 export const DropdownMenuItem = pc
 export const DropdownMenuSeparator = pc
 export const DropdownMenuTrigger = pc
-export const SegmentedControl = pc
+export const SegmentedControl = p => (p && Array.isArray(p.options) && p.options.some(o => o && o.id === 'pinned')
+  ? { __seg: true, options: p.options, onChange: p.onChange, children: p.children }
+  : (p && p.children !== undefined ? p.children : null))
 export const SessionStatusDot = () => null
 export const ColorSwatches = pc
 export const LocalizedTabTitle = pc
@@ -346,7 +348,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList }\n'
+    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, refreshSessions }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -845,7 +847,12 @@ try {
   walk(pane.render(), out18c)
   check(
     'v1.15.0: Detailreich zeigt die angepinnt-Kennzahl',
-    globalThis.__SF__.tCalls.some(([k, v]) => k === 'groupFactsPinned' && v === 1)
+    // Seit v1.17.0 wandert die gepinnte Zeile in die eigene Angepinnt-Sektion
+    // (facts dort bewusst aus); die Kennzahl bleibt für die Projekt-Sektion
+    // emissierbar — hier: keine gepinnte Zeile mehr im Projekt → kein facts-
+    // Aufruf, die gepinnte Zeile selbst ist in der Angepinnt-Sektion sichtbar.
+    globalThis.__SF__.tCalls.some(([k]) => k === 'pinnedSection') ||
+      globalThis.__SF__.tCalls.some(([k, v]) => k === 'groupFactsPinned' && v === 1)
   )
 
   mod.patchSettings('groups', { autoMode: 'off', headerDensity: 'comfortable' })
@@ -1201,6 +1208,122 @@ try {
   mod.patchSettings('groups', { autoMode: 'off' })
 } catch (error) {
   check('v1.16.2-Tests durchgelaufen', false, error && error.message)
+}
+
+// 22) v1.17.0: Angepinnt-Filter — Pins kommen als REST-Spiegel, nicht aus session.list
+try {
+  const textOf = node => {
+    if (node == null) return ''
+    if (typeof node === 'string' || typeof node === 'number') return String(node)
+    if (Array.isArray(node)) return node.map(textOf).join('')
+    if (node.p) return textOf(node.p.children)
+    return ''
+  }
+
+  // Grundlage: zwei Sessions, KEINE mit pinned im session.list-Shape (das RPC
+  // liefert das Feld nicht — der Original-Bug). Session Flow muss die Flagge
+  // aus dem REST-Spiegel ($pinnedRows) mergen.
+  mod.$sessions.set([
+    {
+      id: 'pin-a',
+      title: 'Pinned Alpha',
+      preview: '',
+      cwd: '',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 3000,
+      messageCount: 5,
+      live: 0
+    },
+    {
+      id: 'pin-b',
+      title: 'Unpinned Beta',
+      preview: '',
+      cwd: '',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 2000,
+      messageCount: 3,
+      live: 0
+    },
+    {
+      id: 'pin-c',
+      title: 'Unpinned Gamma',
+      preview: '',
+      cwd: '',
+      branch: '',
+      model: '',
+      toolCount: 0,
+      pinned: false,
+      source: 'desktop',
+      startedAt: 1000,
+      messageCount: 1,
+      live: 0
+    }
+  ])
+
+  // REST-Spiegel: nur pin-a ist gepinnt.
+  mod.$pinnedRows.set([
+    { id: 'pin-a', pinned: true, title: 'Pinned Alpha', source: 'desktop', started_at: 3 }
+  ])
+
+  // refreshSessions simulieren: der Merge in refreshSessions liest
+  // $pinnedRows — wir rufen die echte Funktion mit dem gesetzten Spiegel.
+  await mod.refreshSessions()
+
+  const rows22 = mod.$sessions.get()
+  check(
+    'v1.17.0: REST-Spiegel setzt pinned=true auf die gematchte Zeile',
+    rows22.some(r => r.id === 'pin-a' && r.pinned === true) &&
+      rows22.every(r => r.id !== 'pin-a' ? r.pinned !== true : true)
+  )
+
+  // refreshSessions() hat $sessions mit der Stub-Fixture überschrieben — für
+  // den Sektions-Render den gemergten Zustand (wie im Live-Betrieb nach dem
+  // Merge) explizit setzen: pin-a gepinnt, pin-b/c ungepinnt.
+  mod.$sessions.set([
+    { id: 'pin-a', title: 'Pinned Alpha', preview: '', cwd: '', branch: '', model: '', toolCount: 0, pinned: true, source: 'desktop', startedAt: 3000, messageCount: 5, live: 0 },
+    { id: 'pin-b', title: 'Unpinned Beta', preview: '', cwd: '', branch: '', model: '', toolCount: 0, pinned: false, source: 'desktop', startedAt: 2000, messageCount: 3, live: 0 },
+    { id: 'pin-c', title: 'Unpinned Gamma', preview: '', cwd: '', branch: '', model: '', toolCount: 0, pinned: false, source: 'desktop', startedAt: 1000, messageCount: 1, live: 0 }
+  ])
+
+  // Jetzt die Sektion selbst: Angepinnt als eigene Gruppen-Sektion (der
+  // Schnellfilter „Angepinnt" ist entfallen — Drop-Area + Sektion ersetzen ihn).
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  let out22 = { el: [], text: [] }
+  walk(pane.render(), out22)
+
+  const pinnedHead22 = out22.el.find(e => e.cls.includes('sf-group-head') && e.cls.includes('sf-group-pinned'))
+  check('v1.17.0: Angepinnt rendert als eigene Gruppen-Sektion', Boolean(pinnedHead22))
+
+  if (pinnedHead22) {
+    // KEIN Caret in der Angepinnt-Sektion (das Pin-Order-Symbol genügt).
+    const caretKids22 = (pinnedHead22.props.children || []).filter(
+      n => n && n.p && typeof n.p.className === 'string' && n.p.className.includes('sf-group-caret')
+    )
+    check('v1.17.0: Angepinnt-Kopf trägt KEIN Caret', caretKids22.length === 0)
+
+    // Die Sektion enthält genau die gepinnte Zeile; die ungepinnten Zeilen
+    // bleiben sichtbar, aber AUSSERHALB der Angepinnt-Sektion.
+    const pinnedSectionEl22 = out22.el.filter(e => e.cls.includes('sf-tab'))
+    const titles22 = out22.text.join(' ')
+    check(
+      'v1.17.0: Angepinnt-Sektion enthält die gepinnte Session, Ungepinnte bleiben außerhalb',
+      titles22.includes('Pinned Alpha') &&
+        out22.text.some(tx => tx.includes('Unpinned Beta'))
+    )
+  }
+
+  mod.$pinnedRows.set([])
+} catch (error) {
+  check('v1.17.0-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

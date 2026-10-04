@@ -5,6 +5,39 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-10-05
+
+### Added
+- **Angepinnt als eigene Gruppen-Sektion** — gepinnte Sessions erscheinen
+  jetzt IMMER als erste, einklappbare Sektion (wie „Pinned" in Hermes
+  Desktops Sidebar), statt nur über den bisherigen (leeren) Schnellfilter
+  erreichbar zu sein. Eine gepinnte Zeile erscheint ausschließlich dort,
+  nicht zusätzlich in Datums-/Quell-/Projekt-Gruppen.
+- **Drop-Area „Anpinnen"**: Beim Ziehen einer Zeile in List/Grid-View wird
+  die Angepinnt-Sektion zur Drop-Zone (Highlight + „→ Anpinnen"-Hinweis);
+  Loslassen pinnt die Session wirklich (`host.sessions.pin`) und zieht den
+  REST-Spiegel sofort nach. Gleicher Wirksamkeits-Weg wie der
+  Kontextmenü-Eintrag „Anpinnen/Loslösen".
+- Pin-Datenquelle (nun wirklich funktional): `session.list` liefert kein
+  `pinned` pro Zeile — die Flagge wird über den REST-Spiegel
+  (`GET /api/sessions`, inkl. Backfill gepinnter Rows jenseits des
+  Listen-Limits) in `refreshSessions()` gemerged; Spiegel-Refresh beim
+  Laden, nach Session-Aktualisierungen (5 s Mindestabstand) und sofort
+  nach jeder Pin-Aktion.
+- Kontextmenü: „Anpinnen"/„Loslösen" je aktuellem Zustand der Zeile.
+
+### Changed
+- Der Schnellfilter „Angepinnt" in der Filterleiste ist ENTFERNT (die
+  Sektion + Drop-Area ersetzen ihn); übrig bleiben „Alle"/„Aktiv" + Suche.
+- Angepinnt-Sektionskopf: KEIN Caret-Pfeil — das Pin-Glyph übernimmt die
+  Auf/Zu-Optik, ein zusätzliches Dreieck wäre doppelt (Anforderung).
+  Hover-Action „Alle lösen" (clear-all-Icon) im Kopf.
+
+### Fixed
+- „Angepinnt"-Filter war leer, weil `row.pinned` aus `session.list` immer
+  `false` war (Wire-Feld fehlt — gleiche Ursache wie der ehemalige
+  cwd/Projekt-Gruppierungs-Bug in 1.16.2).
+
 ## [1.16.2] — 2026-10-04
 
 ### Fixed
