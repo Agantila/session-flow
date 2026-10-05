@@ -1,6 +1,9 @@
 # „+"-Sessions landen im Projekt; DnD-Verschiebungen aktualisieren sofort
 
-- **Status**: Done
+- **Status**: Superseded by `2026-10-05-new-session-project-anchor-v2.md`
+  (dieser Plan rief `session.workspace.move` auf — diese Gateway-RPC
+  existiert nicht; der Fix persistierte deshalb nie und wurde in v1.19.1
+  durch den Aufruf von `session.cwd.set` ersetzt).
 - **Erstellt**: 2026-10-05
 - **Abgeschlossen**: 2026-10-05
 - **Betrifft**: `plugin.js` (`startNewSessionInCwd`, `moveSessionRow`,

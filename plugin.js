@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.19.0'
+const VERSION = '1.19.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1391,6 +1391,43 @@ function pruneSessionProjectSeeds() {
 }
 
 /**
+ * Zu einem stored session_key die passende Live-session_id (In-Memory-sid)
+ * finden. Nötig für `session.cwd.set`, das ausschließlich mit der
+ * In-Memory-ID arbeitet (vgl. `_sess_nowait` im Gateway). Reihenfolge:
+ *   1) `$liveMap` (schon gepollt) — der häufige Fall.
+ *   2) frischer `session.active_list`-RPC — fängt den Timing-Fall direkt
+ *      nach `session.create`/vor dem nächsten Poll ab.
+ *   3) null — die Session ist nicht live; `session.cwd.set` würde 4001
+ *      zurückgeben. Caller entscheidet, ob er die Zuordnung nur optisch
+ *      via Overlay-Seed anwendet und einen Hinweis zeigt.
+ */
+async function findLiveSessionIdByKey(storedId) {
+  const needle = String(storedId || '').trim()
+  if (!needle) return null
+
+  const live = $liveMap.get()
+  for (const [runtimeId, info] of Object.entries(live)) {
+    if (info && String(info.storedId || '') === needle) {
+      return String(runtimeId)
+    }
+  }
+
+  try {
+    const result = await host.request('session.active_list', {})
+    const items = Array.isArray(result?.sessions) ? result.sessions : []
+    for (const item of items) {
+      if (String(item?.session_key || '') === needle) {
+        return String(item?.id || '') || null
+      }
+    }
+  } catch (error) {
+    console.warn(`[${ID}] session.active_list lookup failed`, error)
+  }
+
+  return null
+}
+
+/**
  * Welchem Projekt eine Session gehört — schlägt direkt im Hermes-Projekt-
  * Baum nach (`projects.tree` → `ProjectTreeNode.sessionIds`), statt die
  * Zuordnung client-seitig nachzubauen (siehe `refreshProjectsList()` oben
@@ -1794,6 +1831,19 @@ async function resolveNewProjectSessionCwd() {
 async function startNewProjectSession() {
   try {
     const target = await resolveNewProjectSessionCwd()
+
+    // Sichtbarer Hinweis, wenn weder Scope noch active_id noch letzte Session
+    // einen Projekt-Anker liefern. Ohne Toast landete die Session stillschweigend
+    // in „Kein Projekt" — die Hauptbeschwerde aus v1.17.3/v1.19.0. Jetzt sieht
+    // der User sofort, dass der Header-Scope greifen muss.
+    if (!target.cwd) {
+      host.notify({
+        kind: 'info',
+        message: CTX?.i18n?.t('noProjectAnchor')
+          || 'Neue Session ohne Projekt-Anker — bitte Projekt in der Kopfzeile wählen.'
+      })
+    }
+
     await startNewSessionInCwd(target.cwd, target.label)
   } catch (error) {
     host.notifyError(error, CTX?.i18n?.t('newSession') || 'Neue Session')
@@ -1821,25 +1871,33 @@ async function startNewSessionInCwd(cwd, label) {
     }
 
     const created = await host.request('session.create', params)
-    const createdId = String(created?.stored_session_id || created?.session_id || '').trim()
+    const runtimeId = String(created?.session_id || '').trim()
+    const createdId = String(created?.stored_session_id || runtimeId || '').trim()
 
     if (!createdId) {
       throw new Error('session.create lieferte keine Session-ID')
     }
 
     // Sitzungssicher im Projekt verankern: session.create legt die DB-Row
-    // lazy an, und ein dort fehlendes cwd lässt die Session im Projekt-Baum
-    // unter den Radar fallen („Kein Projekt", live beobachtet: Row mit leerem
-    // cwd trotz gesetztem Create-Param). Der explizite Move auf dasselbe
-    // Ziel schreibt cwd/Repo-Root persistent in die Row — derselbe RPC, den
-    // auch Drag&Drop auf einen Projekt-Header benutzt; bei identischem Pfad
-    // ist er ein reines No-op-Update.
-    if (params.cwd) {
+    // lazy an (erst beim 1. Prompt via _ensure_session_db_row), und ohne
+    // `explicit_cwd` landet dort cwd=NULL → Session hängt dauerhaft unter
+    // „Kein Projekt". `session.cwd.set` schreibt cwd + git_repo_root sofort
+    // in die Row — derselbe Server-Pfad, den auch die Hermes-Desktop-Sidebar
+    // für Workspace-Wechsel nutzt. WICHTIG: `session_id` ist hier die
+    // IN-MEMORY-ID (8-stellig), nicht der 24-stellige stored_session_id;
+    // _sess_nowait im Gateway schlägt genau auf diesem Feld nach.
+    // Historische Notiz: v1.17.3/1.19.0 riefen `session.workspace.move` auf
+    // mit `session_key` — Methode existiert im Gateway nicht, Call lief in
+    // ein stummes catch{}, Zuordnung wurde nie persistiert (live in der DB
+    // beobachtet: `+`-Sessions mit 30+ Turns ohne cwd/git_repo_root).
+    if (params.cwd && runtimeId) {
       try {
-        await host.request('session.workspace.move', { cwd: params.cwd, session_key: createdId })
-      } catch {
-        // Best-effort: ohne Move bleibt die Zuordnung dem lazy Persist
-        // überlassen — kein Harter Fehler, die Session ist trotzdem offen.
+        await host.request('session.cwd.set', { cwd: params.cwd, session_id: runtimeId })
+      } catch (error) {
+        // Kein harter Fehler: die Session ist bereits offen und nutzbar.
+        // Nicht mehr lautlos — ein Logging-Hinweis fängt künftige Vertrags-
+        // brüche im Gateway (umbenannte RPC, geänderte Param-Namen) früh ab.
+        console.warn(`[${ID}] session.cwd.set nach session.create fehlgeschlagen`, error)
       }
 
       // Live-Overlay-Seed: die neue Session hat 0 Turns → projects.tree
@@ -3573,6 +3631,8 @@ const EN = {
   glassScopeStatusbar: 'Status bar items',
   glassScopeStatusbarDesc: 'Items in the bar along the bottom edge.',
   newSession: 'New session',
+  noProjectAnchor: 'New session has no project anchor — pick a project in the header to anchor it.',
+  moveSessionNotLive: 'Assignment is visible — permanent only after the session is opened.',
   viewSwitch: 'Switch view (list/grid)',
   tabsView: 'View',
   tabsViewDesc: 'Show sessions as a compact list or as grid cards.',
@@ -4124,6 +4184,8 @@ const DE = {
   glassScopeStatusbar: 'Statusleisten-Einträge',
   glassScopeStatusbarDesc: 'Einträge in der Leiste am unteren Rand.',
   newSession: 'Neue Session',
+  noProjectAnchor: 'Neue Session ohne Projekt-Anker — bitte Projekt in der Kopfzeile wählen.',
+  moveSessionNotLive: 'Zuordnung sichtbar — dauerhaft erst nach dem Öffnen der Session.',
   viewSwitch: 'Ansicht wechseln (Liste/Grid)',
   tabsView: 'Ansicht',
   tabsViewDesc: 'Sessions als kompakte Liste oder als Grid-Karten anzeigen.',
@@ -6457,7 +6519,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
 // Spiegel der Desktop-Aktionen, soweit das Gateway sie für Plugins anbietet:
 // Terminal öffnen (IPC), Umbenennen (session.title), Anpinnen/Farbe (SDK),
 // Zweig erstellen (session.branch_stored), In Projekt verschieben
-// (session.workspace.move), Archivieren (session.archive), Löschen
+// (session.cwd.set), Archivieren (session.archive), Löschen
 // (session.delete — schließt eine laufende Runtime vorher) und ID kopieren.
 // Lokale App-Zustände (gelesen/ungelesen, Export) haben keine Plugin-Door und
 // bleiben bewusst außen vor.
@@ -6555,11 +6617,30 @@ async function moveSessionRow(row, project) {
     throw new Error(CTX?.i18n?.t('moveNoProjects') || 'Kein Projekt')
   }
 
-  await host.request('session.workspace.move', { cwd, session_key: row.id })
+  // `session.cwd.set` erwartet die IN-MEMORY-session_id (8-stellig). Die
+  // Session-Liste liefert `row.id` als stored_session_key (24-stellig) — ohne
+  // Mapping landete der Call in „session not found" (4001). Lookup geht
+  // zuerst über $liveMap (Poll-Snapshot), dann frisch über session.active_list.
+  // Für eine NICHT live aufgeschlagene Session persistieren wir die Zuordnung
+  // nicht (Gateway hat dafür keinen RPC) und zeigen stattdessen den Overlay-
+  // Seed + einen Hinweis-Toast; die Zuordnung wird dann beim nächsten Öffnen
+  // der Session dauerhaft, sobald sie live ist und einen cwd setzt.
+  const runtimeId = await findLiveSessionIdByKey(row.id)
+  let persisted = false
+
+  if (runtimeId) {
+    try {
+      await host.request('session.cwd.set', { cwd, session_id: runtimeId })
+      persisted = true
+    } catch (error) {
+      console.warn(`[${ID}] session.cwd.set bei Drag&Drop fehlgeschlagen`, error)
+    }
+  }
 
   // Live-Overlay-Seed: eine 0-Turn-Session taucht im Projekt-Baum nicht auf
   // (min_message_count=1) — der Seed hält sie in der Ziel-Sektion, bis der
-  // erste Turn persistiert und der Baum übernimmt.
+  // erste Turn persistiert und der Baum übernimmt. Auch bei nicht-live
+  // Sessions sinnvoll: sofortiges visuelles Feedback bis zum nächsten Open.
   const targetNode = $projectsList.get().find(entry => !entry.isNoProject && entry.path === cwd)
 
   if (targetNode) {
@@ -6581,7 +6662,19 @@ async function moveSessionRow(row, project) {
   // gleich aktualisiert").
   void invalidateProjectTree()
   scheduleSessionsRefresh(400)
-  host.notify({ kind: 'success', message: `${CTX?.i18n?.t('moveToProject') || 'Projekt'} · ${project.name || cwd}` })
+
+  if (persisted) {
+    host.notify({ kind: 'success', message: `${CTX?.i18n?.t('moveToProject') || 'Projekt'} · ${project.name || cwd}` })
+  } else {
+    // Overlay-only-Pfad: der User sieht die Zuordnung sofort, aber die DB
+    // behält bis zum nächsten Öffnen der Session noch den alten cwd. Ohne
+    // diesen Toast wäre „Reload und Zuordnung weg wieder" ein verdeckter Bug.
+    host.notify({
+      kind: 'info',
+      message: CTX?.i18n?.t('moveSessionNotLive')
+        || 'Zuordnung sichtbar — dauerhaft erst nach dem Öffnen der Session.'
+    })
+  }
 }
 
 async function archiveSessionRow(row) {
@@ -7398,7 +7491,7 @@ function SessionsPane() {
   }
 
   // Zieht bei einem Projekt-Header die echte Projekt-Verschiebung
-  // (session.workspace.move) — sichtbar UND wirksam, kein reines
+  // (session.cwd.set für die live Session) — sichtbar UND wirksam, kein reines
   // Anzeige-Umhängen. Manuelle/ungruppierte Header weisen weiterhin nur die
   // Firefox-artige Gruppe zu. Hover-Tracking (dragenter/dragleave mit
   // Containment-Check) treibt die Hervorhebung + den Zielhinweis im Header,

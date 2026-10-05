@@ -3,6 +3,46 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.19.1] — 2026-10-05
+
+### Fixed
+- **„+"-Button verankert die neue Session jetzt wirklich im Projekt**
+  (`startNewSessionInCwd`): Der dokumentierte Fix aus v1.17.3 rief
+  `session.workspace.move` auf — diese RPC existiert im Gateway nicht
+  (nur `session.cwd.set`), der Call lief in ein stummes `catch{}`, und die
+  Zuordnung wurde nie persistiert. Live in `~/.hermes/state.db` nachgewiesen:
+  neue „+"-Sessions mit 30+ Turns ohne `cwd` und ohne `git_repo_root`.
+  v1.19.1 ruft stattdessen den korrekt registrierten `session.cwd.set` mit
+  der IN-MEMORY-`session_id` auf (nicht dem stored_session_key — das war
+  der zweite Fehler) und schreibt cwd + Git-Repo-Root sofort über
+  `_set_session_cwd` in die Row.
+- **Drag&Drop auf Projekt-Header** (`moveSessionRow`): Gleicher
+  RPC-Fehler, derselbe Fix. Neu: Lookup `storedSessionKey → runtime sid`
+  via `$liveMap` + Fallback `session.active_list`-RPC, damit `session.cwd.set`
+  die richtige In-Memory-ID bekommt. Für eine NICHT live aufgeschlagene
+  Session hat der Gateway keinen Zuordnungs-RPC — hier bleibt der
+  Overlay-Seed für sofortiges optisches Feedback, und ein Info-Toast
+  (`moveSessionNotLive`) macht transparent, dass die Zuordnung erst beim
+  nächsten Öffnen der Session dauerhaft wird.
+- **Lautloser Fehlerpfad schließt sich**: Beide fehlgeschlagenen RPCs
+  landen nicht mehr in `catch {}`, sondern in `console.warn('[session-flow]
+  …')`. Ein künftiger Gateway-Vertragsbruch (umbenannte Methode, geänderte
+  Params) wird jetzt in der DevTools-Konsole sofort sichtbar — nicht erst
+  nach wochenlangem Rätselraten, warum Sessions „irgendwie Kein Projekt"
+  anzeigen.
+- **Sichtbarer Hinweis, wenn kein Projekt-Anker greift** (`noProjectAnchor`-
+  Toast): Steht der Header-Scope auf „Alle Projekte" und ist weder ein
+  `active_id` in `projects.list` noch eine zuordenbare `lastSessionCwd()`
+  verfügbar, zeigte v1.19.0 nichts an — die Session landete stillschweigend
+  in „Kein Projekt". v1.19.1 toastet: „Neue Session ohne Projekt-Anker —
+  bitte Projekt in der Kopfzeile wählen."
+
+### Tests
+- 11 neue Checks (`v1.19.1: …`): RPC-Name + Param-Form stabilisiert,
+  Overlay-Seed-Verhalten für beide Pfade, `findLiveSessionIdByKey`-
+  Fallback-Chain ($liveMap → session.active_list → null). Jede der drei
+  Bug-Oberflächen hat eine klare Regression-Guard-Zeile im Test-Harness.
+
 ## [1.19.0] — 2026-10-05
 
 ### Added

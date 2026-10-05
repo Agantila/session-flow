@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree }\n'
+    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -2080,6 +2080,222 @@ try {
   )
 } catch (error) {
   check('v1.19.0-Tests durchgelaufen', false, error && error.message)
+}
+
+// 26) v1.19.1: „+"-Button ruft `session.cwd.set` (nicht `session.workspace.move`)
+//     und übergibt die IN-MEMORY-session_id (nicht den stored_session_key).
+try {
+  // Projekt-Scope aus Desktop-localStorage simulieren.
+  globalThis.window = globalThis.window || {}
+  globalThis.window.localStorage = {
+    _data: { 'hermes.desktop.projectScope': 'p-fix' },
+    getItem(k) { return this._data[k] ?? null },
+    setItem(k, v) { this._data[k] = String(v) },
+    removeItem(k) { delete this._data[k] }
+  }
+  // Vor dem Setup pending setTimeouts aus früheren Tests clearen —
+  // scheduleSessionsRefresh(600) aus Test 25 kann noch pending sein und würde
+  // mitten in startNewProjectSession feuern (await host.request lässt die
+  // Microtask-Queue laufen), refreshProjectsList ruft projects.tree auf dem
+  // dann noch nicht gesetzten Test-Mock → leeres $projectsList → Seed-Lookup
+  // schlägt fehl. Default-Mock mit projects.tree-Antwort fängt das stabil ab.
+  const projectsTreeDefault = {
+    projects: [
+      { id: 'p-fix', label: 'FixProject', color: '#f00', icon: 'folder', isAuto: false, isNoProject: false, path: '/tmp/fix', sessionIds: [] }
+    ]
+  }
+  hostStub.request = async (method, params) => {
+    if (method === 'projects.tree') return projectsTreeDefault
+    if (method === 'projects.list') return { projects: [{ id: 'p-fix', name: 'FixProject', primary_path: '/tmp/fix' }], active_id: 'p-fix' }
+    if (method === 'session.list') return { sessions: [] }
+    if (method === 'session.active_list') return { sessions: [] }
+    return {}
+  }
+  // Pending Promise-Mikrotask-Chains flushen, damit anstehende setTimeouts
+  // einmal durchlaufen und $projectsList danach stabil auf unserem Zustand steht.
+  await new Promise(resolve => setTimeout(resolve, 10))
+  mod.$projectsList.set([
+    { id: 'p-fix', label: 'FixProject', path: '/tmp/fix', color: '#f00', icon: 'folder', isNoProject: false, kind: 'project' }
+  ])
+
+  const calls = []
+  const prev = hostStub.request
+  const prevNotify = hostStub.notify
+  const prevOpen = hostStub.openSession
+  const notifies = []
+  hostStub.notify = n => { notifies.push(n) }
+  hostStub.openSession = async () => {}
+  // projects.tree mitbedienen, damit invalidateProjectTree() $projectsList
+  // nicht nach dem Seed-Write wieder leert (Overlay-Seed wird vor dem
+  // Refresh gesetzt, aber der Snapshot für die Assertion kommt NACH dem
+  // await — refreshProjectsList darf also nicht in die leere Default-Antwort
+  // laufen und $projectsList = [] produzieren).
+  const projectsTreeResponse = projectsTreeDefault
+  hostStub.request = async (method, params) => {
+    calls.push({ method, params: params ? { ...params } : {} })
+    if (method === 'projects.list') return { projects: [{ id: 'p-fix', name: 'FixProject', primary_path: '/tmp/fix' }], active_id: 'p-fix' }
+    if (method === 'projects.tree') return projectsTreeResponse
+    if (method === 'session.create') return { session_id: 'rt-fix-01', stored_session_id: 'st-fix-01', info: {} }
+    if (method === 'session.cwd.set') return { cwd: params.cwd }
+    if (method === 'session.active_list') return { sessions: [] }
+    if (method === 'session.list') return { sessions: [] }
+    return {}
+  }
+
+  await mod.startNewProjectSession()
+
+  const cwdSet = calls.find(c => c.method === 'session.cwd.set')
+  const movedWrong = calls.find(c => c.method === 'session.workspace.move')
+  check(
+    'v1.19.1: `+` ruft session.cwd.set (nicht session.workspace.move)',
+    !!cwdSet && !movedWrong,
+    `cwd.set=${!!cwdSet} workspace.move=${!!movedWrong}`
+  )
+  check(
+    'v1.19.1: cwd.set bekommt session_id = runtime-ID (nicht stored_session_id)',
+    cwdSet && cwdSet.params.session_id === 'rt-fix-01' && cwdSet.params.cwd === '/tmp/fix',
+    `session_id=${cwdSet?.params?.session_id} cwd=${cwdSet?.params?.cwd}`
+  )
+  check(
+    'v1.19.1: Live-Overlay-Seed hält die neue Session unter dem Zielprojekt',
+    mod.$sessionProjectSeed.get()['st-fix-01']?.id === 'p-fix',
+    `seed=${JSON.stringify(mod.$sessionProjectSeed.get()['st-fix-01'] || null)}`
+  )
+
+  // 27) Ohne Scope + ohne active_id → Toast mit noProjectAnchor-Key, keine cwd.set.
+  mod.$sessionProjectSeed.set({})
+  mod.$projectsList.set([])
+  globalThis.window.localStorage._data = { 'hermes.desktop.projectScope': '__all_projects__' }
+  notifies.length = 0
+  calls.length = 0
+  hostStub.request = async (method, params) => {
+    calls.push({ method, params: params ? { ...params } : {} })
+    if (method === 'projects.list') return { projects: [], active_id: '' }
+    if (method === 'session.create') return { session_id: 'rt-noanchor', stored_session_id: 'st-noanchor', info: {} }
+    if (method === 'session.active_list') return { sessions: [] }
+    return {}
+  }
+  mod.$sessions.set([]) // lastSessionCwd() → '' erzwingen
+  await mod.startNewProjectSession()
+  const anchorToast = notifies.find(n => n && n.kind === 'info' && typeof n.message === 'string' && n.message.includes('noProjectAnchor'))
+  const cwdSetNoAnchor = calls.find(c => c.method === 'session.cwd.set')
+  check(
+    'v1.19.1: ohne Projekt-Anker → Hinweis-Toast noProjectAnchor',
+    !!anchorToast,
+    `notify-kinds=${notifies.map(n => n && n.kind).join(',')}`
+  )
+  check(
+    'v1.19.1: ohne cwd kein session.cwd.set (nichts zu persistieren)',
+    !cwdSetNoAnchor,
+    `cwd.set=${!!cwdSetNoAnchor}`
+  )
+
+  // 28) Drag&Drop auf LIVE-Session → session.cwd.set + Success-Toast.
+  mod.$liveMap.set({ 'rt-live-dnd': { storedId: 'st-live-dnd', status: 'idle', at: Date.now(), model: 'm', lastActive: Date.now() } })
+  mod.$projectsList.set([
+    { id: 'p-dnd', label: 'DndProject', path: '/tmp/dnd', color: '#0f0', icon: 'folder', isNoProject: false, kind: 'project' }
+  ])
+  notifies.length = 0
+  calls.length = 0
+  hostStub.request = async (method, params) => {
+    calls.push({ method, params: params ? { ...params } : {} })
+    if (method === 'session.cwd.set') return { cwd: params.cwd }
+    return {}
+  }
+  await mod.moveSessionRow({ id: 'st-live-dnd' }, { id: 'p-dnd', name: 'DndProject', path: '/tmp/dnd' })
+  const dndLiveCall = calls.find(c => c.method === 'session.cwd.set')
+  check(
+    'v1.19.1: DnD auf Live-Session → session.cwd.set mit runtime-ID',
+    dndLiveCall && dndLiveCall.params.session_id === 'rt-live-dnd' && dndLiveCall.params.cwd === '/tmp/dnd',
+    `session_id=${dndLiveCall?.params?.session_id} cwd=${dndLiveCall?.params?.cwd}`
+  )
+  check(
+    'v1.19.1: DnD Live → Success-Toast moveToProject',
+    notifies.some(n => n && n.kind === 'success'),
+    `kinds=${notifies.map(n => n && n.kind).join(',')}`
+  )
+
+  // 29) Drag&Drop auf NICHT-Live-Session → kein cwd.set, Overlay-Seed, Info-Toast.
+  mod.$liveMap.set({})
+  mod.$sessionProjectSeed.set({})
+  notifies.length = 0
+  calls.length = 0
+  const projectsTreeDnd = {
+    projects: [
+      { id: 'p-dnd', label: 'DndProject', color: '#0f0', icon: 'folder', isAuto: false, isNoProject: false, path: '/tmp/dnd', sessionIds: [] }
+    ]
+  }
+  // Default-Mock inkl. projects.tree setzen BEVOR wir $projectsList füllen,
+  // damit pending Timer-Ticks aus Test 28 (scheduleSessionsRefresh/invalidate)
+  // nicht in eine leere projects.tree-Antwort laufen und unsere Seed-Grundlage
+  // wegwischen. Microtask-Flush zieht alle pending callbacks durch.
+  hostStub.request = async (method, params) => {
+    if (method === 'projects.tree') return projectsTreeDnd
+    if (method === 'session.active_list') return { sessions: [] }
+    if (method === 'session.list') return { sessions: [] }
+    return {}
+  }
+  await new Promise(resolve => setTimeout(resolve, 10))
+  mod.$projectsList.set([
+    { id: 'p-dnd', label: 'DndProject', path: '/tmp/dnd', color: '#0f0', icon: 'folder', isNoProject: false, kind: 'project' }
+  ])
+  hostStub.request = async (method, params) => {
+    calls.push({ method, params: params ? { ...params } : {} })
+    if (method === 'projects.tree') return projectsTreeDnd
+    if (method === 'session.active_list') return { sessions: [] }
+    if (method === 'session.list') return { sessions: [] }
+    return {}
+  }
+  await mod.moveSessionRow({ id: 'st-not-live' }, { id: 'p-dnd', name: 'DndProject', path: '/tmp/dnd' })
+  const dndDeadCall = calls.find(c => c.method === 'session.cwd.set')
+  const infoToast = notifies.find(n => n && n.kind === 'info' && typeof n.message === 'string' && n.message.includes('moveSessionNotLive'))
+  check(
+    'v1.19.1: DnD auf NICHT-Live → kein session.cwd.set',
+    !dndDeadCall,
+    `cwd.set=${!!dndDeadCall}`
+  )
+  check(
+    'v1.19.1: DnD NICHT-Live → Overlay-Seed hält Session unter Zielprojekt',
+    mod.$sessionProjectSeed.get()['st-not-live']?.id === 'p-dnd',
+    `seed=${JSON.stringify(mod.$sessionProjectSeed.get()['st-not-live'] || null)}`
+  )
+  check(
+    'v1.19.1: DnD NICHT-Live → Info-Toast moveSessionNotLive',
+    !!infoToast,
+    `kinds=${notifies.map(n => n && n.kind).join(',')}`
+  )
+
+  // 30) findLiveSessionIdByKey direkt — $liveMap first, active_list fallback.
+  mod.$liveMap.set({ 'rt-A': { storedId: 'st-A', status: 'idle', at: Date.now() } })
+  const idFromMap = await mod.findLiveSessionIdByKey('st-A')
+  check(
+    'v1.19.1: findLiveSessionIdByKey findet runtime-ID über $liveMap',
+    idFromMap === 'rt-A',
+    `got=${idFromMap}`
+  )
+  mod.$liveMap.set({})
+  hostStub.request = async (method, params) => {
+    if (method === 'session.active_list') return { sessions: [{ id: 'rt-B', session_key: 'st-B', status: 'idle' }] }
+    return {}
+  }
+  const idFromRpc = await mod.findLiveSessionIdByKey('st-B')
+  check(
+    'v1.19.1: findLiveSessionIdByKey fällt auf session.active_list zurück',
+    idFromRpc === 'rt-B',
+    `got=${idFromRpc}`
+  )
+  const idMissing = await mod.findLiveSessionIdByKey('st-ghost')
+  check(
+    'v1.19.1: findLiveSessionIdByKey liefert null, wenn Session nicht live ist',
+    idMissing === null,
+    `got=${idMissing}`
+  )
+
+  hostStub.request = prev
+  hostStub.notify = prevNotify
+  hostStub.openSession = prevOpen
+} catch (error) {
+  check('v1.19.1-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
