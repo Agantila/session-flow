@@ -156,6 +156,29 @@ und „Nicht gruppiert"-Bereich (`groups.showUngrouped`) — dieselben drei
 Optionen wie auf der Einstellungsseite, nur ohne dorthin wechseln zu müssen.
 Spiegelt Hermes Desktops Sidebar-Filter-Icon in Form und Platzierung.
 
+### Filter-Parität (`view.*`)
+
+Seit v1.19.0 spiegelt die `view.*`-Settings-Gruppe 1:1 die Filter-/Sortier-
+Möglichkeiten der Hermes-Sidebar. Alle Werte werden in `$settings.view`
+persistiert; die Toolbar-„Ansichtsoptionen"-Verweise sind Verweise auf
+dieselben Keys, also reicht ein Setzen in der Einstellungsseite.
+
+| Key | Typ | Default | Effekt |
+|---|---|---|---|
+| `view.ordering` | `'updated'\|'created'\|'status'\|'tokens'\|'cost'` | `'updated'` | Sortierung der Zeilen je Sektion. `updated` = letzte Aktivität, `created` = Startzeit, `status` = Busy-Rang, `tokens`/`cost` = REST-Aggregat (degradiert sauber, wenn REST-Door fehlt). |
+| `view.statusFilter` | `string[]` | `[]` | Multi-Select: `working`/`needs-input`/`unread`/`draft`/`idle`. Leer = alle Status. `working`+`needs-input` lesen aus dem Live-Map, `unread`/`draft` aus dem REST-Payload. |
+| `view.projectFilter` | `string[]` | `[]` | Multi-Select aus der Projektliste (echte Projekt-IDs + `__no_project__`). Leer = alle Projekte. |
+| `view.showArchived` | `bool` | `false` | Blendet den Archiv-Filter-Slot in der Toolbar ein (eigene Liste via REST `archived=only`, 60-s-TTL). |
+| `view.showTokens` | `bool` | `false` | Token-Badge (`Σ input+output`) pro Zeile. |
+| `view.showCost` | `bool` | `false` | Kosten-Badge (`estimated_cost_usd` / `actual_cost_usd`) pro Zeile. |
+| `view.showProfile` | `bool` | `false` | Profil-Badge (Hermes-Profile-Tag aus `/api/profiles/sessions`) pro Zeile. |
+
+Zusätzlich: „Alle einklappen/ausklappen" + „Alle als gelesen" (Bulk-PATCH
+`unread:false` via REST). Reihenfolge: zuerst `statusFilter`, dann
+`projectFilter`, dann `ordering`. Wird ein Filter aktiv und das Ergebnis ist
+leer, zeigt die Pane einen eigenen Leerzustand (`filterEmpty`/`filterEmptyHint`),
+nicht das allgemeine `empty`.
+
 ### Projekt-Ordner-Gruppierung (`groups.autoMode: 'project'`)
 
 Gruppiert alle (nicht manuell zugewiesenen) Sessions nach **derselben

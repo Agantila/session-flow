@@ -3,6 +3,83 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.19.0] — 2026-10-05
+
+### Added
+- **Sichtbares Ladeerlebnis** (`$loadPhase` + `.sf-load`-Block): Solange der
+  erste Datensatz fehlt, zeigt die Pane einen animierten Ladebalken und einen
+  Gateway-Hinweis („Sobald das Gateway die Sessions anzeigt, erscheinen
+  Sessions und Projekte hier automatisch"). `loadPhase` läuft
+  `gate`→`loading`→`ready`/`error` und wird vom bestehenden Bootstrap-Gate
+  gespeist; der `prefers-reduced-motion`-Pfad respektiert. Vor 1.19.0 wirkte
+  die Pane bis zum ersten `session.list` wie tot, jetzt liest sich die Warte-
+  zeit als aktiv.
+- **Projekte-laden-Pending-Sektion** (`buildSections()`-Fix): Solange der
+  Projekt-Baum (`projects.tree`) noch keinen erfolgreichen Refresh
+  verzeichnet (`projectsPending()`), wird nicht länger fälschlich in „Kein
+  Projekt“ gruppiert (was die Wartezeit unnötig verlängert hätte). Stattdessen
+  zeigt der Pane genau EINE Sektion mit dem i18n-Key `projectsPendingTitle`
+  und dem Subtext-Hint `projectsPendingHint` („Sessions erscheinen sofort;
+  die Projekt-Gruppierung folgt unmittelbar“). Sobald der Baum da ist,
+  übernimmt die normale Projekt-Gruppierung. Sessions selbst sind von Anfang
+  an sichtbar, weil der Pending-Pfad ALLE Zeilen in diese eine Sektion
+  bündelt.
+- **REST-First-Refresh** (`refreshSessions()`): Primärquelle ist jetzt
+  `GET /api/sessions?…order=recent` über die Bridge — volle Zeilen mit
+  `pinned`, `unread`, `archived`, `input_tokens/output_tokens`,
+  `estimated_cost_usd/actual_cost_usd`, `last_active`, `tool_call_count`,
+  `message_count`, `_lineage_root_id`. RPC-`session.list` (dünn) bleibt als
+  Fallback für ältere Shells ohne die REST-Door. Sortierung nach Tokens/
+  Kosten, Unread-Filter und Profil-Gruppierung funktionieren ohne weitere
+  Gateway-Patches.
+- **Filter-Parität mit der Hermes-Sidebar** (`view.*`-Settings): Sortierung
+  (`updated`/`created`/`status`/`tokens`/`cost`), Status-Filter
+  (`working`/`needs-input`/`unread`/`draft`/`idle` als Multi-Select),
+  Projekt-Filter (Multi-Select aus der Projektliste), Zeilen-Meta
+  (`showTokens`/`showCost`/`showProfile`-Badges), Archiviert-Modus (eigene
+  Anzeige via REST `archived=only` + „Wiederherstellen“-Aktion pro Zeile,
+  60-s-TTL-Cache), Status-Gruppierung (`autoMode:'status'`), „Alle ein-/
+  ausklappen“ und „Alle als gelesen“ (Bulk-PATCH `unread:false`). Ansichts-
+  optionen-Menü: Gruppierung + Sortierung + Status-Filter + Projekt-Filter
+  + Zeilen-Meta + Bulk-Aktionen.
+- **Projekt-Verwaltung in Session Flow** (Toolbar-Button „Neues Projekt“ +
+  `ProjectDialog`): Erstellen/Bearbeiten mit Ordnern (nativem Picker via
+  `selectPaths`), primärem Ordner, Farbe und Icon. Submit mappt auf
+  `projects.create`/`update`/`add_folder`/`remove_folder`/`set_primary`.
+  Löschen über `ConfirmDialog` (`projDeleteConfirmTitle`/
+  `projDeleteConfirmBody`/`projDelete`/`projDeleted`).
+- **Instant-Sync App↔Plugin** (`watchSidebarSync()`): MutationObserver auf
+  den Sidebar-Container (`[data-sessions-mode]`, `data-sessions-project`)
+  + `window`-focus ziehen Projekt-Baum und Sessions nach, mit 4-5-s-TTL-
+  Guards gegen Spam. Plugin→App-Kick nach jeder Mutation: `window.focus`-
+  und `document.visibilitychange`-Synthetisierung, auf die die App
+  (`use-background-sync.ts`) reagiert. Verdratet in `register()` mit
+  Disposer im `onDispose`-Block.
+
+### Changed
+- **`buildSections()` Projekt-Pfad umstrukturiert**: Der bisherige
+  Pending-Guard (`!isNoProject && projectsPending() && items.length && !meta`)
+  traf nie (alle Zeilen landen via `resolveSessionProject()` im
+  `__no_project__`-Bucket, sobald der Baum leer ist) und zerstörte sogar
+  gepushte Sektionen. Ersetzt durch einen expliziten
+  „Projekte werden geladen“-Pfad, der die Sektion EINMAL pusht und die
+  Schleife verlässt. Folge: keine fälschliche „Kein Projekt“-Sektion mehr
+  während des Ladevorgangs.
+
+### Tests
+- Render-Smoketest v1.19.0: Toolbar-„Neues Projekt“-Button,
+  `ProjectDialog`-Ruhezustand (kein sf-dialog im DOM bei `open:false`),
+  Pending-Sektion (genau 1 Kopf, `projectsPendingTitle` + Hint im Subtext,
+  echte Zeilen sichtbar, kein `noProject`-TCall), Lade-Phase-Rendering
+  (`.sf-load`-Block, `data-phase=loading`, `loadingHint`-Key).
+- Bootstrap-Gate-Regression: kein `session.list` vor `gateway=open`,
+  Initial-Satz beim ersten `open`, Reconnect (`closed→open`) zieht nach.
+
+### Docs
+- Plan `docs/plans/2026-10-05-ladeerlebnis-projektverwaltung-filter-paritaet.md`
+  (Status: Done, Verifikations-Evidenz im Block „Verifikation (evidenz)“
+  ergänzt).
+
 ## [1.18.0] — 2026-10-05
 
 ### Added

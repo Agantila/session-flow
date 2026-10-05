@@ -27,7 +27,9 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | `[data-pane-host]` | Pane-Container für Content-Shell (Radius/Schatten) + Hintergrund-Layer | **Anchor-positioniert mit Inline-Styles** — CSS darf hier NIE Geometrie/overflow ändern, nur additiv färben/runden; Overlays über `[data-pane-overlay]` ausnehmen |
 | `[data-pane-hidden]` | inaktiver Keep-Alive-Tab (gleiche Rect wie der sichtbare!) | Video-Gating: nur sichtbare Panes dekodieren lassen |
 | `div:has(> [role='tablist'] [data-tree-tab^='session-tile:'])` | **Tab-Selektor-Modus** (`tabs.asTabSelector`): blendet NUR Streifen mit mind. einem Session-Tile-Tab aus | `:has()` ist bereits anderswo im Plugin in Gebrauch (siehe `nolead`-Regel); trifft **jede** Pane mit Session-Tabs (auch gestapelte im Content-Bereich) — Terminal/Dateien ohne Session-Tabs bleiben unberührt. Risiko: strukturelle Regel, kein `data-slot` — bei App-Refactor hier zuerst nachsehen. |
+| `[data-sessions-mode]` + `[data-sessions-project]` | **Sidebar-Sync-Anker** (v1.19.0): MutationObserver im Plugin überwacht den Sidebar-Container und die Projekt-Rows, um App→Plugin-Sessions-/Projekt-Updates nachzuziehen (Gateway feuert dafür keine Events). | strukturelle Regel (kein `data-slot`); Container/Row-Attribut muss bei App-Refactor erhalten bleiben, sonst verpasst der Observer Mutationen. Verifikation: ein `pane.dispatchEvent(new Event('focus'))` + `document.dispatchEvent(new Event('visibilitychange'))` reicht als Plugin→App-Kick. |
 | `window.hermesDesktop.selectPaths` | nativer Datei-Picker (IPC `hermes:selectPaths`, Optionen `{ title, filters, multiple }`) → absolute Pfade | vor Nutzung auf Existenz prüfen; App-APIs können sich ändern |
+| `window.hermesDesktop.revealPath` | OS-Dateimanager an Pfad öffnen (IPC `hermes:revealPath`) | Remote-safe; Plugin prüft Existenz und zeigt Hinweis-Toast, falls die Door im aktuellen Build fehlt |
 
 ## Theme-Tokens (CSS-Variablen)
 

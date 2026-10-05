@@ -94,6 +94,10 @@ const {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   SegmentedControl,
   SessionStatusDot,
   ColorSwatches,
@@ -113,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.18.0'
+const VERSION = '1.19.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -208,6 +212,19 @@ const DEFAULT_SETTINGS = {
     headerDensity: 'comfortable',
     stackStyle: 'spine',
     showUngrouped: true
+  },
+  // Ansichts-Filter/Sortierung — Parität zur Hermes-Desktop-Sessions-Ansicht
+  // (Sidebar-Filtermenü). Persistiert wie die App-Einstellungen der Sidebar;
+  // Zeilen-Metadaten sind Toggles, Filter sind Multi-Select-Listen.
+  view: {
+    ordering: 'updated', // 'updated' | 'created' | 'status' | 'tokens' | 'cost'
+    statusFilter: [], // ['working','needs-input','unread','draft','idle'] — leer = alle
+    projectFilter: [], // Projekt-IDs — leer = alle
+    showArchived: false, // Archiv-Anzeigemodus (eigener Tab in der Filterleiste)
+    showTokens: false,
+    showCost: false,
+    showProfile: false,
+    dismissedAuto: [] // Auto-Projekt-IDs, die der Nutzer ausgeblendet hat
   },
   uiTabs: {
     enabled: true,
@@ -1173,6 +1190,124 @@ const $sessions = atom([])
 const $sessionsError = atom(null)
 const $liveMap = atom({}) // runtimeId -> { storedId, status, at }
 const $activity = atom({}) // storedId -> { kind, name, at }
+// Lade-Phase der Pane: 'gate' (Gateway-Socket noch nicht offen) →
+// 'loading' (Requests laufen) → 'ready' (erster Datensatz da) bzw. 'error'.
+// Treibt den Ladebalken + Gateway-Hinweis statt eines toten Leerraums.
+const $loadPhase = atom('gate')
+// true, sobald der ERSTE refreshSessions-Lauf überhaupt Daten geliefert hat —
+// danach darf ein Fehler die geladenen Zeilen nicht mehr durch einen Lade-
+// balken ersetzen (App-Parität: Fehlerbanner über erhaltenem Stand).
+let bootstrapDoneOnce = false
+
+/** Läuft der Projekt-Baum noch? (Noch kein erfolgreicher Refresh NACH Gate-Open.) */
+function projectsPending() {
+  return gatedBootstrapDone && projectsListSucceededAt === 0
+}
+
+// Wird true, sobald das Gateway-Bootstrap-Gate den Initial-Satz gefeuert hat
+// (Socket offen). Davor wäre „Projekte laden" irreführend — es warten noch
+// beide Datenquellen auf die Verbindung.
+let gatedBootstrapDone = false
+
+// Archiv-Ansicht: eigene Zeilenbasis (REST archived=only), on demand geladen.
+const $archivedRows = atom([])
+let archivedInFlight = null
+let archivedSucceededAt = 0
+const ARCHIVED_TTL_MS = 60_000
+
+/** Archivierte Sessions über REST nachziehen (nur im Archiv-Modus sichtbar). */
+function refreshArchivedSessions() {
+  if (archivedInFlight) {
+    return archivedInFlight
+  }
+
+  archivedInFlight = (async () => {
+    try {
+      const bridge = globalThis.window?.hermesDesktop
+
+      if (!bridge || typeof bridge.api !== 'function') {
+        return
+      }
+
+      const limit = Math.max(10, Math.min(200, Number(readSetting('tabs', 'maxItems')) || 60))
+      const result = await bridge.api({
+        path: `/api/sessions?limit=${limit}&offset=0&archived=only&order=recent`,
+        timeoutMs: 10_000
+      })
+      const rows = (Array.isArray(result?.sessions) ? result.sessions : [])
+        .map(normalizeRow)
+        .filter(row => row.id && row.archived)
+        .sort((a, b) => (b.lastActiveAt || b.startedAt) - (a.lastActiveAt || a.startedAt))
+
+      $archivedRows.set(rows)
+      archivedSucceededAt = Date.now()
+    } catch {
+      // Bridge/Netzwerk — alter Stand bleibt; der Modus zeigt dann den
+      // bestehenden Leerzustand statt zu crashen.
+    } finally {
+      archivedInFlight = null
+    }
+  })()
+
+  return archivedInFlight
+}
+
+/** Alle sichtbaren ungelesenen Sessions als gelesen markieren (Bulk-PATCH). */
+async function markAllSessionsRead(rows) {
+  const bridge = globalThis.window?.hermesDesktop
+
+  if (!bridge || typeof bridge.api !== 'function' || !Array.isArray(rows)) {
+    return 0
+  }
+
+  let done = 0
+
+  for (const row of rows) {
+    if (!row?.unread) {
+      continue
+    }
+
+    try {
+      await bridge.api({
+        path: `/api/sessions/${encodeURIComponent(row.id)}`,
+        method: 'PATCH',
+        body: { unread: false },
+        timeoutMs: 8000
+      })
+      done += 1
+    } catch {
+      // Einzelne Fehler übergehen — der Refresh zeigt den verbleibenden Stand.
+    }
+  }
+
+  if (done > 0) {
+    kickAppRefresh()
+    scheduleSessionsRefresh(400)
+  }
+
+  return done
+}
+
+/**
+ * Sanfter Refresh-Kick an die App: die eigene Sidebar horcht auf window-focus
+ * und visibilitychange (use-background-sync.ts) und zieht ihre Listen genau
+ * auf diese Signale nach. Nach Plugin-seitigen Mutationen (Projekt geändert,
+ * Pin, Archiv) feuern wir beide — die App bleibt ohne Restart instantan
+ * aktuell. Bewusst generisch: kein App-Store wird angefasst.
+ */
+function kickAppRefresh() {
+  try {
+    window.dispatchEvent(new Event('focus'))
+  } catch {
+    /* kein DOM (Tests) — egal */
+  }
+
+  try {
+    document.dispatchEvent(new Event('visibilitychange'))
+  } catch {
+    /* ditto */
+  }
+}
 // Vorherige Aktivität (kurz): speist die Ausblend-Animation der
 // Detailreich-Info-Zeile (storedId -> { kind, name, at }).
 const $activityPrev = atom({})
@@ -1350,6 +1485,131 @@ function watchAppDensity() {
   return () => {}
 }
 
+/**
+ * App→Plugin-Instant-Sync: beobachtet den DOM-Container der Hermes-Sidebar
+ * ([data-sessions-mode] — von der App selbst als Skin-Anker deklariert).
+ * Ändert sich dort etwas (Projekt erstellt/umbenanen/gelöscht, Ordner
+ * verknüpft, Session verschoben/gepinnt/archiviert), refresht Session Flow
+ * nach kurzem Debounce nach — das Gateway feuert dafür KEINE Events (der
+ * RPC-Katalog wurde darauf geprüft), also ist der DOM die einzige sofortige
+ * Signalquelle. Zusätzlich zieht ein window-focus nach (Fensterwechsel).
+ * Der Observer ist bewusst breit (childList+attributes) und debounced —
+ * die reine DOM-Mutation ist billig, nur der nachgelagerte Refresh kostet.
+ */
+function watchSidebarSync(ctx) {
+  if (typeof MutationObserver !== 'function' || typeof document === 'undefined') {
+    return () => {}
+  }
+
+  let timer = 0
+  let queued = false
+  let lastRun = 0
+
+  const run = () => {
+    lastRun = Date.now()
+    queued = false
+
+    // Baum + Sessions nachziehen; die Inflight-/TTL-Guards in beiden
+    // Refreshes verhindern Spam, wenn die Sidebar mehrere Mutationen in
+    // Folge feuert (Reorder, Collapse-Animationen etc.).
+    if (Date.now() - projectsListSucceededAt > 4_000) {
+      void refreshProjectsList()
+    }
+
+    if (Date.now() - pinnedSucceededAt > 5_000) {
+      void refreshPinnedIds()
+    }
+
+    void refreshSessions()
+  }
+
+  const schedule = () => {
+    queued = true
+
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => {
+      if (!queued) {
+        return
+      }
+
+      // In schneller Folge: minimal 1,2 s Abstand zwischen echten Läufen.
+      const wait = Math.max(0, 1200 - (Date.now() - lastRun))
+      window.clearTimeout(timer)
+
+      if (wait === 0) {
+        run()
+      } else {
+        timer = window.setTimeout(() => queued && run(), wait)
+      }
+    }, 600)
+  }
+
+  const attach = root => {
+    if (!root || root.__sfSyncObserved) {
+      return
+    }
+
+    try {
+      root.__sfSyncObserved = true
+      const observer = new MutationObserver(schedule)
+      observer.observe(root, { attributes: true, attributeFilter: ['data-sessions-mode', 'data-sessions-project', 'data-active'], childList: true, subtree: true })
+      observers.push({ observer, root })
+    } catch {
+      /* DOM weg — beim nächsten Tick erneut versuchen */
+    }
+  }
+
+  const observers = []
+  const scan = () => {
+    try {
+      attach(document.querySelector('[data-sessions-mode]'))
+    } catch {
+      /* kein DOM */
+    }
+  }
+
+  scan()
+  const scanTimer = ctx.setInterval(scan, 5_000)
+
+  const onFocus = () => {
+    // Fenster zurück: die App hat frische Daten, wir auch — gedrosselt.
+    if (Date.now() - lastRun > 2_000) {
+      schedule()
+    }
+  }
+
+  try {
+    window.addEventListener('focus', onFocus)
+  } catch {
+    /* Tests ohne echtes window */
+  }
+
+  return () => {
+    window.clearTimeout(timer)
+
+    try {
+      ctx.clearInterval(scanTimer)
+    } catch {
+      /* älterer Host */
+    }
+
+    try {
+      window.removeEventListener('focus', onFocus)
+    } catch {
+      /* ditto */
+    }
+
+    for (const { observer, root } of observers) {
+      try {
+        observer.disconnect()
+        delete root.__sfSyncObserved
+      } catch {
+        /* schon weg */
+      }
+    }
+  }
+}
+
 let refreshInFlight = null
 
 /**
@@ -1363,6 +1623,113 @@ let refreshInFlight = null
 function invalidateProjectTree() {
   projectsListSucceededAt = 0
   return refreshProjectsList()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Projekt-Verwaltung — dieselben Gateway-RPCs, die auch die Hermes-Sidebar
+// nutzt (methods_projects.py): create/update/add_folder/remove_folder/
+// set_primary/delete/set_active. Jede Mutation zieht den Baum sofort nach
+// und kickt die App-Sidebar (focus/visibilitychange), damit BEIDE Ansichten
+// ohne manuelles Aktualisieren synchron stehen.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Nach einer Projekt-Mutation: Baum + Sessions sofort, App sanft nachziehen. */
+function afterProjectMutation() {
+  void invalidateProjectTree()
+  scheduleSessionsRefresh(600)
+  kickAppRefresh()
+}
+
+/** Neues Projekt anlegen (Name + mindestens ein Ordner), optional sofort aktiv. */
+async function createProject({ name, folders, color, icon, use }) {
+  const params = { name: String(name || '').trim(), folders: (folders || []).map(f => String(f || '').trim()).filter(Boolean) }
+
+  if (color) params.color = color
+  if (icon) params.icon = icon
+  if (use) params.use = true
+
+  const payload = await host.request('projects.create', params)
+  afterProjectMutation()
+
+  return payload?.project || null
+}
+
+/** Bestehendes Projekt umbenennen / Farbe+Icon setzen (projects.update). */
+async function updateProject(id, patch) {
+  const params = { id }
+
+  if (patch?.name != null) params.name = String(patch.name)
+  if (patch?.color !== undefined) params.color = patch.color
+  if (patch?.icon !== undefined) params.icon = patch.icon
+
+  await host.request('projects.update', params)
+  afterProjectMutation()
+}
+
+/** Ordner zu einem Projekt verknüpfen (projects.add_folder). */
+async function addProjectFolder(id, path) {
+  await host.request('projects.add_folder', { id, path: String(path || '') })
+  afterProjectMutation()
+}
+
+/** Ordner aus einem Projekt lösen (projects.remove_folder). */
+async function removeProjectFolder(id, path) {
+  await host.request('projects.remove_folder', { id, path: String(path || '') })
+  afterProjectMutation()
+}
+
+/** Primären Ordner setzen (projects.set_primary). */
+async function setProjectPrimaryFolder(id, path) {
+  await host.request('projects.set_primary', { id, path: String(path || '') })
+  afterProjectMutation()
+}
+
+/** Projekt als aktives setzen (projects.set_active) — Ziele neuer Sessions. */
+async function setActiveProject(id) {
+  await host.request('projects.set_active', id ? { id } : {})
+  afterProjectMutation()
+}
+
+/** Projekt löschen (explizit) — Auto-Projekte werden stattdessen ausgeblendet. */
+async function deleteProject(id) {
+  await host.request('projects.delete', { id })
+  afterProjectMutation()
+}
+
+/** Pfad im OS-Dateimanager zeigen (App-Preload-Door, Remote-safe). */
+async function revealProjectPath(path) {
+  const desktop = globalThis.window?.hermesDesktop
+
+  if (!desktop || typeof desktop.revealPath !== 'function') {
+    host.notify({ kind: 'info', message: CTX?.i18n?.t('projRevealUnavailable') || 'Dateimanager nicht verfügbar' })
+
+    return
+  }
+
+  try {
+    await desktop.revealPath(path)
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('projReveal') || 'Im Dateimanager anzeigen')
+  }
+}
+
+/** Ordner über den nativen/remote-fähigen Picker wählen; null bei Abbruch. */
+async function pickProjectFolder() {
+  const desktop = globalThis.window?.hermesDesktop
+
+  if (!desktop || typeof desktop.selectPaths !== 'function') {
+    host.notify({ kind: 'info', message: CTX?.i18n?.t('projPickUnavailable') || 'Ordnerauswahl nicht verfügbar' })
+
+    return null
+  }
+
+  try {
+    const picked = await desktop.selectPaths({ directories: true, multiple: false, title: CTX?.i18n?.t('projPickFolder') || 'Ordner wählen' })
+
+    return Array.isArray(picked) && picked[0] ? String(picked[0]) : null
+  } catch {
+    return null
+  }
 }
 
 /** CWD der zuletzt bekannten Session (Fallback, wenn kein Projekt bestimmt ist). */
@@ -1530,9 +1897,15 @@ function normalizeRow(row) {
     model: String(row?.model || '').trim(),
     toolCount: Number(row?.tool_call_count || 0),
     pinned: Boolean(row?.pinned),
+    unread: Boolean(row?.unread),
+    archived: Boolean(row?.archived),
     source: String(row?.source || '').trim(),
+    profile: String(row?.profile || '').trim(),
     startedAt: Number(row?.started_at || 0) * 1000,
+    lastActiveAt: Number(row?.last_active || row?.lastActive || 0) * 1000,
     messageCount: Number(row?.message_count || 0),
+    tokens: Number(row?.input_tokens || 0) + Number(row?.output_tokens || 0),
+    costUsd: Number(row?.actual_cost_usd || row?.estimated_cost_usd || 0) || 0,
     live: Number(row?.live_message_count || 0)
   }
 }
@@ -1543,20 +1916,49 @@ async function refreshSessions() {
   }
 
   refreshInFlight = (async () => {
+    // Phase läuft mit, bevor irgendetwas awaiting passiert — die Lade-UI
+    // soll den ersten Frame zeigen, nicht erst nach dem Fetch.
+    if (!bootstrapDoneOnce) {
+      $loadPhase.set('loading')
+    }
+
     try {
       const limit = Math.max(10, Math.min(200, Number(readSetting('tabs', 'maxItems')) || 60))
-      const result = await host.request('session.list', { limit, include_hidden: false })
-      const raw = Array.isArray(result?.sessions) ? result.sessions : Array.isArray(result) ? result : []
-      const pinned = new Set($pinnedRows.get().map(row => row.id))
-      const rows = raw
-        .map(normalizeRow)
-        .map(row => ({ ...row, pinned: row.pinned || pinned.has(row.id) }))
-        .filter(row => row.id)
-        .sort((a, b) => b.startedAt - a.startedAt)
+      // REST-first: /api/sessions liefert die VOLLSTÄNDIGE Zeile (pinned,
+      // unread, tokens, Kosten, last_active) — dieselbe Quelle, aus der die
+      // Hermes-Sidebar ihre Status-/Kosten-Sortierung baut. Der dünne
+      // session.list-RPC bleibt als Fallback für Shells ohne die Bridge
+      // (Features degradieren dann sauber auf „weglassen statt 0").
+      const bridge = globalThis.window?.hermesDesktop
+      let rows = []
+      let usedRpc = true
 
-      // Gepinnte Sessions, die das session.list-Limit verpasst haben (alt und
-      // tief unten), aus dem REST-Spiegel ergänzen — ein Pin heißt „immer
-      // erreichbar", genau wie in der Desktop-Sidebar (pageWindow-Backfill).
+      if (bridge && typeof bridge.api === 'function') {
+        try {
+          const result = await bridge.api({
+            path: `/api/sessions?limit=${limit}&offset=0&order=recent`,
+            timeoutMs: 10_000
+          })
+          const raw = Array.isArray(result?.sessions) ? result.sessions : []
+          rows = raw.map(normalizeRow).filter(row => row.id).sort((a, b) => (b.lastActiveAt || b.startedAt) - (a.lastActiveAt || a.startedAt))
+          usedRpc = false
+        } catch {
+          // Bridge-Fehler → RPC-Fallback unten (kein Crash, nur dünnere Daten).
+        }
+      }
+
+      if (usedRpc) {
+        const result = await host.request('session.list', { limit, include_hidden: false })
+        const raw = Array.isArray(result?.sessions) ? result.sessions : Array.isArray(result) ? result : []
+        rows = raw.map(normalizeRow).filter(row => row.id).sort((a, b) => b.startedAt - a.startedAt)
+      }
+
+      const pinned = new Set($pinnedRows.get().map(row => row.id))
+      rows = rows.map(row => ({ ...row, pinned: row.pinned || pinned.has(row.id) }))
+
+      // Gepinnte Sessions, die das Seiten-Limit verpasst haben (alt und tief
+      // unten), aus dem REST-/Pin-Spiegel ergänzen — ein Pin heißt „immer
+      // erreichbar", genau wie in der Desktop-Sidebar (include_pinned-Backfill).
       const seen = new Set(rows.map(row => row.id))
       const missed = $pinnedRows.get()
         .filter(row => !seen.has(row.id))
@@ -1565,14 +1967,17 @@ async function refreshSessions() {
         .filter(row => row.id)
 
       if (missed.length) {
-        rows.push(...missed.sort((a, b) => b.startedAt - a.startedAt))
+        rows.push(...missed.sort((a, b) => (b.lastActiveAt || b.startedAt) - (a.lastActiveAt || a.startedAt)))
       }
 
       $sessions.set(rows)
       $sessionsError.set(null)
+      bootstrapDoneOnce = true
+      $loadPhase.set('ready')
       scheduleContextRefresh(1200)
     } catch (error) {
       $sessionsError.set(error instanceof Error ? error.message : String(error))
+      $loadPhase.set('error')
     } finally {
       refreshInFlight = null
     }
@@ -1670,6 +2075,8 @@ const GATEWAY_BOOTSTRAP_FALLBACK_MS = 20_000
 
 /** Erster Daten-Satz: Sessions + Pins + Live-Status + Projekt-Baum. */
 function bootstrapSessionData() {
+  gatedBootstrapDone = true
+
   try {
     void refreshPinnedIds()
     void refreshSessions()
@@ -2370,10 +2777,81 @@ function buildSections() {
   const settings = $settings.get()
   const tabsCfg = settings.tabs
   const groupsCfg = settings.groups
+  const viewCfg = settings.view || {}
+  const live = $liveMap.get()
+  const activity = $activity.get()
+
+  // Status-Bucket je Zeile (App-Parität: session-dot-state reduziert
+  // 'stalled'/'background' → 'working'; working umfasst alle Busy-Arten).
+  const statusBucketOf = row => {
+    const detail = activity[row.id]
+    const runtimeEntry = Object.values(live).find(entry => entry && entry.storedId === row.id)
+
+    if (runtimeEntry && ['waiting', 'streaming', 'working', 'starting', 'resuming'].includes(String(runtimeEntry.status))) {
+      return String(runtimeEntry.status) === 'waiting' ? 'needs-input' : 'working'
+    }
+
+    if (detail && ['waiting', 'streaming', 'working', 'tool', 'thinking'].includes(detail.kind)) {
+      return detail.kind === 'waiting' ? 'needs-input' : 'working'
+    }
+
+    if (row.unread) {
+      return 'unread'
+    }
+
+    if (!row.messageCount) {
+      return 'draft'
+    }
+
+    return 'idle'
+  }
+
+  // Sortierung innerhalb der Sektionen (view.ordering) — 'updated' fällt auf
+  // lastActivityAt zurück (REST), created auf startedAt. Tokens/Kosten nur
+  // mit REST-Zeilen (RPC-Fall: alle 0 → Reihenfolge bleibt erhalten).
+  const orderBy = viewCfg.ordering || 'updated'
+  const sortRows = items => {
+    const arr = [...items]
+
+    if (orderBy === 'created') {
+      arr.sort((a, b) => b.startedAt - a.startedAt)
+    } else if (orderBy === 'tokens') {
+      arr.sort((a, b) => b.tokens - a.tokens || b.startedAt - a.startedAt)
+    } else if (orderBy === 'cost') {
+      arr.sort((a, b) => b.costUsd - a.costUsd || b.startedAt - a.startedAt)
+    } else if (orderBy === 'status') {
+      const rank = { 'needs-input': 0, working: 1, unread: 2, draft: 3, idle: 4 }
+
+      arr.sort((a, b) => (rank[statusBucketOf(a)] ?? 9) - (rank[statusBucketOf(b)] ?? 9) || lastActivityAt(b, live, activity) - lastActivityAt(a, live, activity))
+    } else {
+      arr.sort((a, b) => lastActivityAt(b, live, activity) - lastActivityAt(a, live, activity))
+    }
+
+    return arr
+  }
+
+  // Zeilen-Filter: Status (Multi) + Projekt (Multi) — leer = alles, exakt wie
+  // das Filtermenü der App (leerer Filter schränkt nicht ein).
+  const statusFilter = Array.isArray(viewCfg.statusFilter) ? viewCfg.statusFilter : []
+  const projectFilter = Array.isArray(viewCfg.projectFilter) ? viewCfg.projectFilter : []
+  const dismissedAuto = new Set(Array.isArray(viewCfg.dismissedAuto) ? viewCfg.dismissedAuto : [])
 
   const filtered = rows.filter(row => {
     if (tabsCfg.hideCron && row.source === 'cron') {
       return false
+    }
+
+    if (statusFilter.length && !statusFilter.includes(statusBucketOf(row))) {
+      return false
+    }
+
+    if (projectFilter.length) {
+      const resolved = resolveSessionProject(row)
+      const projectId = resolved ? resolved.id : '__no_project__'
+
+      if (!projectFilter.includes(projectId)) {
+        return false
+      }
     }
 
     return true
@@ -2398,7 +2876,7 @@ function buildSections() {
       titleKey: 'pinnedSection',
       color: null,
       collapsed: Boolean(groupsState.collapsed['pinned']),
-      items: pinnedItems
+      items: sortRows(pinnedItems)
     })
   }
 
@@ -2421,7 +2899,7 @@ function buildSections() {
         title: group.name,
         color: group.color || null,
         collapsed: Boolean(groupsState.collapsed[key]),
-        items
+        items: sortRows(items)
       })
     }
   }
@@ -2452,7 +2930,7 @@ function buildSections() {
         titleKey: `bucket.${bucket}`,
         color: null,
         collapsed: Boolean(groupsState.collapsed[key]),
-        items
+        items: sortRows(items)
       })
     }
   } else if (groupsCfg.enabled && groupsCfg.autoMode === 'source' && rest.length) {
@@ -2478,7 +2956,42 @@ function buildSections() {
         title: sourceLabel(source),
         color: null,
         collapsed: Boolean(groupsState.collapsed[key]),
-        items: bySource.get(source)
+        items: sortRows(bySource.get(source))
+      })
+    }
+  } else if (groupsCfg.enabled && groupsCfg.autoMode === 'status' && rest.length) {
+    // Status-Gruppierung (App-Parität: needs-input/working/unread/draft/idle
+    // mit derselben Rangfolge wie das Sortierungs-Kriterium 'status').
+    const byStatus = new Map()
+
+    for (const row of rest) {
+      const bucket = statusBucketOf(row)
+
+      if (!byStatus.has(bucket)) {
+        byStatus.set(bucket, [])
+      }
+
+      byStatus.get(bucket).push(row)
+    }
+
+    const order = ['needs-input', 'working', 'unread', 'draft', 'idle']
+
+    for (const bucket of order) {
+      const items = byStatus.get(bucket)
+
+      if (!items || !items.length) {
+        continue
+      }
+
+      const key = `auto:status:${bucket}`
+      sections.push({
+        key,
+        kind: 'auto',
+        title: null,
+        titleKey: `status.${bucket}`,
+        color: null,
+        collapsed: Boolean(groupsState.collapsed[key]),
+        items: sortRows(items)
       })
     }
   } else if (groupsCfg.enabled && groupsCfg.autoMode === 'project' && rest.length) {
@@ -2498,6 +3011,29 @@ function buildSections() {
       byProject.get(bucketKey).items.push(row)
     }
 
+    // Solange der Projekt-Baum lädt (erstes Gate-Open ohne erfolgreichen
+    // Refresh), liefert resolveSessionProject() für ALLE Zeilen null — die
+    // Welt als „Kein Projekt" zu zeigen wäre falsch und liest sich als
+    // „lädt ewig". Stattdessen: ALLE Zeilen in einer einzigen „Projekte
+    // laden"-Sektion bündeln und KEINE Projekt-Sektionen mehr pushen.
+    // Re-Trigger: sobald projectsPending() false wird, läuft buildSections()
+    // erneut durch den normalen Pfad.
+    if (projectsPending() && rest.length) {
+      sections.push({
+        key: 'projects-pending',
+        kind: 'project-pending',
+        titleKey: 'projectsPendingTitle',
+        hintKey: 'projectsPendingHint',
+        color: null,
+        icon: null,
+        cwd: '',
+        collapsed: false,
+        items: sortRows(rest)
+      })
+
+      return sections
+    }
+
     const buckets = [...byProject.entries()].sort(([aKey, aVal], [bKey, bVal]) => {
       if (aKey === '__no_project__') return 1
       if (bKey === '__no_project__') return -1
@@ -2506,6 +3042,13 @@ function buildSections() {
 
     for (const [bucketKey, { meta, items }] of buckets) {
       const isNoProject = bucketKey === '__no_project__'
+
+      // Vom Nutzer ausgeblendete Auto-Projekte erscheinen nicht (App-
+      // Parität: dismissAutoProject filtert aus JEDEM Projekt-Surface).
+      if (!isNoProject && meta?.isAuto && dismissedAuto.has(bucketKey)) {
+        continue
+      }
+
       const key = `auto:project:${bucketKey}`
       sections.push({
         key,
@@ -2519,7 +3062,7 @@ function buildSections() {
         icon: isNoProject ? null : meta?.icon || null,
         cwd: isNoProject ? '' : meta?.anchor || '',
         collapsed: Boolean(groupsState.collapsed[key]),
-        items
+        items: sortRows(items)
       })
     }
   } else if (rest.length && (groupsCfg.showUngrouped || sections.length === 0)) {
@@ -2533,7 +3076,7 @@ function buildSections() {
         titleKey: 'ungrouped',
         color: null,
         collapsed: false,
-        items: rest
+        items: sortRows(rest)
       })
     }
   }
@@ -2856,6 +3399,85 @@ const EN = {
   filterActive: 'Active',
   filterEmpty: 'No sessions match this filter',
   filterEmptyHint: 'Try a different search term or quick filter.',
+  filterArchived: 'Archived',
+  filterArchiveEmpty: 'No archived sessions',
+  filterArchiveEmptyHint: 'Archived sessions appear here after you archive them.',
+
+  // Loading phase (gateway gate → first data)
+  loadingTitle: 'Loading sessions…',
+  loadingGateTitle: 'Waiting for the gateway…',
+  loadingGateHint: 'As soon as the gateway shows the sessions, they and the projects appear here automatically.',
+  loadingHint: 'Sessions and projects are being fetched right now.',
+
+  // View options menu (parity with the Hermes sessions filter menu)
+  viewOptionsOrdering: 'Sort by',
+  viewOptionsFilters: 'Filters',
+  viewOptionsFilterStatus: 'Status',
+  viewOptionsFilterProject: 'Project',
+  viewOptionsRowMeta: 'Row details',
+  viewOptionsActions: 'Actions',
+  orderUpdated: 'Last activity',
+  orderCreated: 'Created',
+  orderStatus: 'Status',
+  orderTokens: 'Tokens',
+  orderCost: 'Cost',
+  statusNeedsInput: 'Needs input',
+  statusWorking: 'Working',
+  statusUnread: 'Unread',
+  statusDraft: 'Draft',
+  statusIdle: 'Idle',
+  rowMetaTokens: 'Token count',
+  rowMetaCost: 'Cost',
+  rowMetaProfile: 'Profile',
+  actionCollapseAll: 'Collapse all',
+  actionExpandAll: 'Expand all',
+  actionMarkAllRead: 'Mark all as read',
+  actionMarkAllReadDone: n => `${n} marked as read`,
+  actionNoUnread: 'No unread sessions',
+  projectsAll: 'All projects',
+  projectsNoProject: 'No project',
+
+  // Project management
+  newProject: 'New project',
+  projEdit: 'Edit project',
+  projName: 'Name',
+  projNamePlaceholder: 'e.g. Customer portal',
+  projFolders: 'Folders',
+  projAddFolder: 'Link folder',
+  projPickFolder: 'Choose folder',
+  projPickUnavailable: 'Folder picker not available',
+  projRemoveFolder: 'Unlink',
+  projMakePrimary: 'Make primary',
+  projPrimary: 'primary',
+  projColor: 'Color',
+  projCreate: 'Create project',
+  projSave: 'Save',
+  projCancel: 'Cancel',
+  projDelete: 'Delete project',
+  projDeleteConfirmTitle: 'Delete project?',
+  projDeleteConfirmBody: 'The project entry is removed — files and sessions stay untouched.',
+  projReveal: 'Reveal in file manager',
+  projRevealUnavailable: 'File manager not available',
+  projCopyPath: 'Copy path',
+  projSetActive: 'Set as active project',
+  projDismissAuto: 'Hide auto project',
+  projUseActive: 'Set active after creating',
+  projCreated: 'Project created',
+  projSaved: 'Project saved',
+  projDeleted: 'Project deleted',
+  projNeedName: 'Please enter a name',
+  projNeedFolder: 'Link at least one folder',
+  projRename: 'Rename',
+  projLinkFolder: 'Link folder',
+  archRestore: 'Restore',
+
+  // Projects-pending section (project tree still loading)
+  projectsPendingTitle: 'Projects are loading…',
+  projectsPendingHint: 'Sessions appear immediately; project grouping follows right after.',
+
+  // Token/cost row meta
+  metaTokens: n => `${n} tokens`,
+  metaCost: usd => `$${usd}`,
 
   // Settings navigation + UI-tab presets
   navChat: 'Chat',
@@ -3328,6 +3950,85 @@ const DE = {
   filterActive: 'Aktiv',
   filterEmpty: 'Keine Sessions passen zu diesem Filter',
   filterEmptyHint: 'Anderen Suchbegriff oder Schnellfilter versuchen.',
+  filterArchived: 'Archiv',
+  filterArchiveEmpty: 'Keine archivierten Sessions',
+  filterArchiveEmptyHint: 'Archivierte Sessions erscheinen hier, sobald du sie archivierst.',
+
+  // Lade-Phase (Gateway-Gate → erste Daten)
+  loadingTitle: 'Sessions werden geladen…',
+  loadingGateTitle: 'Warte auf das Gateway…',
+  loadingGateHint: 'Sobald das Gateway die Sessions anzeigt, erscheinen sie samt Projekten hier automatisch.',
+  loadingHint: 'Sessions und Projekte werden gerade geladen.',
+
+  // Ansichtsoptionen (Parität zum Filtermenü der Hermes-Sessions-Ansicht)
+  viewOptionsOrdering: 'Sortieren nach',
+  viewOptionsFilters: 'Filter',
+  viewOptionsFilterStatus: 'Status',
+  viewOptionsFilterProject: 'Projekt',
+  viewOptionsRowMeta: 'Zeilen-Details',
+  viewOptionsActions: 'Aktionen',
+  orderUpdated: 'Letzte Aktivität',
+  orderCreated: 'Erstellt',
+  orderStatus: 'Status',
+  orderTokens: 'Tokens',
+  orderCost: 'Kosten',
+  statusNeedsInput: 'Braucht Eingabe',
+  statusWorking: 'Läuft',
+  statusUnread: 'Ungelesen',
+  statusDraft: 'Entwurf',
+  statusIdle: 'Ruhend',
+  rowMetaTokens: 'Token-Anzahl',
+  rowMetaCost: 'Kosten',
+  rowMetaProfile: 'Profil',
+  actionCollapseAll: 'Alle einklappen',
+  actionExpandAll: 'Alle ausklappen',
+  actionMarkAllRead: 'Alle als gelesen markieren',
+  actionMarkAllReadDone: n => `${n} als gelesen markiert`,
+  actionNoUnread: 'Keine ungelesenen Sessions',
+  projectsAll: 'Alle Projekte',
+  projectsNoProject: 'Kein Projekt',
+
+  // Projekt-Verwaltung
+  newProject: 'Neues Projekt',
+  projEdit: 'Projekt bearbeiten',
+  projName: 'Name',
+  projNamePlaceholder: 'z. B. Kundenportal',
+  projFolders: 'Ordner',
+  projAddFolder: 'Ordner verknüpfen',
+  projPickFolder: 'Ordner wählen',
+  projPickUnavailable: 'Ordnerauswahl nicht verfügbar',
+  projRemoveFolder: 'Verknüpfung lösen',
+  projMakePrimary: 'Als primär festlegen',
+  projPrimary: 'primär',
+  projColor: 'Farbe',
+  projCreate: 'Projekt erstellen',
+  projSave: 'Speichern',
+  projCancel: 'Abbrechen',
+  projDelete: 'Projekt löschen',
+  projDeleteConfirmTitle: 'Projekt löschen?',
+  projDeleteConfirmBody: 'Der Projekt-Eintrag wird entfernt — Dateien und Sessions bleiben unberührt.',
+  projReveal: 'Im Dateimanager anzeigen',
+  projRevealUnavailable: 'Dateimanager nicht verfügbar',
+  projCopyPath: 'Pfad kopieren',
+  projSetActive: 'Als aktives Projekt festlegen',
+  projDismissAuto: 'Auto-Projekt ausblenden',
+  projUseActive: 'Nach dem Erstellen aktiv setzen',
+  projCreated: 'Projekt erstellt',
+  projSaved: 'Projekt gespeichert',
+  projDeleted: 'Projekt gelöscht',
+  projNeedName: 'Bitte einen Namen eingeben',
+  projNeedFolder: 'Mindestens einen Ordner verknüpfen',
+  projRename: 'Umbenennen',
+  projLinkFolder: 'Ordner verknüpfen',
+  archRestore: 'Wiederherstellen',
+
+  // Projekte-laden-Sektion (Projekt-Baum lädt noch)
+  projectsPendingTitle: 'Projekte werden geladen…',
+  projectsPendingHint: 'Sessions erscheinen sofort; die Projekt-Gruppierung folgt unmittelbar.',
+
+  // Token-/Kosten-Zeilen-Meta
+  metaTokens: n => `${n} Tokens`,
+  metaCost: usd => `${usd} $`,
 
   // Einstellungs-Navigation + UI-Tabs-Presets
   navChat: 'Chat',
@@ -3660,6 +4361,30 @@ html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destr
 .sf-dialog-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:6px;background:transparent;color:var(--foreground);font-size:12px;text-align:left;cursor:pointer}
 .sf-dialog-item:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08))}
 .sf-empty{padding:24px 16px;text-align:center;color:var(--ui-text-tertiary)}
+
+/* Lade-Phase: Balken + Gateway-Hinweis, solange noch keine Daten da sind. */
+.sf-load{padding:22px 16px;display:flex;flex-direction:column;gap:10px;color:var(--ui-text-tertiary)}
+.sf-load-title{font-size:.8125rem;font-weight:600;color:var(--ui-text-secondary);display:flex;align-items:center;gap:7px}
+.sf-load-bar{position:relative;height:3px;border-radius:999px;background:color-mix(in srgb,var(--ui-text-primary) 8%,transparent);overflow:hidden}
+.sf-load-bar::after{content:"";position:absolute;inset:0;width:38%;border-radius:inherit;background:var(--ui-accent);animation:sf-load-slide 1.15s var(--ease-out,cubic-bezier(0.22,1,0.36,1)) infinite}
+@keyframes sf-load-slide{0%{transform:translateX(-110%)}100%{transform:translateX(290%)}}
+.sf-load-hint{font-size:.75rem;line-height:1.45;color:var(--ui-text-quaternary)}
+html[data-renderer-animations-paused] .sf-load-bar::after{animation-play-state:paused}
+@media (prefers-reduced-motion:reduce){.sf-load-bar::after{animation:none;transform:translateX(60%)}}
+
+/* Zeilen-Meta-Badges: Tokens/Kosten/Profil (rechte Meta-Spalte). */
+.sf-tab-tokens,.sf-tab-cost,.sf-tab-prof{font-size:10px;line-height:14px;color:var(--ui-text-quaternary);white-space:nowrap}
+
+/* Projekt-Dialog: Ordner-Zeilen. */
+.sf-proj-folders{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.sf-proj-folder{display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--ui-stroke-tertiary);border-radius:6px;font-size:.75rem;color:var(--ui-text-secondary)}
+.sf-proj-folder-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.sf-proj-folder-tag{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--ui-accent)}
+.sf-proj-folder button{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;color:var(--ui-text-tertiary);background:transparent;border:none;cursor:pointer}
+.sf-proj-folder button:hover{background:var(--ui-control-hover-background);color:var(--foreground)}
+
+/* Archiv-Modus: Wiederherstellen-Aktion in der Zeile. */
+.sf-arch-restore{font-size:10px;color:var(--ui-accent);cursor:pointer}
 .sf-empty-title{font-weight:600;color:var(--ui-text-secondary);margin-bottom:4px}
 .sf-empty-body{font-size:11px;line-height:1.5}
 .sf-hud{position:fixed;left:50%;bottom:52px;transform:translateX(-50%) translateY(6px);z-index:80;pointer-events:none;opacity:0;transition:opacity .16s ease-out,transform .16s ease-out}
@@ -3694,7 +4419,9 @@ html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destr
 .sf-seg button{border:0;background:transparent;border-radius:3px;padding:2px 9px;font-size:11px;color:var(--ui-text-secondary);cursor:pointer}
 .sf-seg button[data-active=true]{background:var(--background,#fff);color:var(--foreground);box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .sf-dialog-row{display:flex;flex-direction:column;gap:6px;margin:10px 0}
-.sf-dialog-label{font-size:11px;font-weight:600;color:var(--ui-text-secondary)}
+.sf-dialog-label{font-size:11px;font-weight:600;color:var(--ui-text-secondary);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sf-dialog-body{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.sf-dialog-error{font-size:11px;color:var(--ui-danger,#f87171);margin-top:4px}
 @media (prefers-reduced-motion: reduce){.sf-hud{transition:none}}
 
 /* ── Glass & Lesbarkeit (optional; gesteuert über :root[data-sf-glass]-Tokens) ─
@@ -5068,6 +5795,7 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
   const color = section.color || null
   const isProject = section.kind === 'project'
   const isPinned = section.kind === 'pinned'
+  const isProjectPending = section.kind === 'project-pending'
   const title = section.titleKey ? t(section.titleKey) : section.title || t('ungrouped')
   const collapsible = section.kind !== 'ungrouped'
   const editable = section.kind === 'manual'
@@ -5099,6 +5827,10 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
 
   if (isProject && showDetail && section.cwd) {
     subtextParts.push(shortPath(section.cwd))
+  } else if (isProjectPending && section.hintKey) {
+    // Solange der Projekt-Baum lädt: kurzer Hinweis unter dem Titel, warum
+    // alle Zeilen noch in EINER Sektion sitzen („Gruppierung folgt gleich").
+    subtextParts.push(t(section.hintKey))
   }
 
   subtextParts.push(...facts)
@@ -5525,6 +6257,20 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     )
   }
 
+  // Zeilen-Meta (App-Parität zum Filtermenü „Anzeigen"): Tokens, Kosten und
+  // Profil — nur mit REST-Zeilen besetzt; RPC-Fall lässt sie weg (nie 0 lügen).
+  if (settings.view?.showTokens && row.tokens > 0) {
+    meta.push(jsx('span', { className: 'sf-tab-tokens', key: 'tok', title: t('rowMetaTokens'), children: compactNumber ? compactNumber(row.tokens) : String(row.tokens) }))
+  }
+
+  if (settings.view?.showCost && row.costUsd > 0) {
+    meta.push(jsx('span', { className: 'sf-tab-cost', key: 'cost', title: t('rowMetaCost'), children: compactNumber ? compactNumber(row.costUsd) : String(row.costUsd) }))
+  }
+
+  if (settings.view?.showProfile && row.profile) {
+    meta.push(jsx('span', { className: 'sf-tab-prof', key: 'prof', children: row.profile }))
+  }
+
   const ctx = tabsCfg.showContext ? ctxInfo[row.id] : null
   let ctxNode = null
 
@@ -5580,7 +6326,9 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     { icon: 'repo-forked', key: 'branch', label: t('branchSession'), run: () => onMore('branch', row) },
     { icon: 'folder', key: 'move', label: t('moveToProject'), run: () => onMore('move', row) },
     { key: 'sep2', separator: true },
-    { icon: 'archive', key: 'archive', label: t('archiveSession'), run: () => onMore('archive', row) },
+    row.archived
+      ? { icon: 'history', key: 'restore', label: t('archRestore'), run: () => onMore('restore', row) }
+      : { icon: 'archive', key: 'archive', label: t('archiveSession'), run: () => onMore('archive', row) },
     { icon: 'trash', key: 'delete', label: t('deleteSession'), run: () => onMore('delete', row) },
     { key: 'sep3', separator: true },
     { icon: 'copy', key: 'copy', label: t('copySessionId'), run: () => onMore('copy', row) }
@@ -5842,6 +6590,18 @@ async function archiveSessionRow(row) {
     scheduleSessionsRefresh(800)
   } catch (error) {
     host.notifyError(error, CTX?.i18n?.t('archiveSession') || 'Archivieren')
+  }
+}
+
+/** Archiviertes wiederherstellen — zieht beide Listen (aktiv + Archiv) nach. */
+async function restoreSessionRow(row) {
+  try {
+    await host.request('session.archive', { archived: false, session_id: row.id })
+    archivedSucceededAt = 0
+    kickAppRefresh()
+    scheduleSessionsRefresh(400)
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('archRestore') || 'Wiederherstellen')
   }
 }
 
@@ -6133,6 +6893,170 @@ function newGroupDialogState() {
   return { open: false, mode: 'create', groupId: null, name: '', color: null }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Projekt-Dialog — Erstellen + Bearbeiten (Name, Ordner, Farbe) über dieselben
+// Gateway-RPCs wie die Hermes-Sidebar (projects.create/update/add_folder/
+// remove_folder/set_primary). Ordner kommen über den nativen/remote-fähigen
+// Picker (selectPaths-Door).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function newProjectDialogState() {
+  return { open: false, mode: 'create', project: null, name: '', color: null, folders: [], primary: '', busy: false, error: '' }
+}
+
+function ProjectDialog({ state, setState, t }) {
+  if (!state.open) {
+    return null
+  }
+
+  const close = () => setState({ ...newProjectDialogState() })
+  const editing = state.mode === 'edit' ? state.project : null
+  const canSubmit = state.name.trim().length > 0 && state.folders.length > 0 && !state.busy
+
+  const addFolder = async () => {
+    const path = await pickProjectFolder()
+
+    if (path && !state.folders.includes(path)) {
+      setState({ ...state, folders: [...state.folders, path], primary: state.primary || path, error: '' })
+    }
+  }
+
+  const removeFolder = path => {
+    const folders = state.folders.filter(entry => entry !== path)
+
+    setState({ ...state, folders, primary: state.primary === path ? (folders[0] || '') : state.primary })
+  }
+
+  const submit = async () => {
+    if (!canSubmit) {
+      setState({ ...state, error: !state.name.trim() ? t('projNeedName') : t('projNeedFolder') })
+
+      return
+    }
+
+    setState({ ...state, busy: true, error: '' })
+
+    try {
+      if (editing) {
+        // Edit: Basis-Update + Ordner-Delta gegenüber dem Projekt-Datensatz.
+        await updateProject(editing.id, { name: state.name.trim(), color: state.color })
+
+        const existing = new Set((editing.folders || []).map(f => f.path || f))
+
+        for (const folder of state.folders) {
+          if (!existing.has(folder)) {
+            await addProjectFolder(editing.id, folder)
+          }
+        }
+
+        for (const folder of existing) {
+          if (!state.folders.includes(folder)) {
+            await removeProjectFolder(editing.id, folder)
+          }
+        }
+
+        if (state.primary && state.primary !== editing.primary_path) {
+          await setProjectPrimaryFolder(editing.id, state.primary)
+        }
+
+        host.notify({ kind: 'success', message: t('projSaved') })
+      } else {
+        await createProject({ name: state.name.trim(), folders: state.folders, color: state.color, use: false })
+        host.notify({ kind: 'success', message: t('projCreated') })
+      }
+
+      close()
+    } catch (error) {
+      setState({ ...state, busy: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  return jsxs(Dialog, {
+    open: true,
+    onOpenChange: open => {
+      if (!open) {
+        close()
+      }
+    },
+    children: [
+      jsx(DialogContent, {
+        className: 'sf-dialog',
+        children: jsxs('div', {
+          className: 'sf-dialog-inner',
+          children: [
+            jsx(DialogHeader, { children: jsx(DialogTitle, { children: editing ? t('projEdit') : t('newProject') }) }),
+            jsxs('div', {
+              className: 'sf-dialog-body',
+              children: [
+                jsx(Input, {
+                  'aria-label': t('projName'),
+                  onChange: event => setState({ ...state, name: event.target.value }),
+                  placeholder: t('projNamePlaceholder'),
+                  value: state.name
+                }),
+                jsxs('div', {
+                  className: 'sf-dialog-label',
+                  children: [
+                    jsx('span', { children: t('projFolders') }),
+                    jsx(Button, { disabled: state.busy, onClick: () => void addFolder(), size: 'sm', variant: 'ghost', children: jsxs('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 }, children: [jsx(Codicon, { name: 'add', size: '0.75rem' }), t('projAddFolder')] }) })
+                  ]
+                }),
+                state.folders.length
+                  ? jsx('div', {
+                      className: 'sf-proj-folders',
+                      children: state.folders.map(folder =>
+                        jsxs('div', {
+                          className: 'sf-proj-folder',
+                          children: [
+                            jsx(Codicon, { name: 'folder', size: '0.875rem' }),
+                            jsx('span', { className: 'sf-proj-folder-path', title: folder, children: folder }),
+                            state.primary === folder ? jsx('span', { className: 'sf-proj-folder-tag', children: t('projPrimary') }) : null,
+                            state.primary !== folder
+                              ? jsx('button', {
+                                  'aria-label': t('projMakePrimary'),
+                                  title: t('projMakePrimary'),
+                                  type: 'button',
+                                  onClick: () => setState({ ...state, primary: folder }),
+                                  children: jsx(Codicon, { name: 'target', size: '0.75rem' })
+                                })
+                              : null,
+                            jsx('button', {
+                              'aria-label': t('projRemoveFolder'),
+                              title: t('projRemoveFolder'),
+                              type: 'button',
+                              onClick: () => removeFolder(folder),
+                              children: jsx(Codicon, { name: 'close', size: '0.75rem' })
+                            })
+                          ]
+                        }, folder)
+                      )
+                    })
+                  : null,
+                jsxs('div', {
+                  className: 'sf-dialog-label',
+                  children: [jsx('span', { children: t('projColor') })]
+                }),
+                jsx(GroupSwatches, {
+                  clearLabel: t('clearColor'),
+                  value: state.color,
+                  onChange: color => setState({ ...state, color })
+                }),
+                state.error ? jsx('div', { className: 'sf-dialog-error', children: state.error }) : null
+              ]
+            }),
+            jsxs(DialogFooter, {
+              children: [
+                jsx(Button, { onClick: close, variant: 'ghost', children: t('projCancel') }),
+                jsx(Button, { disabled: !canSubmit, onClick: () => void submit(), children: state.busy ? '…' : editing ? t('projSave') : t('projCreate') })
+              ]
+            })
+          ]
+        })
+      })
+    ]
+  })
+}
+
 function GroupDialog({ state, setState, t }) {
   const groupsState = $groupsState.get()
   const editing = state.mode === 'edit' ? groupsState.groups.find(entry => entry.id === state.groupId) : null
@@ -6257,8 +7181,16 @@ function SessionsPane() {
   const [justMovedId, setJustMovedId] = useState(null)
   const [filterText, setFilterText] = useState('')
   const [filterMode, setFilterMode] = useState('all')
+  const [projDialog, setProjDialog] = useState(() => newProjectDialogState())
+  const [projConfirmDelete, setProjConfirmDelete] = useState(null)
+  const loadPhase = useValue($loadPhase)
+  const projectsList = useValue($projectsList)
 
-  const sections = useMemo(() => buildSections(), [rows, groupsState, settings])
+  // buildSections liest außer rows/groups/settings auch den Projekt-Baum
+  // ($projectsList) und den Live-/Aktivitäts-Status (Status-Buckets) — beides
+  // muss in den Dependencies stehen, sonst reagiert die Gruppierung nicht auf
+  // Baum- oder Live-Updates.
+  const sections = useMemo(() => buildSections(), [rows, groupsState, settings, projectsList, liveForSort])
   const totalCount = sections.reduce((sum, section) => sum + section.items.length, 0)
   const maxVisible = Math.floor(clampNumber(settings.tabs.maxVisible, 0, 200, 0))
 
@@ -6300,6 +7232,17 @@ function SessionsPane() {
   }, [sections, needle, filterMode, liveForSort])
 
   const activeMode = filterMode === 'active'
+  const archivedMode = filterMode === 'archived'
+
+  // Archiv-Modus: Zeilen on demand über REST laden (60 s TTL), sobald der
+  // Modus betreten wird — nicht vorher (kein Dauer-Poll auf eine Randliste).
+  const archivedRows = useValue($archivedRows)
+
+  useEffect(() => {
+    if (archivedMode && (Date.now() - archivedSucceededAt > ARCHIVED_TTL_MS)) {
+      void refreshArchivedSessions()
+    }
+  }, [archivedMode])
 
   // „Aktiv" als flache, kopfzeilenfreie Liste: laufende Sessions oben,
   // darunter nur Sessions mit HEUTIGER Aktivität (lokale Mitternacht als
@@ -6384,6 +7327,12 @@ function SessionsPane() {
 
     if (action === 'archive') {
       void archiveSessionRow(row)
+
+      return
+    }
+
+    if (action === 'restore') {
+      void restoreSessionRow(row)
 
       return
     }
@@ -6669,16 +7618,52 @@ function SessionsPane() {
   // Desktops Sidebar-Filter-Icon (list-filter) in Form und Platzierung.
   // Jede Zeile bleibt im proven-sicheren DropdownMenuItem-Rahmen (siehe
   // moreRowMenu oben) — keine ungetesteten Radio-/Checkbox-Untermenüs.
+  // „Ansichtsoptionen" — volle Parität zum Filtermenü der Hermes-Sessions-
+  // Ansicht: Gruppierung, Sortierung, Status-/Projekt-Filter, Zeilen-Details
+  // und Aktionen (Alle ein-/ausklappen, Alle als gelesen). Radio-artige
+  // Auswahlen laufen über menuChoice, Multi-Filter über Checkbox-Untermenüs.
   const groupingChoices = [
     { id: 'off', icon: 'circle-slash', label: t('groupsAutoOff') },
     { id: 'date', icon: 'clock', label: t('groupsAutoDate') },
     { id: 'source', icon: 'broadcast', label: t('groupsAutoSource') },
+    { id: 'status', icon: 'pulse', label: t('orderStatus') },
     { id: 'project', icon: 'root-folder', label: t('groupsAutoProject') }
   ]
   const densityChoices = [
     { id: 'compact', label: t('headerDensityCompact') },
     { id: 'comfortable', label: t('headerDensityComfortable') },
     { id: 'detailed', label: t('headerDensityDetailed') }
+  ]
+  const orderingChoices = [
+    { id: 'updated', icon: 'clock', label: t('orderUpdated') },
+    { id: 'created', icon: 'add', label: t('orderCreated') },
+    { id: 'status', icon: 'pulse', label: t('orderStatus') },
+    { id: 'tokens', icon: 'symbol-numeric', label: t('orderTokens') },
+    { id: 'cost', icon: 'credit-card', label: t('orderCost') }
+  ]
+  const statusChoices = [
+    { id: 'needs-input', label: t('statusNeedsInput') },
+    { id: 'working', label: t('statusWorking') },
+    { id: 'unread', label: t('statusUnread') },
+    { id: 'draft', label: t('statusDraft') },
+    { id: 'idle', label: t('statusIdle') }
+  ]
+  const viewCfg = settings.view || {}
+  const statusFilter = Array.isArray(viewCfg.statusFilter) ? viewCfg.statusFilter : []
+  const projectFilter = Array.isArray(viewCfg.projectFilter) ? viewCfg.projectFilter : []
+
+  const toggleViewList = (key, id) => {
+    const current = Array.isArray(viewCfg[key]) ? viewCfg[key] : []
+    const next = current.includes(id) ? current.filter(entry => entry !== id) : [...current, id]
+
+    patchSettings('view', { [key]: next })
+  }
+
+  // Projekt-Filter-Einträge: echte Projekte + „Kein Projekt" (wie die App
+  // den Home-Bucket anbietet). Nur wenn überhaupt Projekte existieren.
+  const projectChoices = [
+    ...projectsList.filter(node => !node.isNoProject).map(node => ({ id: node.id, label: node.label })),
+    { id: '__no_project__', label: t('projectsNoProject') }
   ]
 
   const menuChoice = (active, label, onSelect, icon) =>
@@ -6726,13 +7711,158 @@ function SessionsPane() {
                   )
                 ),
                 jsx(DropdownMenuSeparator, { key: 'sep-1' }),
+                jsx('div', { className: 'sf-menu-caption', key: 'cap-order', children: t('viewOptionsOrdering') }),
+                ...orderingChoices.map(choice =>
+                  menuChoice(
+                    (viewCfg.ordering || 'updated') === choice.id,
+                    choice.label,
+                    () => patchSettings('view', { ordering: choice.id }),
+                    choice.icon
+                  )
+                ),
+                jsx(DropdownMenuSeparator, { key: 'sep-1b' }),
+                ...(() => {
+                  // Status-Filter als Checkbox-Untermenü (nur wenn die
+                  // DropdownMenuSub-Familie im SDK existiert — ältere Builds
+                  // überspringen die Filter, verlieren aber nichts anderes).
+                  if (!(DropdownMenuSub && DropdownMenuSubContent && DropdownMenuSubTrigger && DropdownMenuCheckboxItem)) {
+                    return []
+                  }
+
+                  return [
+                    jsxs(DropdownMenuSub, {
+                      key: 'sub-status',
+                      children: [
+                        jsx(DropdownMenuSubTrigger, { children: t('viewOptionsFilterStatus') }),
+                        jsx(DropdownMenuSubContent, {
+                          children: statusChoices.map(choice =>
+                            jsx(DropdownMenuCheckboxItem, {
+                              checked: statusFilter.includes(choice.id),
+                              key: choice.id,
+                              onSelect: event => event?.preventDefault?.(),
+                              onCheck: () => toggleViewList('statusFilter', choice.id),
+                              children: choice.label
+                            })
+                          )
+                        })
+                      ]
+                    }),
+                    ...(projectChoices.length > 1
+                      ? [
+                          jsxs(DropdownMenuSub, {
+                            key: 'sub-project',
+                            children: [
+                              jsx(DropdownMenuSubTrigger, { children: t('viewOptionsFilterProject') }),
+                              jsx(DropdownMenuSubContent, {
+                                children: projectChoices.map(choice =>
+                                  jsx(DropdownMenuCheckboxItem, {
+                                    checked: projectFilter.includes(choice.id),
+                                    key: choice.id,
+                                    onSelect: event => event?.preventDefault?.(),
+                                    onCheck: () => toggleViewList('projectFilter', choice.id),
+                                    children: choice.label
+                                  })
+                                )
+                              })
+                            ]
+                          })
+                        ]
+                      : []),
+                    jsxs(DropdownMenuSub, {
+                      key: 'sub-meta',
+                      children: [
+                        jsx(DropdownMenuSubTrigger, { children: t('viewOptionsRowMeta') }),
+                        jsx(DropdownMenuSubContent, {
+                          children: [
+                            jsx(DropdownMenuCheckboxItem, {
+                              checked: Boolean(viewCfg.showTokens),
+                              key: 'tok',
+                              onSelect: event => event?.preventDefault?.(),
+                              onCheck: () => patchSettings('view', { showTokens: !viewCfg.showTokens }),
+                              children: t('rowMetaTokens')
+                            }),
+                            jsx(DropdownMenuCheckboxItem, {
+                              checked: Boolean(viewCfg.showCost),
+                              key: 'cost',
+                              onSelect: event => event?.preventDefault?.(),
+                              onCheck: () => patchSettings('view', { showCost: !viewCfg.showCost }),
+                              children: t('rowMetaCost')
+                            }),
+                            jsx(DropdownMenuCheckboxItem, {
+                              checked: Boolean(viewCfg.showProfile),
+                              key: 'prof',
+                              onSelect: event => event?.preventDefault?.(),
+                              onCheck: () => patchSettings('view', { showProfile: !viewCfg.showProfile }),
+                              children: t('rowMetaProfile')
+                            })
+                          ]
+                        })
+                      ]
+                    })
+                  ]
+                })(),
+                jsx(DropdownMenuSeparator, { key: 'sep-1c' }),
+                jsx(DropdownMenuItem, {
+                  className: 'sf-menu-item',
+                  key: 'collapse-all',
+                  onSelect: event => {
+                    event?.preventDefault?.()
+
+                    const groupsStateNow = $groupsState.get()
+                    const next = { ...groupsStateNow.collapsed }
+
+                    for (const section of sections) {
+                      if (section.kind !== 'ungrouped' && section.key !== 'pinned') {
+                        next[section.key] = true
+                      }
+                    }
+
+                    $groupsState.set({ ...groupsStateNow, collapsed: next })
+                    scheduleGroupsSave()
+                  },
+                  children: t('actionCollapseAll')
+                }),
+                jsx(DropdownMenuItem, {
+                  className: 'sf-menu-item',
+                  key: 'expand-all',
+                  onSelect: event => {
+                    event?.preventDefault?.()
+
+                    const groupsStateNow = $groupsState.get()
+                    $groupsState.set({ ...groupsStateNow, collapsed: {} })
+                    scheduleGroupsSave()
+                  },
+                  children: t('actionExpandAll')
+                }),
+                jsx(DropdownMenuItem, {
+                  className: 'sf-menu-item',
+                  disabled: !rows.some(row => row.unread),
+                  key: 'mark-read',
+                  onSelect: event => {
+                    event?.preventDefault?.()
+
+                    const unread = rows.filter(row => row.unread)
+
+                    if (!unread.length) {
+                      host.notify({ kind: 'info', message: t('actionNoUnread') })
+
+                      return
+                    }
+
+                    void markAllSessionsRead(unread).then(done => {
+                      host.notify({ kind: 'success', message: t('actionMarkAllReadDone', done) })
+                    })
+                  },
+                  children: t('actionMarkAllRead')
+                }),
+                jsx(DropdownMenuSeparator, { key: 'sep-2' }),
                 jsx('div', { className: 'sf-menu-caption', key: 'cap-density', children: t('viewOptionsDensity') }),
                 ...densityChoices.map(choice =>
                   menuChoice(settings.groups.headerDensity === choice.id, choice.label, () =>
                     patchSettings('groups', { headerDensity: choice.id })
                   )
                 ),
-                jsx(DropdownMenuSeparator, { key: 'sep-2' }),
+                jsx(DropdownMenuSeparator, { key: 'sep-3' }),
                 menuChoice(settings.groups.showUngrouped, t('groupsShowUngrouped'), () =>
                   patchSettings('groups', { showUngrouped: !settings.groups.showUngrouped })
                 )
@@ -6763,6 +7893,16 @@ function SessionsPane() {
         })
       }),
       viewOptionsMenu,
+      jsx(Tip, {
+        label: t('newProject'),
+        children: jsx(Button, {
+          'aria-label': t('newProject'),
+          onClick: () => setProjDialog({ ...newProjectDialogState(), open: true }),
+          size: 'icon-xs',
+          variant: 'ghost',
+          children: jsx(Codicon, { name: 'folder-library', size: '0.875rem' })
+        })
+      }),
       jsx(Tip, {
         label: t('newSession'),
         children: jsx(Button, {
@@ -6837,16 +7977,79 @@ function SessionsPane() {
         onChange: setFilterMode,
         options: [
           { id: 'all', label: t('filterAll') },
-          { id: 'active', label: t('filterActive') }
+          { id: 'active', label: t('filterActive') },
+          { id: 'archived', label: t('filterArchived') }
         ],
         value: filterMode
       })
     ]
   })
 
+  // Archiv-Liste: flach, mit Restore-Aktion je Zeile (More-Menü zeigt
+  // „Wiederherstellen", siehe TabRow), Suche greift wie überall.
+  const archivedVisible = useMemo(() => {
+    if (!archivedMode) {
+      return []
+    }
+
+    return archivedRows.filter(matchesFilter)
+  }, [archivedMode, archivedRows, needle])
+
+  const archivedList = jsx('div', {
+    className: 'sf-list sf-list-flat',
+    'data-flat': 'archived',
+    children: jsx('div', {
+      className: 'sf-items',
+      'data-view': settings.tabs.view === 'grid' ? 'grid' : 'list',
+      children: archivedVisible.map(row =>
+        jsx(TabRow, {
+          key: row.id,
+          row,
+          active: row.id === (focused || active),
+          section: FLAT_SECTION,
+          t,
+          onOpen: open,
+          onMore,
+          groupsState,
+          onAssign: assign,
+          dragging,
+          setDragging,
+          justMoved: row.id === justMovedId
+        })
+      )
+    })
+  })
+
+  // Lade-Zustand: solange der erste Datensatz fehlt, Ladebalken + Gateway-
+  // Hinweis (statt leerem „Keine Sessions", das wie ein Fehler wirkt).
+  const loadingBody = jsxs('div', {
+    className: 'sf-load',
+    'data-phase': loadPhase,
+    children: [
+      jsxs('div', {
+        className: 'sf-load-title',
+        children: [jsx(Codicon, { name: loadPhase === 'gate' ? 'plug' : 'loading', size: '0.875rem', spinning: loadPhase !== 'gate' }), loadPhase === 'gate' ? t('loadingGateTitle') : t('loadingTitle')]
+      }),
+      jsx('div', { className: 'sf-load-bar' }),
+      jsx('div', { className: 'sf-load-hint', children: loadPhase === 'gate' ? t('loadingGateHint') : t('loadingHint') })
+    ]
+  })
+
   let body = null
 
-  if (!rows.length && error) {
+  if (archivedMode) {
+    body = archivedVisible.length
+      ? archivedList
+      : jsxs('div', {
+          className: 'sf-empty',
+          children: [
+            jsx('div', { className: 'sf-empty-title', children: t('filterArchiveEmpty') }),
+            jsx('div', { className: 'sf-empty-body', children: t('filterArchiveEmptyHint') })
+          ]
+        })
+  } else if (!rows.length && loadPhase !== 'ready' && loadPhase !== 'error') {
+    body = loadingBody
+  } else if (!rows.length && error) {
     body = jsxs('div', {
       className: 'sf-empty',
       children: [
@@ -6891,7 +8094,29 @@ function SessionsPane() {
       filterBar,
       body,
       jsx(GroupDialog, { state: dialog, setState: setDialog, t }),
-      jsx(RowDialogHost, { state: rowDialog, setState: setRowDialog, t })
+      jsx(RowDialogHost, { state: rowDialog, setState: setRowDialog, t }),
+      jsx(ProjectDialog, { state: projDialog, setState: setProjDialog, t }),
+      projConfirmDelete
+        ? jsx(ConfirmDialog, {
+          cancelLabel: t('cancel'),
+          confirmLabel: t('projDelete'),
+          description: t('projDeleteConfirmBody'),
+          destructive: true,
+          onClose: () => setProjConfirmDelete(null),
+          onConfirm: async () => {
+            const target = projConfirmDelete
+            setProjConfirmDelete(null)
+            try {
+              await deleteProject(target.id)
+              host.notify({ kind: 'success', message: t('projDeleted') })
+            } catch (error) {
+              host.notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
+            }
+          },
+          open: true,
+          title: t('projDeleteConfirmTitle')
+        })
+        : null
     ]
   })
 }
@@ -8489,6 +9714,12 @@ export default {
       expireActivity()
     }, 30_000)
 
+    // 3c) Sidebar-Observer: App→Plugin-Sync für Projekt-/Session-Änderungen
+    //     in der Hermes-Desktop-Sidebar (Gateway feuert dafür keine Events).
+    //     MutationObserver auf [data-sessions-mode] + window focus. Disposer
+    //     läuft im onDispose-Block unten.
+    const stopSidebarSync = watchSidebarSync(ctx)
+
     // 4) UI-Beiträge: Pane, Einstellungs-Seite, Sidebar-Nav, Palette, Keybinds.
     ctx.register({
       id: 'pane',
@@ -8638,6 +9869,7 @@ export default {
         stopAppDensityWatch()
         stopCtxInfoWatch()
         window.clearTimeout(ctxRefreshTimer)
+        if (typeof stopSidebarSync === 'function') stopSidebarSync()
         removeCss()
         disposeAnimation()
         wheelController.dispose()

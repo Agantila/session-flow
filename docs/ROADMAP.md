@@ -1,10 +1,20 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.14.0 (2026-10-04). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.19.0 (2026-10-05). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Ladeerlebnis, Projekt-Verwaltung & Filter-Parität** (v1.19.0): Sichtbares
+  Loading (`$loadPhase` + `.sf-load`-Block mit Gateway-Hinweis),
+  Projekte-laden-Pending-Sektion (statt falscher „Kein Projekt“-Gruppierung
+  während der Wartezeit), REST-First-Refresh (`/api/sessions?order=recent`
+  mit Fallback auf `session.list`), Filter-Parität mit der Hermes-Sidebar
+  (Sortierung/Status/Projekt/Archiviert + Token-/Kosten-/Profil-Badges),
+  Toolbar-„Neues Projekt" + `ProjectDialog` (Erstellen/Bearbeiten/Löschen)
+  und Instant-Sync App↔Plugin (Sidebar-MutationObserver +
+  `dispatchEvent(focus/visibilitychange)`-Kick). Plan:
+  `docs/plans/2026-10-05-ladeerlebnis-projektverwaltung-filter-paritaet.md`.
 - **Gateway-Bootstrap-Gate** (v1.18.0): Start-/Reconnect-Initialisierung — der
   erste Daten-Satz (Sessions, Pins, Live, Projekt-Baum) feuert erst beim
   ersten `host.state.gateway === 'open'` (vorher wirft `host.request` ab);
