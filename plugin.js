@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.17.2'
+const VERSION = '1.18.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -239,7 +239,7 @@ const DEFAULT_SETTINGS = {
     arcMode: 'always',
     arcWidth: 1.5,
     arcDuration: 3.2,
-    scopes: { composer: true, chips: true, statusbar: false }
+    scopes: { composer: true, chips: false, statusbar: false }
   },
   personal: {
     accentOn: false,
@@ -318,6 +318,24 @@ function loadSettings() {
   }
 
   $settings.set(deepMerge(DEFAULT_SETTINGS, isPlainObject(saved) ? saved : {}))
+
+  // Stand 2026-10-05: Chips-Glow/Hintergrund raus, nur Text + Icon. Werks-
+  // standard ist jetzt „aus"; wer den Frosted-Look behalten möchte, schaltet
+  // ihn in den Glass-Settings wieder ein. Damit der Wechsel auch bei
+  // bestehenden Usern sofort sichtbar wird, setzen wir den Wert einmalig
+  // zurück, falls er noch aus der alten Standardzeit auf „true" steht.
+  try {
+    const current = $settings.get()
+    if (current?.glass?.scopes?.chips === true) {
+      $settings.set({
+        ...current,
+        glass: { ...current.glass, scopes: { ...current.glass.scopes, chips: false } }
+      })
+      scheduleSettingsSave()
+    }
+  } catch {
+    /* Settings evtl. noch nicht initialisiert — egal */
+  }
 }
 
 /** Patcht eine Sektion (z.B. 'wheel', {enabled:false}) und persistiert. */
@@ -677,7 +695,18 @@ function syncPaneBackgrounds() {
       if (!existing) {
         layer.className = 'sf-bg-layer'
         layer.setAttribute('data-sf-bg-layer', '')
-        target.appendChild(layer)
+        // Als ERSTES Kind einsetzen: DOM-Ordnung gewinnt vor z-index unter
+        // Geschwistern ohne eigenen z-index, und der Layer ist absolut, also
+        // fließt er nicht in den Layout-Flow. Damit landet er zuverlässig
+        // hinter positionierten Geschwistern (Chat-Inhalt), aber ÜBER der
+        // eigenen Hintergrund-Farbe des Parents — vorher mit z-index:-1
+        // verschwand er hinter der Chat-Surface-Background (`bg-(--ui-chat-
+        // surface-background)`, opaque in den meisten Themes).
+        if (target.firstChild) {
+          target.insertBefore(layer, target.firstChild)
+        } else {
+          target.appendChild(layer)
+        }
       }
 
       layer.setAttribute('data-sf-bg-sig', sig)
@@ -692,17 +721,41 @@ function syncPaneBackgrounds() {
         const video = document.createElement('video')
         video.setAttribute('data-sf-bg-video', '')
         video.setAttribute('aria-hidden', 'true')
+        // Attribute und Property gleichsetzen — autoplay als HTML-Attribut ist
+        // auf manchen Chromium-Versionen die Voraussetzung dafür, dass ein
+        // absolut positioniertes, gemutetes <video> ohne User-Gesture startet
+        // (nur die Property reicht in manchen Builds nicht). `muted` ist
+        // Pflicht: nur gemutete Videos sind von der Autoplay-Policy
+        // ausgenommen.
         video.muted = true
+        video.setAttribute('muted', '')
         video.loop = true
+        video.setAttribute('loop', '')
         video.autoplay = true
+        video.setAttribute('autoplay', '')
         video.playsInline = true
+        video.setAttribute('playsinline', '')
         video.src = mediaStreamUrl(bgPath)
+        // Ebenfalls als HTML-Attribut setzen — manche Build-Pfade (auch der
+        // Plugin-Test-Stub) spiegeln Property-Setter nicht in `attrs`. Im
+        // echten DOM ist das Attribut ohnehin durch die Property gesetzt,
+        // schadet also nicht.
+        video.setAttribute('src', video.src)
         layer.appendChild(video)
 
-        const play = video.play()
-
-        if (play && typeof play.catch === 'function') {
-          play.catch(() => {})
+        // play() sofort anstoßen UND nach `loadeddata` erneut versuchen: das
+        // erste play() fällt oft in den Lade-Puffer und zeigt nur das erste
+        // Frame als „Standbild". Mit dem Retry auf `loadeddata` springt die
+        // Wiedergabe an, sobald genug Daten da sind.
+        const start = () => {
+          const result = video.play()
+          if (result && typeof result.catch === 'function') {
+            result.catch(() => {})
+          }
+        }
+        start()
+        if (typeof video.addEventListener === 'function') {
+          video.addEventListener('loadeddata', start, { once: true })
         }
       }
     }
@@ -1176,17 +1229,6 @@ async function refreshProjectsList() {
   return projectsListInFlight
 }
 
-/**
- * Welchem Projekt eine Session gehört — schlägt direkt im Hermes-Projekt-
- * Baum nach (`projects.tree` → `ProjectTreeNode.sessionIds`), statt die
- * Zuordnung client-seitig nachzubauen (siehe `refreshProjectsList()` oben
- * für die Begründung). Der Home/„Kein Projekt"-Knoten (`isNoProject`) zählt
- * genauso als „nicht zugeordnet" wie eine Session-ID, die in KEINEM Knoten
- * auftaucht (z. B. jenseits von `session_limit`).
- *
- * @returns {{id:string,name:string,color:?string,icon:?string,anchor:string,isAuto:boolean}|null}
- *   `null` → „Kein Projekt".
- */
 // Zielprojekt frisch erstellter Sessions — Live-Overlay wie Hermes Desktop:
 // projects.tree lässt 0-Turn-Sessions weg (min_message_count=1), eine neue
 // „+"-Session wäre bis zum ersten persistierten Turn „Kein Projekt". Der
@@ -1213,6 +1255,22 @@ function pruneSessionProjectSeeds() {
   }
 }
 
+/**
+ * Welchem Projekt eine Session gehört — schlägt direkt im Hermes-Projekt-
+ * Baum nach (`projects.tree` → `ProjectTreeNode.sessionIds`), statt die
+ * Zuordnung client-seitig nachzubauen (siehe `refreshProjectsList()` oben
+ * für die Begründung). Der Home/„Kein Projekt"-Knoten (`isNoProject`) zählt
+ * genauso als „nicht zugeordnet" wie eine Session-ID, die in KEINEM Knoten
+ * auftaucht (z. B. jenseits von `session_limit`).
+ *
+ * Ausnahme Live-Overlay: eine frisch über „+"/Projekt-Header erstellte
+ * Session steht (noch) in keinem Baum-Knoten — ihr Seed liefert das Ziel
+ * aus dem Create-Kontext, bis der Baum sie nach dem ersten Turn übernimmt
+ * (genau das Prinzip von Hermes Desktops `liveSessionProjectId`-Overlay).
+ *
+ * @returns {{id:string,name:string,color:?string,icon:?string,anchor:string,isAuto:boolean}|null}
+ *   `null` → „Kein Projekt".
+ */
 function resolveSessionProject(row) {
   const id = String(row?.id || '').trim()
 
@@ -1595,6 +1653,123 @@ function scheduleSessionsRefresh(delay = 1500) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Start-/Reconnect-Gate für den ersten Daten-Satz. Vor dem ersten Socket-Open
+// wirft jeder `host.request` sofort „Hermes gateway unavailable" — der blinde
+// Initial-Aufruf beim Plugin-Load verpuffte beim App-Start damit komplett:
+// Fehlerbanner in der Pane + „Kein Projekt"-Gruppierung, bis der Nutzer
+// manuell auf Aktualisieren klickte (der nächste reguläre Takt kam erst nach
+// 30–60 s). Das Gate feuert den Initial-Satz stattdessen genau dann, wenn der
+// Gateway-Socket wirklich offen ist (`host.state.gateway`, Werte
+// 'idle' | 'connecting' | 'open' | 'closed' | 'error'), mit 20-s-Fallback für
+// ältere Builds ohne das Atom. Danach bleibt der Listener aktiv und zieht bei
+// JEDEM geschlossenen→offen-Wechsel (Standby, Backend-Neustart) die Daten
+// sofort nach — kein manuelles Aktualisieren mehr nötig.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GATEWAY_BOOTSTRAP_FALLBACK_MS = 20_000
+
+/** Erster Daten-Satz: Sessions + Pins + Live-Status + Projekt-Baum. */
+function bootstrapSessionData() {
+  try {
+    void refreshPinnedIds()
+    void refreshSessions()
+    void pollLiveSessions()
+    void refreshProjectsList()
+    pruneSessionProjectSeeds()
+  } catch (error) {
+    console.warn(`[${ID}] Session-Bootstrap fehlgeschlagen`, error)
+  }
+}
+
+/**
+ * Initial-Bootstrap an den Gateway-Socket-Zustand koppeln.
+ * @param {object} ctx Plugin-Kontext (scoped setTimeout + onDispose).
+ */
+function scheduleGatewayBootstrap(ctx) {
+  let gatewayAtom = null
+
+  try {
+    gatewayAtom = host.state?.gateway || null
+  } catch {
+    gatewayAtom = null
+  }
+
+  const isOpen = () => {
+    try {
+      return String(gatewayAtom?.get?.() || '') === 'open'
+    } catch {
+      return false
+    }
+  }
+
+  // Älterer SDK-Stand ohne Gateway-Atom (oder Test-Stub): bisheriges
+  // Verhalten — sofort laden. Der Socket ist in dem Fall entweder schon
+  // offen (Hot-Reload im laufenden Betrieb) oder es gibt ohnehin kein
+  // Signal, auf das wir warten könnten.
+  if (!gatewayAtom || typeof gatewayAtom.listen !== 'function') {
+    bootstrapSessionData()
+
+    return
+  }
+
+  let fired = false
+  let wasOpen = isOpen()
+
+  const run = () => {
+    if (fired) {
+      return
+    }
+
+    fired = true
+    bootstrapSessionData()
+  }
+
+  const stopListen = gatewayAtom.listen(() => {
+    const open = isOpen()
+
+    if (open && !wasOpen) {
+      if (!fired) {
+        // Erstes Öffnen nach dem Load: der komplette Initial-Satz.
+        run()
+      } else {
+        // Reconnect (Standby/Backend-Neustart): Daten sind potentiell
+        // veraltet — sofort nachziehen (Debounce + Inflight-Guards
+        // verhindern Spam; der Projekt-Baum nur bei abgelaufenem Cache).
+        scheduleSessionsRefresh(400)
+        void pollLiveSessions()
+      }
+    }
+
+    wasOpen = open
+  })
+
+  // Schon offen beim Load (Hot-Reload im laufenden Betrieb): sofort laden,
+  // statt bis zum 20-s-Fallback zu warten.
+  if (!fired && isOpen()) {
+    run()
+  }
+
+  // Fallback: Atom vorhanden, aber es kommt nie ein `open` (kaputter Stub,
+  // exotischer Route) — nach 20 s trotzdem einmal versuchen statt ewig leer.
+  // ctx-scoped: räumt der Host beim Unload selbst auf, die Disposer-Rückgabe
+  // muss hier nicht extra gehalten werden.
+  ctx.setTimeout(run, GATEWAY_BOOTSTRAP_FALLBACK_MS)
+
+  try {
+    ctx.onDispose(() => {
+      try {
+        stopListen()
+      } catch {
+        /* Listener schon weg — egal */
+      }
+    })
+  } catch {
+    /* onDispose nicht verfügbar (alter Host) — Fallback-Timer läuft via ctx
+       scoped ab; der Listener leckt dann maximal einmal pro Load. */
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Kontextfenster-Info (reduziert): Prozent-Label je Zeile/Karte für LIVE-
 // Sessions über den read-only RPC `session.context_breakdown` (kein Provider-
 // Call, kein Prompt-Cache-Impact). Läuft nur bei eingeschalteter Option.
@@ -1606,6 +1781,69 @@ const $ctxInfo = atom({}) // storedId -> { used, max, percent, est, at }
 // kurz nach dem Auslösen wieder entfernt, damit die Animation genau
 // einmal spielt (data-done-fx an der Zeile).
 const $doneFx = atom({})
+
+// Ordner-Größen-Cache für Projekt-Gruppen-Header. Keyed by absolutem
+// Pfad (section.cwd). Wert: { bytes, fetchedAt } — bei `inflight` Promise
+// wird der Race-Schutz geteilt. TTL 60 s; bei App-IPC-Fehler (Door fehlt)
+// bleibt der Eintrag null und wird in der Stats-Zeile weggelassen.
+const $folderSizes = atom({})
+const FOLDER_SIZE_TTL_MS = 60_000
+const folderSizeInflight = new Map() // path -> Promise<{ bytes, fetchedAt } | null>
+
+async function fetchFolderSizeOnce(path) {
+  if (!path) {
+    return null
+  }
+
+  const bridge = globalThis.window?.hermesDesktop
+
+  if (!bridge || typeof bridge.api !== 'function') {
+    return null
+  }
+
+  try {
+    const result = await bridge.api({ path: '/api/getFolderSize', body: { path }, timeoutMs: 4000 })
+
+    if (result && Number.isFinite(Number(result.bytes))) {
+      return { bytes: Number(result.bytes), fetchedAt: Date.now() }
+    }
+
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** Cache-Hit oder frischer Fetch; teilt eine Inflight-Promise unter mehreren Aufrufern. */
+function ensureFolderSize(path) {
+  const cached = $folderSizes.get()[path]
+
+  if (cached && Date.now() - cached.fetchedAt < FOLDER_SIZE_TTL_MS) {
+    return Promise.resolve(cached)
+  }
+
+  const existing = folderSizeInflight.get(path)
+
+  if (existing) {
+    return existing
+  }
+
+  const inflight = (async () => {
+    const next = await fetchFolderSizeOnce(path)
+
+    if (next) {
+      const current = $folderSizes.get()
+      $folderSizes.set({ ...current, [path]: next })
+    }
+
+    return next
+  })().finally(() => {
+    folderSizeInflight.delete(path)
+  })
+
+  folderSizeInflight.set(path, inflight)
+  return inflight
+}
 
 let ctxRefreshTimer = 0
 let ctxRefreshInFlight = false
@@ -1976,6 +2214,130 @@ function fmtAge(tsMs, t) {
   }
 
   return `${Math.floor(days / 7)}w`
+}
+
+/** Bytes → kompakte MB/KB-Zahl (eine Nachkommastelle, Locale-unabhängig). */
+function fmtBytes(bytes) {
+  const n = Number(bytes)
+
+  if (!Number.isFinite(n) || n < 0) {
+    return ''
+  }
+
+  if (n < 1024) {
+    return `${n} B`
+  }
+
+  if (n < 1024 * 1024) {
+    return `${(n / 1024).toFixed(1)} KB`
+  }
+
+  if (n < 1024 * 1024 * 1024) {
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
+/** Wandelt einen Zeitstempel in „Heute HH:MM" / „Gestern" / „15. Sep" um.
+ *  Verwendet die *lokale* Zeitzone des Browsers — wer woanders lebt, sieht
+ *  seine eigene Zeit; Datums-Linie „Gestern" richtet sich nach Mitternacht
+ *  Lokalzeit. */
+function fmtRelativeDate(tsMs) {
+  const stamp = Number(tsMs)
+
+  if (!Number.isFinite(stamp) || stamp <= 0) {
+    return ''
+  }
+
+  const now = new Date()
+  const date = new Date(stamp)
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startYesterday = startToday - 86_400_000
+  const sameYear = now.getFullYear() === date.getFullYear()
+
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+
+  if (stamp >= startToday) {
+    return time
+  }
+
+  if (stamp >= startYesterday) {
+    return 'Gestern'
+  }
+
+  if (sameYear) {
+    return `${date.getDate()}. ${MONTH_NAMES[date.getMonth()]}`
+  }
+
+  return `${date.getDate()}. ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`
+}
+
+// Folder-Size-Cache-Peek (synchron), damit computeSectionStats keine Promise
+// zurückgeben muss. Der echte Fetch läuft in `ensureFolderSize`, angestoßen
+// durch SectionHeader selbst über useEffect.
+const folderSizeCache = {
+  peek(path) {
+    if (!path) {
+      return null
+    }
+
+    const cached = $folderSizes.get()[path]
+
+    if (cached && Number.isFinite(Number(cached.bytes))) {
+      return Number(cached.bytes)
+    }
+
+    return null
+  }
+}
+
+/** Pure Aggregat-Funktion für Sektions-Stat-Zeile (Detailreich). Liest drei
+ *  Quellen: max(startedAt, lastActive) über enthaltene Items, Folder-Size
+ *  für Projekt-Gruppen, Σ context_used/max über $ctxInfo für Live-Sessions.
+ *  Gibt immer alle vier Felder zurück — null signalisiert „nicht
+ *  vorhanden", nicht „0" (eine Summe von 0 wäre erfunden). */
+function computeSectionStats(section, liveMap, ctxInfo) {
+  const items = Array.isArray(section.items) ? section.items : []
+  let modifiedAt = null
+
+  for (const item of items) {
+    const started = Number(item?.startedAt) || 0
+
+    if (started > (modifiedAt || 0)) {
+      modifiedAt = started
+    }
+
+    if (liveMap && item?.id && liveMap[item.id] && Number(liveMap[item.id].lastActive)) {
+      const lastActive = Number(liveMap[item.id].lastActive)
+
+      if (lastActive > (modifiedAt || 0)) {
+        modifiedAt = lastActive
+      }
+    }
+  }
+
+  let tokensUsed = null
+  let tokensMax = null
+
+  if (ctxInfo) {
+    for (const item of items) {
+      const ctx = item?.id && ctxInfo[item.id]
+
+      if (ctx && Number.isFinite(Number(ctx.used)) && Number.isFinite(Number(ctx.max))) {
+        tokensUsed = (tokensUsed || 0) + Number(ctx.used)
+        tokensMax = (tokensMax || 0) + Number(ctx.max)
+      }
+    }
+  }
+
+  const folderBytes = section?.kind === 'project' && section?.cwd
+    ? folderSizeCache.peek(section.cwd)
+    : null
+
+  return { modifiedAt, folderBytes, tokensUsed, tokensMax }
 }
 
 function dayBucket(tsMs) {
@@ -2434,6 +2796,9 @@ const EN = {
   headerDensityDetailed: 'Detailed',
   groupFactsPinned: n => `${n} pinned`,
   groupFactsBusy: n => `${n} active`,
+  groupStat2Modified: stamp => `Last change: ${stamp}`,
+  groupStat2FolderSize: bytes => `Folder: ${bytes}`,
+  groupStat2Tokens: ({ used, max, pct }) => `Tokens: ${used} / ${max} · ${pct}%`,
   viewOptions: 'View options',
   viewOptionsGrouping: 'Grouping',
   viewOptionsDensity: 'Header density',
@@ -2904,6 +3269,9 @@ const DE = {
   headerDensityDetailed: 'Detailreich',
   groupFactsPinned: n => `${n} angepinnt`,
   groupFactsBusy: n => `${n} aktiv`,
+  groupStat2Modified: stamp => `Letzte Änderung: ${stamp}`,
+  groupStat2FolderSize: bytes => `Ordner: ${bytes}`,
+  groupStat2Tokens: ({ used, max, pct }) => `Tokens: ${used} / ${max} · ${pct}%`,
   viewOptions: 'Ansichtsoptionen',
   viewOptionsGrouping: 'Gruppierung',
   viewOptionsDensity: 'Kopfzeilen-Dichte',
@@ -3152,12 +3520,12 @@ const CSS = `
 .sf-toolbar{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary);color:var(--ui-text-tertiary)}
 .sf-toolbar-count{flex:1;min-width:0;padding-left:2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ui-text-quaternary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sf-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 4px 12px}
-.sf-group-head{display:flex;align-items:center;gap:4px;min-height:27px;padding:2px 4px 2px 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none;transition:background-color .12s ease,box-shadow .12s ease}
+.sf-group-head{display:flex;align-items:flex-start;gap:4px;min-height:27px;padding:2px 4px 2px 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none;transition:background-color .12s ease,box-shadow .12s ease}
 .sf-group-head:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
 .sf-group-head[data-drop=true]{background:color-mix(in srgb,var(--ui-accent) 14%,transparent);box-shadow:inset 0 0 0 1px var(--ui-accent)}
-.sf-group-caret{display:flex;align-items:center;justify-content:center;width:14px;flex-shrink:0;color:var(--ui-text-quaternary)}
-.sf-group-dot{width:8px;height:8px;border-radius:3px;flex-shrink:0}
-.sf-group-lead-icon{display:flex;align-items:center;justify-content:center;width:14px;flex-shrink:0;color:var(--ui-text-tertiary)}
+.sf-group-caret{display:flex;align-items:flex-start;justify-content:center;width:14px;flex-shrink:0;padding-top:2px;color:var(--ui-text-quaternary)}
+.sf-group-dot{width:8px;height:8px;flex-shrink:0;margin-top:5px;border-radius:3px}
+.sf-group-lead-icon{display:flex;align-items:flex-start;justify-content:center;width:14px;flex-shrink:0;padding-top:2px;color:var(--ui-text-tertiary)}
 /* Kopfzeile als Text-Spalte (Titel + optionale Subzeile) — wie die
    Projekt-/Gruppen-Header von Hermes Desktop, nur hier IMMER sichtbar statt
    per Hover-Tooltip, weil "Detaildichte" das ausdrücklich verlangt. */
@@ -3166,7 +3534,8 @@ const CSS = `
 .sf-group-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:500;line-height:1.25;color:var(--ui-text-quaternary)}
 .sf-group-count{flex-shrink:0;font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-group-drophint{flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:600;color:var(--ui-accent)}
-.sf-group-actions{display:flex;align-items:center;opacity:0;flex-shrink:0}
+.sf-group-actions{display:flex;align-items:center;justify-content:center;align-self:stretch;min-width:20px;min-height:20px;margin-left:2px;padding:0 2px;border-radius:5px;opacity:0;flex-shrink:0;transition:opacity .12s ease,background-color .12s ease}
+.sf-group-head:hover .sf-group-actions:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.1))}
 .sf-group-head:hover .sf-group-actions,.sf-group-head:focus-within .sf-group-actions{opacity:1}
 .sf-group-unassigned .sf-group-name{font-weight:600;color:var(--ui-text-tertiary)}
 /* Projekt-Ordner-Header (wie "Projekte" in Hermes Desktop): Caret erst beim
@@ -3178,6 +3547,9 @@ const CSS = `
    Text einzuquetschen — die Zeilenhöhe wächst nur, wenn wirklich zwei Zeilen
    da sind (Projektpfad oder, in Detailreich, Kennzahlen). */
 .sf-group-head.sf-group-twoline{min-height:38px;padding-top:3px;padding-bottom:3px}
+.sf-group-head.sf-group-threeline{min-height:50px;padding-top:3px;padding-bottom:3px}
+.sf-group-stats-2{display:flex;flex-wrap:wrap;gap:0 6px;min-width:0;overflow:hidden;font-size:9.5px;font-weight:500;line-height:1.25;color:var(--ui-text-quaternary)}
+.sf-group-stats-2>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Kopfzeilen-Dichte (groups.headerDensity) — steuert nur die Typografie; WAS
    angezeigt wird (Subzeile/Kennzahlen) entscheidet React in SectionHeader. */
 html[data-sf-grpdensity='compact'] .sf-group-name{font-size:11px;font-weight:600}
@@ -3576,7 +3948,7 @@ html[data-sf-bg~='on'][data-sf-bg-scope='all']{
 .sf-bg-layer{
   position:absolute;
   inset:0;
-  z-index:-1;
+  z-index:0;
   pointer-events:none;
   background-image:var(--sf-bg-url,none);
   background-size:var(--sf-bg-fit,cover);
@@ -4700,6 +5072,8 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
   const collapsible = section.kind !== 'ungrouped'
   const editable = section.kind === 'manual'
   const showDetail = section.kind !== 'ungrouped' && density !== 'compact'
+  const liveMap = useValue($liveMap)
+  const ctxInfo = useValue($ctxInfo)
 
   // Subzeile: bei Projekt-Gruppen der (gekürzte) Ordnerpfad, sonst — nur in
   // der Detailreich-Stufe — eine kurze Kennzahl (angepinnt/aktiv), wenn sie
@@ -4729,6 +5103,50 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
 
   subtextParts.push(...facts)
   const subtext = subtextParts.join(' · ')
+
+  // Detailreich-Zusatzzeile (v1.18.0): Datum der letzten Änderung,
+  // Ordner-Größe (nur Projekt-Gruppen), Σ Live-Token-Verbrauch. Wird
+  // komplett weggelassen, wenn KEIN Wert vorhanden ist — nie erfunden.
+  let stats2Children = null
+
+  if (density === 'detailed' && !isPinned && section.items.length > 0) {
+    const stats = computeSectionStats(section, liveMap, ctxInfo)
+    const parts = []
+
+    if (Number.isFinite(stats.modifiedAt)) {
+      parts.push(t('groupStat2Modified', fmtRelativeDate(stats.modifiedAt)))
+    }
+
+    if (Number.isFinite(stats.folderBytes)) {
+      parts.push(t('groupStat2FolderSize', fmtBytes(stats.folderBytes)))
+    }
+
+    if (Number.isFinite(stats.tokensUsed) && Number.isFinite(stats.tokensMax) && stats.tokensMax > 0) {
+      const pct = Math.min(100, Math.max(0, Math.round((stats.tokensUsed / stats.tokensMax) * 100)))
+      parts.push(t('groupStat2Tokens', {
+        used: compactNumber ? compactNumber(stats.tokensUsed) : String(stats.tokensUsed),
+        max: compactNumber ? compactNumber(stats.tokensMax) : String(stats.tokensMax),
+        pct
+      }))
+    }
+
+    if (parts.length) {
+      stats2Children = parts.map((label, index) =>
+        jsx('span', { key: `s2-${index}`, children: label })
+      )
+    }
+
+    // Folder-Size nur bei Projekt-Gruppen abrufen — und nur wenn der
+    // Cache-Eintrag älter als TTL ist (ensureFolderSize macht das selbst).
+    // useEffect: nach First-Paint, damit der Header sofort rendert und
+    // die Größe „nachlädt". Bei Komponenten-Unmount brechen wir nicht ab
+    // (Promise läuft, Cache-Update ist harmlos).
+    if (isProject && section.cwd) {
+      useEffect(() => {
+        void ensureFolderSize(section.cwd)
+      }, [section.cwd])
+    }
+  }
 
   // Projekt-Identität aus Hermes Desktop übernehmen (projects.list → Farbe/
   // Icon): eigenes Icon zuerst (optional eingefärbt), sonst ein Farbpunkt wie
@@ -4765,15 +5183,20 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
             style: { background: 'var(--ui-text-quaternary)', opacity: 0.5 }
           })
 
-  const nameBlock = subtext
-    ? jsxs('span', {
-        className: 'sf-group-text',
-        children: [
-          jsx('span', { className: 'sf-group-name', key: 'name', children: title }),
-          jsx('span', { className: 'sf-group-sub', key: 'sub', children: subtext })
-        ]
-      })
-    : jsx('span', { className: 'sf-group-text', children: jsx('span', { className: 'sf-group-name', children: title }) })
+  const nameBlockChildren = [jsx('span', { className: 'sf-group-name', key: 'name', children: title })]
+
+  if (subtext) {
+    nameBlockChildren.push(jsx('span', { className: 'sf-group-sub', key: 'sub', children: subtext }))
+  }
+
+  if (stats2Children) {
+    nameBlockChildren.push(jsx('span', { className: 'sf-group-stats-2', key: 'stats', children: stats2Children }))
+  }
+
+  const nameBlock = jsxs('span', {
+    className: 'sf-group-text',
+    children: nameBlockChildren
+  })
 
   return jsxs('div', {
     className: cn(
@@ -4781,7 +5204,8 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
       section.kind === 'ungrouped' && 'sf-group-unassigned',
       isProject && 'sf-group-project',
       isPinned && 'sf-group-pinned',
-      subtext && 'sf-group-twoline'
+      subtext && 'sf-group-twoline',
+      stats2Children && 'sf-group-threeline'
     ),
     'data-drop': dropActive ? 'true' : undefined,
     onClick: collapsible ? () => onToggle() : undefined,
@@ -4810,7 +5234,7 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
               onNewHere(section)
             },
             title: t('newSessionHere'),
-            children: jsx(Codicon, { name: 'add', size: '0.75rem' })
+            children: jsx(Codicon, { name: 'add', size: '0.875rem' })
           })
         : isPinned
           ? jsx('span', {
@@ -4820,7 +5244,7 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
                 event.stopPropagation()
                 onPinToggle && onPinToggle()
               },
-              children: jsx(Codicon, { name: 'clear-all', size: '0.75rem' })
+              children: jsx(Codicon, { name: 'clear-all', size: '0.875rem' })
             })
           : editable
           ? jsx('span', {
@@ -4829,7 +5253,7 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
                 event.stopPropagation()
                 onEdit()
               },
-              children: jsx(Codicon, { name: 'edit', size: '0.75rem' })
+              children: jsx(Codicon, { name: 'edit', size: '0.875rem' })
             })
           : null,
       jsx('span', { className: 'sf-group-count', children: String(section.items.length) })
@@ -5409,7 +5833,6 @@ async function moveSessionRow(row, project) {
   // gleich aktualisiert").
   void invalidateProjectTree()
   scheduleSessionsRefresh(400)
-
   host.notify({ kind: 'success', message: `${CTX?.i18n?.t('moveToProject') || 'Projekt'} · ${project.name || cwd}` })
 }
 
@@ -7978,11 +8401,14 @@ export default {
     ctx.setInterval(() => measureComposerRadius(), 4000)
 
 
-    // 3) Session-Daten: initial + bei Events + Polls.
-    void refreshPinnedIds()
-    void refreshSessions()
-    void pollLiveSessions()
-    void refreshProjectsList()
+    // 3) Session-Daten: initial (via Gateway-Gate) + bei Events + Polls.
+    //    Der erste Satz wird NICHT blind gefeuert: vor dem ersten Socket-Open
+    //    wirft host.request ab — das war die Ursache für Fehlerbanner +
+    //    „Kein Projekt“-Gruppierung beim App-Start (bis zum manuellen
+    //    Aktualisieren). scheduleGatewayBootstrap feuert den Initial-Satz
+    //    beim ersten `open`, zieht bei Reconnects sofort nach und hat einen
+    //    20-s-Fallback für Builds ohne das Gateway-Atom.
+    scheduleGatewayBootstrap(ctx)
     pruneSessionProjectSeeds()
 
     ctx.onEvent('message.complete', event => {

@@ -9,6 +9,7 @@ Einstiegspunkt, der durch den Rest hier verlinkt.
 | Datei | Kurzbeschreibung |
 |---|---|
 | [AGENT-GUIDE.md](AGENT-GUIDE.md) | **Einstiegspunkt** für Mensch & KI-Agent: Lesereihenfolge, Plan-Prozess (Kurzfassung), unveränderliche Regeln, Verifikations-Befehle, Git-Identität. |
+| [AGENT-GUIDE-EN.md](AGENT-GUIDE-EN.md) | **English entry point** for AI agents & contributors: reading order, hard rules, data-layer/test-suite traps, parallel-session rules, git identity. Mirrors AGENT-GUIDE.md. |
 | [PLANNING.md](PLANNING.md) | **Plan-Prozess im Detail**: wann ein Plan unter `plans/` angelegt wird, Lebenszyklus (Offen → In Arbeit → Done/Blockiert/Verworfen), Template-Erklärung, Pflege-Checkliste beim Abschließen. |
 | [plans/](plans/) | **Einzelpläne** — ein Dokument pro nicht-trivialem Vorhaben (Anforderung im Original-Wortlaut, Scope/Nicht-Scope, Umsetzung, Verifikation, Follow-ups). `plans/TEMPLATE.md` ist die Vorlage. Das durchsuchbare Langzeitgedächtnis des Projekts — siehe PLANNING.md für Details. |
 | [SETTINGS.md](SETTINGS.md) | **Optionen-Referenz**: jede Einstellung mit Key, Default und Wirkung — Sektion für Sektion (Animation, Strg+Scroll, Session-Tabs, Gruppen, UI-Tabs, Glass, Individualisierung). Bei jeder neuen Option pflegen! |

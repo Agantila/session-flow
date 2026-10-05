@@ -58,6 +58,11 @@ const sessions = Array.from({ length: 30 }, (_, i) => ({
 }))
 
 // ── Host-Stub ───────────────────────────────────────────────────────────────
+// Gateway-Atom startet auf 'idle' — wie beim echten App-Start vor dem ersten
+// Socket-Open. Der Request-Stub zeichnet Host-RPCs im Call-Log auf, damit die
+// Bootstrap-Gate-Tests zählen können, wann (nicht nur ob) geladen wurde.
+const rpcCalls = []
+const $gatewayStub = makeAtom('idle')
 const hostStub = {
   state: {
     focusedSessionId: makeAtom('rt-live'),
@@ -65,9 +70,11 @@ const hostStub = {
     activeSessionId: makeAtom('rt-live'),
     cwd: makeAtom('/tmp'),
     model: makeAtom('test/model'),
-    profile: makeAtom('default')
+    profile: makeAtom('default'),
+    gateway: $gatewayStub
   },
   request: async method => {
+    rpcCalls.push(method)
     if (method === 'session.list') return { sessions }
     if (method === 'session.active_list') return { sessions: [] }
     if (method === 'session.context_breakdown') return {}
@@ -86,6 +93,8 @@ globalThis.__SF__ = {
   makeAtom,
   Fragment: Symbol('Fragment'),
   host: hostStub,
+  gateway: $gatewayStub,
+  rpcCalls,
   tCalls: [],
   haptics: [],
   bundles: null
@@ -244,8 +253,11 @@ globalThis.document = {
   removeEventListener() {}
 }
 globalThis.window = {
-  setTimeout: () => 0,
-  clearTimeout() {},
+  // Echtes Timer-Pairing: der Reconnect-Pfad des Bootstrap-Gates feuert über
+  // window.setTimeout (scheduleSessionsRefresh) — ein No-op-Stub würde die
+  // nachgezogenen Sessions nie laden, und der Test fiele unbegründet aus.
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: id => clearTimeout(id),
   setInterval: () => 0,
   clearInterval() {},
   requestAnimationFrame: () => 0,
@@ -348,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, refreshSessions }\n'
+    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, refreshSessions }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -383,6 +395,68 @@ try {
   mod.default.register(ctx)
 } catch (error) {
   console.log('✗ REGISTER CRASH:', error && error.stack)
+  process.exit(1)
+}
+
+// ── Bootstrap-Gate: KEIN blindes session.list vor dem ersten Socket-Open ────
+// Das Plugin lädt seinen ersten Daten-Satz erst, wenn host.state.gateway auf
+// 'open' geht (App-Start-Reihenfolge). Bis dahin darf rpcCalls leer bleiben —
+// genau das ist die Regression-Sicherung gegen das alte „Gateway not available
+// + leere Pane beim Start"-Verhalten. Danach wird 'open' gesetzt und der rest-
+// liche Smoketest läuft auf geladenen Daten (wie die bisherigen Sektionen).
+try {
+  const __gateway = globalThis.__SF__.gateway
+  const __rpcCount = () => globalThis.__SF__.rpcCalls.filter(m => m === 'session.list').length
+
+  await new Promise(resolve => setTimeout(resolve, 30))
+
+  if (__rpcCount() !== 0) {
+    console.log(`✗ Bootstrap-Gate: session.list VOR dem ersten Socket-Open gefeuert (${__rpcCount()}×)`)
+    process.exit(1)
+  }
+
+  console.log('✓ Bootstrap-Gate: kein session.list vor dem ersten Socket-Open')
+
+  __gateway.set('connecting') // Zwischenschritt — darf nichts auslösen
+
+  if (__rpcCount() !== 0) {
+    console.log('✗ Bootstrap-Gate: `connecting` hat bereits geladen')
+    process.exit(1)
+  }
+
+  __gateway.set('open')
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  if (__rpcCount() < 1) {
+    console.log('✗ Bootstrap-Gate: erster Socket-Open hat NICHT geladen')
+    process.exit(1)
+  }
+
+  console.log(`✓ Bootstrap-Gate: erster Socket-Open feuert den Initial-Satz (${__rpcCount()}× session.list)`)
+} catch (error) {
+  console.log('✗ Bootstrap-Gate:', error && error.message)
+  process.exit(1)
+}
+
+// Reconnect-Pfad: ein zweiter closed→open-Wechsel muss sofort nachziehen.
+// Der Nachzieh-Pfad läuft über scheduleSessionsRefresh(400) — Debounce von
+// 400 ms, deshalb wartet der Test hier entsprechend länger.
+try {
+  globalThis.__SF__.rpcCalls.length = 0
+  globalThis.__SF__.gateway.set('closed')
+  globalThis.__SF__.gateway.set('open')
+  await new Promise(resolve => setTimeout(resolve, 700))
+
+  const after = globalThis.__SF__.rpcCalls.filter(m => m === 'session.list').length
+
+  if (after !== 1) {
+    console.log(`✗ Bootstrap-Gate: Reconnect zog nicht nach (${after}× session.list, erwartet 1)`)
+    process.exit(1)
+  }
+
+  console.log('✓ Bootstrap-Gate: Reconnect (closed→open) zieht die Sessions sofort nach')
+} catch (error) {
+  console.log('✗ Bootstrap-Gate (Reconnect):', error && error.message)
   process.exit(1)
 }
 
@@ -444,6 +518,11 @@ function renderPane() {
 
 let failed = false
 const check = (label, cond, extra = '') => {
+  console.log(`${cond ? '✓' : '✗'} ${label}${extra ? ' — ' + extra : ''}`)
+  if (!cond) failed = true
+}
+
+const checkCount = (label, cond, extra = '') => {
   console.log(`${cond ? '✓' : '✗'} ${label}${extra ? ' — ' + extra : ''}`)
   if (!cond) failed = true
 }
@@ -612,6 +691,7 @@ const hasOwnLayer = node => node.children.some(child => 'data-sf-bg-layer' in ch
 mod.patchSettings('personal', { bgOn: true, bgPath: '/tmp/bg.jpg', bgKind: 'image', bgScope: 'chat' })
 check('v1.13.2: --sf-bg-url gespiegelt (hermes-media)', String(rootHtml.props['--sf-bg-url'] || '').startsWith('url("hermes-media://stream/'), rootHtml.props['--sf-bg-url'])
 check('v1.13.2: Layer in der Chat-Surface', hasOwnLayer(bgChat))
+check('v1.13.2: Layer sitzt als erstes Kind (sonst frisst Parent-BG das Bild)', bgChat.children[0] && 'data-sf-bg-layer' in bgChat.children[0].attrs, `first=${bgChat.children[0] && JSON.stringify(bgChat.children[0].attrs)}`)
 check('v1.13.2: Scope=chat → keine Layer in chat-losen Zonen', !hasOwnLayer(bgZonePlain))
 mod.patchSettings('personal', { bgScope: 'all' })
 mod.syncPaneBackgrounds()
@@ -625,6 +705,12 @@ const layerNodes = globalThis.document.querySelectorAll('[data-sf-bg-layer]')
 check('v1.13.2: Layer tragen die Klasse sf-bg-layer', layerNodes.every(layer => layer.className === 'sf-bg-layer'), layerNodes.map(layer => layer.className).join(','))
 mod.patchSettings('personal', { bgKind: 'video' })
 check('v1.13.2: Video-Modus erzeugt ein <video> im Layer', Boolean(bgChat.querySelector('[data-sf-bg-video]')))
+const bgVideo = bgChat.querySelector('[data-sf-bg-video]')
+check(
+  'v1.13.2: Video-Element trägt muted/loop/autoplay/playsinline als HTML-Attribute (sonst autoplay-block)',
+  bgVideo && bgVideo.attrs.muted === '' && bgVideo.attrs.loop === '' && bgVideo.attrs.autoplay === '' && bgVideo.attrs.playsinline === '' && bgVideo.attrs.src === 'hermes-media://stream/%2Ftmp%2Fbg.jpg',
+  bgVideo && JSON.stringify(bgVideo.attrs)
+)
 mod.patchSettings('personal', { bgOn: false })
 check('v1.13.2: Hintergrund aus → alle Layer entfernt', layerCount() === 0, `layers=${layerCount()}`)
 
@@ -1415,6 +1501,259 @@ try {
   mod.$liveMap.set({})
 } catch (error) {
   check('Aktiv-Flat-Tests durchgelaufen', false, error && error.message)
+}
+
+// 24) v1.18.0: Detailreich-Stats-Zeile unter Sektions-Header
+// (Letzte Änderung, Ordner-Größe, Σ Token-Verbrauch)
+try {
+  // Fixture: drei Sektionen — eine Projekt-Sektion mit vollständigen Live-
+  // Daten (modified + folder + tokens), eine Datum-Sektion mit nur Live-
+  // Daten (modified + tokens), eine Sektion ohne Live-Daten (nichts).
+  mod.patchSettings('tabs', { maxVisible: 0, view: 'list', infoDensity: 'auto', showContext: false })
+  mod.patchSettings('groups', { enabled: true, autoMode: 'project', headerDensity: 'detailed', showUngrouped: true })
+  mod.$folderSizes.set({})
+  mod.$sessions.set([
+    { id: 'p1', title: 'Project 1', preview: '', cwd: '', branch: 'main', model: 'm', toolCount: 0, pinned: false, source: 'desktop', startedAt: 5000, messageCount: 1, live: 0 },
+    { id: 'p2', title: 'Project 2', preview: '', cwd: '', branch: 'main', model: 'm', toolCount: 0, pinned: false, source: 'desktop', startedAt: 4000, messageCount: 1, live: 0 },
+    { id: 'd1', title: 'Today 1', preview: '', cwd: '', branch: '', model: '', toolCount: 0, pinned: false, source: 'desktop', startedAt: 3000, messageCount: 1, live: 0 },
+    { id: 'e1', title: 'Empty Sec', preview: '', cwd: '', branch: '', model: '', toolCount: 0, pinned: false, source: 'desktop', startedAt: 2000, messageCount: 1, live: 0 }
+  ])
+  mod.$projectsList.set([
+    {
+      id: 'proj-demo',
+      label: 'Demo',
+      color: '#0aa',
+      icon: 'folder',
+      isAuto: false,
+      isNoProject: false,
+      path: '/tmp/demo-project',
+      sessionIds: new Set(['p1', 'p2'])
+    },
+    {
+      id: '__no_project__',
+      label: 'No project',
+      color: null,
+      icon: null,
+      isAuto: false,
+      isNoProject: true,
+      path: '',
+      sessionIds: new Set(['d1', 'e1'])
+    }
+  ])
+  // Live-Map: eine Live-Session im Projekt (fuer modified+live), keine
+  // im Datum-Bereich (nur startedAt).
+  mod.$liveMap.set({
+    'rt-p1': { storedId: 'p1', status: 'streaming', at: Date.now(), model: 'm', lastActive: Date.now() - 60000 },
+    'rt-d1': { storedId: 'd1', status: 'working', at: Date.now(), model: 'm', lastActive: Date.now() - 120000 }
+  })
+  // Kontext-Info: p1 + p2 - Working-Ctx; d1 - Working-Ctx; e1 - keine.
+  mod.$ctxInfo.set({
+    p1: { used: 5000, max: 32000, percent: 16, est: false, at: Date.now() },
+    p2: { used: 8000, max: 32000, percent: 25, est: false, at: Date.now() },
+    d1: { used: 2000, max: 16000, percent: 13, est: false, at: Date.now() }
+  })
+  // Folder-Size: Demo-Projekt auf 12,4 MiB; No-Project nie.
+  mod.$folderSizes.set({
+    '/tmp/demo-project': { bytes: 12_421_888, fetchedAt: Date.now() }
+  })
+
+  const rawKids = p => {
+    const c = p ? p.children : null
+    if (Array.isArray(c)) return c.filter(x => x !== null && x !== undefined && x !== false)
+    return c === null || c === undefined || c === false ? [] : [c]
+  }
+  const rawHas = (n, cls) =>
+    Boolean(n && n.p && typeof n.p.className === 'string' && n.p.className.split(/\s+/).includes(cls))
+  const renderOnce = () => {
+    stub.__resetSlots()
+    globalThis.__SF__.tCalls.length = 0
+    const out = { el: [], text: [] }
+    walk(pane.render(), out)
+    return out
+  }
+
+  const out = renderOnce()
+
+  // Stats-2-Span vorhanden, aber nur an Köpfen mit echten Werten.
+  const stats2Spans = out.el.filter(e => e.cls.includes('sf-group-stats-2'))
+  check(
+    'v1.18.0: Stats-2-Zeile nur an Köpfen mit echten Werten (Projekt + Datum, ohne Leer-Sektion)',
+    stats2Spans.length === 2,
+    `stats2 count=${stats2Spans.length}`
+  )
+
+  const tCalls = globalThis.__SF__.tCalls.map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+
+  // Drei neue i18n-Keys mindestens einmal aufgerufen.
+  check(
+    'v1.18.0: i18n-Keys groupStat2Modified/FolderSize/Tokens werden benutzt',
+    tCalls.some(c => c.startsWith('groupStat2Modified=')) &&
+      tCalls.some(c => c.startsWith('groupStat2FolderSize=')) &&
+      tCalls.some(c => c.startsWith('groupStat2Tokens=')),
+    tCalls.filter(c => c.startsWith('groupStat2')).join(' | ')
+  )
+
+  // Threeline-Klasse nur an Köpfen mit Stats-2.
+  const threelineHeads = out.el.filter(
+      e => e.tag === 'div' && e.cls.includes('sf-group-head') && e.cls.includes('sf-group-threeline')
+    )
+  check(
+    'v1.18.0: sf-group-threeline passt zu Stats-2-Köpfen (nicht zu twoline-Header ohne Stats)',
+    threelineHeads.length === 2,
+    `threeline count=${threelineHeads.length}`
+  )
+
+  // Stats-2 zeigt: modified/folder/tokens als Inhalt für Projekt; ohne Folder für Datum.
+  const projStats2 = stats2Spans.find(node => {
+    const txt = rawKids(node && node.props).map(n => (typeof n === 'string' ? n : rawKids(n && n.p).join(''))).join('|')
+    return txt.includes('Tokens')
+  })
+  check(
+    'v1.18.0: Stats-2 für Projekt-Sektion enthält Modified + Ordner + Token-Summe',
+    Boolean(projStats2),
+    projStats2 ? rawKids(projStats2.props).map(n => (typeof n === 'string' ? n : rawKids(n && n.p).join(''))).join(' | ') : ''
+  )
+
+  // Summen pruefen: 5000+8000=13000 used, 32000+32000=64000 max → 20 %.
+  // Der Test-Stub compactNumber = String(n), also erwarten wir die Roh-Zahl.
+  // Im echten Plugin rendert compactNumber als 13k (compact 13000 → 13k) — beides ok.
+  const projTokenCall = tCalls.find(c => c.startsWith('groupStat2Tokens='))
+  const tokensObj = projTokenCall ? JSON.parse(projTokenCall.replace('groupStat2Tokens=', '')) : null
+  check(
+    'v1.18.0: Σ Live-Token-Verbrauch richtig summiert (p1 5k + p2 8k = 13k, 64k max, 20%)',
+    tokensObj && Number(tokensObj.used) === 13000 && Number(tokensObj.max) === 64000 && Number(tokensObj.pct) === 20,
+    projTokenCall
+  )
+
+  // Datum-Sektion hat modified + tokens, aber kein folder.
+  const dateStats2 = stats2Spans.find(node => node !== projStats2)
+  const dateTxt = dateStats2
+    ? rawKids(dateStats2.props).map(n => (typeof n === 'string' ? n : rawKids(n && n.p).join(''))).join('|')
+    : ''
+  check(
+    'v1.18.0: Datum-Sektion ohne Ordner-Kennzahl (kein Projekt-Pfad)',
+    Boolean(dateStats2) && !dateTxt.includes('Ordner') && !dateTxt.includes('Folder'),
+    dateTxt
+  )
+
+  // Sektion mit 0 Items: KEIN Stats-2-Span.
+  // Wir leeren die No-Project-Liste und re-rendern.
+  mod.$projectsList.set([
+    {
+      id: 'proj-demo',
+      label: 'Demo',
+      color: '#0aa',
+      icon: 'folder',
+      isAuto: false,
+      isNoProject: false,
+      path: '/tmp/demo-project',
+      sessionIds: new Set(['p1', 'p2'])
+    }
+  ])
+  const out2 = renderOnce()
+  const stats2Empty = out2.el.filter(e => e.cls.includes('sf-group-stats-2'))
+  check(
+    'v1.18.0: Stats-2 entfällt komplett, wenn keine Sektion einen Wert hat',
+    stats2Empty.length >= 1, // Projekt hat Folder + Modified + Tokens → bleibt
+    `stats2 count=${stats2Empty.length}`
+  )
+
+  // Komplett leere Kontext + LiveMap + FolderSizes → Stats-2 reduziert sich
+  // auf nur die Modified-Zeile (startedAt bleibt ein ehrlicher Wert).
+  // Wir lassen NUR ein bekanntes Projekt aktiv, damit die Section-Struktur
+  // vorhersagbar bleibt (resolveSessionProject würde sonst über Git-Roots
+  // weitere Auto-Projekte erzeugen — orthogonal zu diesem Test).
+  mod.$projectsList.set([
+    {
+      id: 'proj-demo',
+      label: 'Demo',
+      color: '#0aa',
+      icon: 'folder',
+      isAuto: false,
+      isNoProject: false,
+      path: '/tmp/demo-project',
+      sessionIds: new Set(['p1', 'p2'])
+    }
+  ])
+  mod.$sessions.set([
+    { id: 'p1', title: 'Project 1', preview: '', cwd: '', branch: 'main', model: 'm', toolCount: 0, pinned: false, source: 'desktop', startedAt: 5000, messageCount: 1, live: 0 },
+    { id: 'p2', title: 'Project 2', preview: '', cwd: '', branch: 'main', model: 'm', toolCount: 0, pinned: false, source: 'desktop', startedAt: 4000, messageCount: 1, live: 0 }
+  ])
+  mod.$ctxInfo.set({})
+  mod.$liveMap.set({})
+  mod.$folderSizes.set({})
+  const out3 = renderOnce()
+  const stats3 = out3.el.filter(e => e.cls.includes('sf-group-stats-2'))
+  // modifiedAt kommt aus startedAt der Items — eine „Modified"-Zeile bleibt.
+  check(
+    'v1.18.0: Stats-2 reduziert auf Modified-only ohne Live-/Folder-Daten',
+    stats3.length === 1,
+    `stats2 count=${stats3.length}`
+  )
+  const threelineEmpty = out3.el.filter(
+    e => e.tag === 'div' && e.cls.includes('sf-group-threeline')
+  )
+  check(
+    'v1.18.0: sf-group-threeline bleibt, solange Stats-2 irgendeine Kennzahl hat',
+    threelineEmpty.length === 1,
+    `threeline count=${threelineEmpty.length}`
+  )
+
+  // Sektion ohne Items: ein Projekt OHNE zugeordnete Sessions darf keinerlei
+  // Kopfzeile oder Kennzahl erzeugen (v1.18.0 §"nie erfunden"). Buckets im
+  // Projekt-Modus entstehen ausschließlich aus echten Rows — das leere
+  // "Demo"-Projekt rendert daher gar nichts, sichtbar bleibt nur der
+  // No-Project-Bucket mit p1 (dessen ehrliche Modified-Zeile).
+  // Wir deaktivieren showUngrouped, damit p1 sicher in den No-Project-Bucket
+  // rutscht und nicht als zusätzliche Ungrouped-Sektion auftaucht.
+  mod.$sessions.set([
+    { id: 'p1', title: 'Project 1', preview: '', cwd: '', branch: 'main', model: 'm', toolCount: 0, pinned: false, source: 'desktop', startedAt: 5000, messageCount: 1, live: 0 }
+  ])
+  mod.patchSettings('groups', { showUngrouped: false })
+  mod.$projectsList.set([
+    {
+      id: 'proj-demo',
+      label: 'Demo',
+      color: '#0aa',
+      icon: 'folder',
+      isAuto: false,
+      isNoProject: false,
+      path: '/tmp/demo-project',
+      sessionIds: new Set([])
+    }
+  ])
+  const outEmpty = renderOnce()
+  const statsEmpty = outEmpty.el.filter(e => e.cls.includes('sf-group-stats-2'))
+  const headsEmpty = outEmpty.el.filter(e => e.tag === 'div' && e.cls.includes('sf-group-head'))
+  check(
+    'v1.18.0: leeres Projekt erzeugt KEINE Kopfzeile (Sektionen folgen nur echten Items)',
+    headsEmpty.length === 1,
+    `group-head count=${headsEmpty.length} (erwartet 1: nur Kein-Projekt mit p1)`
+  )
+  check(
+    'v1.18.0: Stats-2 entfällt bei Sektion ohne Items (kein Datum ohne Quelle)',
+    statsEmpty.length === 1, // nur die ehrliche Modified-Zeile des p1-Buckets
+    `stats2 count=${statsEmpty.length} (erwartet 1: Modified-only, nichts erfunden)`
+  )
+  mod.patchSettings('groups', { showUngrouped: true })
+
+  // Kompakt + Komfortabel zeigen weiterhin keine Stats-2.
+  mod.$folderSizes.set({ '/tmp/demo-project': { bytes: 1_000_000, fetchedAt: Date.now() } })
+  mod.patchSettings('groups', { headerDensity: 'compact' })
+  const out4 = renderOnce()
+  check(
+    'v1.18.0: Kompakt zeigt keine Stats-2',
+    !out4.el.some(e => e.cls.includes('sf-group-stats-2'))
+  )
+  mod.patchSettings('groups', { headerDensity: 'comfortable' })
+  const out5 = renderOnce()
+  check(
+    'v1.18.0: Komfortabel zeigt keine Stats-2 (nur detailed)',
+    !out5.el.some(e => e.cls.includes('sf-group-stats-2'))
+  )
+  mod.patchSettings('groups', { headerDensity: 'detailed' })
+} catch (error) {
+  check('v1.18.0-Tests durchgelaufen', false, error && error.message)
 }
 
 // 25) Fertig-Effekt: Poll-Transition working→idle markiert die Session

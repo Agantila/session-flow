@@ -5,6 +5,13 @@ zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Gateway-Bootstrap-Gate** (v1.18.0): Start-/Reconnect-Initialisierung — der
+  erste Daten-Satz (Sessions, Pins, Live, Projekt-Baum) feuert erst beim
+  ersten `host.state.gateway === 'open'` (vorher wirft `host.request` ab);
+  Reconnects (`closed→open`) ziehen automatisch nach, 20-s-Fallback inklusive.
+  Behebt „Gateway nicht verfügbar“-Banner + „Kein Projekt“-Gruppierung beim
+  App-Start; manuelles Aktualisieren entfällt. Plan:
+  `docs/plans/2026-10-05-gateway-bootstrap-gate.md`.
 - **Projekt-Ordner-Gruppierung + Drag&Drop-Verschieben** (v1.14.0):
   `groups.autoMode: 'project'` gruppiert nach CWD, Header im
   Hermes-„Projekte"-Look (Ordner-Icon, Hover-Caret, Hover-„+"). Ziehen eines

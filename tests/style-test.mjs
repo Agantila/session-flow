@@ -161,6 +161,42 @@ const html = `<!doctype html>
       <div class="sf-bg-layer" data-sf-bg-layer id="bgLayer"></div>
     </div>
   </div>
+  <!-- v1.18.x: Section-Header-Icons oben ausgerichtet (statisch + zweizeilig + dreizeilig) -->
+  <div class="sf-section">
+    <h4 style="color:#9ca3af;font:600 11px/1 system-ui;margin:14px 4px 6px">Section-Header Icon-Ausrichtung</h4>
+    <div style="width:320px">
+      <div class="sf-group-head" id="gh1">
+        <span class="sf-group-caret"><span style="display:inline-block;width:8px;height:8px;background:#888"></span></span>
+        <span class="sf-group-lead-icon"><span style="display:inline-block;width:10px;height:10px;background:#0aa"></span></span>
+        <span class="sf-group-text">
+          <span class="sf-group-name">Einzeilig: nur Titel</span>
+        </span>
+        <span class="sf-group-actions" id="gh1-actions"><span style="display:inline-block;width:8px;height:8px;background:#0aa"></span></span>
+        <span class="sf-group-count">3</span>
+      </div>
+      <div class="sf-group-head sf-group-twoline" id="gh2">
+        <span class="sf-group-caret"><span style="display:inline-block;width:8px;height:8px;background:#888"></span></span>
+        <span class="sf-group-lead-icon"><span style="display:inline-block;width:10px;height:10px;background:#0aa"></span></span>
+        <span class="sf-group-text">
+          <span class="sf-group-name">Zweizeilig: Titel + Pfad</span>
+          <span class="sf-group-sub">…/demo-project/app</span>
+        </span>
+        <span class="sf-group-actions" id="gh2-actions"><span style="display:inline-block;width:8px;height:8px;background:#0aa"></span></span>
+        <span class="sf-group-count">5</span>
+      </div>
+      <div class="sf-group-head sf-group-threeline" id="gh3">
+        <span class="sf-group-caret"><span style="display:inline-block;width:8px;height:8px;background:#888"></span></span>
+        <span class="sf-group-lead-icon"><span style="display:inline-block;width:10px;height:10px;background:#0aa"></span></span>
+        <span class="sf-group-text">
+          <span class="sf-group-name">Dreizeilig: Titel + Pfad + Stats-2</span>
+          <span class="sf-group-sub">…/demo-project/app</span>
+          <span class="sf-group-stats-2"><span>Letzte Änderung: 15. Sep</span><span>Ordner: 12.4 MB</span><span>Tokens: 13k / 64k · 20%</span></span>
+        </span>
+        <span class="sf-group-actions" id="gh3-actions"><span style="display:inline-block;width:8px;height:8px;background:#0aa"></span></span>
+        <span class="sf-group-count">9</span>
+      </div>
+    </div>
+  </div>
 </body></html>`
 
 const dir = mkdtempSync(join(tmpdir(), 'session-flow-style-'))
@@ -209,6 +245,55 @@ const probeExpr = `(() => {
   }
   const out = {}
   for (const id of ['l1','l2','l3','g1','g2','g3']) out[id] = read(id)
+  // v1.18.x: Section-Header-Icons oben ausgerichtet — Computed-Styles
+  // für align-items der Head + Caret/Lead-Icon, plus die vertikale
+  // Position (offsetTop) relativ zum Titel. Hier wird explizit NICHT
+  // über CSS-Klassen-Namen gesprochen — wir messen, was der Browser
+  // tatsächlich rendert (Datenlage, nicht Spec).
+  const headInfo = id => {
+    const head = document.getElementById(id)
+    if (!head) return null
+    const cs = getComputedStyle(head)
+    const caret = head.querySelector('.sf-group-caret')
+    const lead = head.querySelector('.sf-group-lead-icon')
+    const name = head.querySelector('.sf-group-name')
+    const actions = head.querySelector('.sf-group-actions')
+    // Beide offsetTop-Werte hängen am selben offsetParent — Differenzen
+    // sind also direkt vergleichbar (Head-Top als Ursprung normalisieren).
+    const headTop = head.offsetTop
+    return {
+      headAlign: cs.alignItems,
+      caretAlign: caret ? getComputedStyle(caret).alignItems : '',
+      caretPaddingTop: caret ? getComputedStyle(caret).paddingTop : '',
+      leadAlign: lead ? getComputedStyle(lead).alignItems : '',
+      leadPaddingTop: lead ? getComputedStyle(lead).paddingTop : '',
+      // Wie weit liegt der Titel unter der Head-Oberkante — damit
+      // können wir nachweisen, dass Icon und Titel oben bündig sind
+      // und nicht mittig/zentriert zur mehrzeiligen Spalte abdriften.
+      caretTop: caret ? caret.offsetTop : -1,
+      leadTop: lead ? lead.offsetTop : -1,
+      nameTop: name ? name.offsetTop : -1,
+      headMinHeight: cs.minHeight,
+      headHeight: head.offsetHeight,
+      // v1.18.x: Actions-Spalte (Add/Edit/Lösen) — eigene, über die volle
+      // Kopf-Höhe gestreckte Spalte mit zentriertem Icon. Zentrierung
+      // heißt hier: Icon-Mitte ≈ Kopf-Mitte (Toleranz 2 px), unabhängig
+      // von 1/2/3 Textzeilen.
+      actionsAlign: actions ? getComputedStyle(actions).alignSelf : '',
+      actionsAlignItems: actions ? getComputedStyle(actions).alignItems : '',
+      actionsHeight: actions ? actions.offsetHeight : -1,
+      // RELATIV zum Kopf messen (getBoundingClientRect-Differenz) —
+      // offsetTop wäre relativ zum offsetParent und mit headHeight
+      // nicht vergleichbar.
+      actionsRelTop: actions
+        ? Math.round(actions.getBoundingClientRect().top - head.getBoundingClientRect().top)
+        : -1,
+      actionsMinWidth: actions ? getComputedStyle(actions).minWidth : ''
+    }
+  }
+  out.gh1 = headInfo('gh1')
+  out.gh2 = headInfo('gh2')
+  out.gh3 = headInfo('gh3')
   return out
 })()`
 
@@ -278,8 +363,75 @@ await page.goto(pathToFileURL(htmlPath).href)
 await page.waitForLoadState('load')
 
 try {
-  // ── 1) Design AN: Grid übernimmt Verlauf + Alpha (Kern-Bugfix) ────────────
+  // ── 0) Section-Header: Caret/Lead-Icon oben bündig zum Titel ────────────
+  // (Voraussetzung: kein mittiges Abdriften bei zwei-/dreizeiligen Köpfen.)
   let P = await read()
+  for (const id of ['gh1', 'gh2', 'gh3']) {
+    const h = P[id]
+    check(
+      `Section-Head ${id}: align-items=flex-start auf der Head-Row`,
+      h && h.headAlign === 'flex-start',
+      h ? `got=${h.headAlign}` : 'null'
+    )
+    check(
+      `Section-Head ${id}: Caret + Lead-Icon align-items=flex-start (nicht center)`,
+      h && h.caretAlign === 'flex-start' && h.leadAlign === 'flex-start',
+      h ? `caret=${h.caretAlign} lead=${h.leadAlign}` : 'null'
+    )
+    // Caret/Lead-Icon und Titel müssen oben bündig sein — die Differenz
+    // zwischen caretTop/leadTop und nameTop ist die zentrale Aussage. Bei
+    // der bisherigen `align-items:center`-Variante driften Caret + Lead
+    // bei gh2/gh3 sichtbar nach unten ab.
+    check(
+      `Section-Head ${id}: Caret oben bündig zum Titel (Δ ≤ 2 px)`,
+      h && Math.abs(h.caretTop - h.nameTop) <= 2,
+      h ? `Δ=${h.caretTop - h.nameTop}` : 'null'
+    )
+    check(
+      `Section-Head ${id}: Lead-Icon oben bündig zum Titel (Δ ≤ 2 px)`,
+      h && Math.abs(h.leadTop - h.nameTop) <= 2,
+      h ? `Δ=${h.leadTop - h.nameTop}` : 'null'
+    )
+  }
+  // zweizeilig + dreizeilig müssen GENAU EIG liegen (Padding-top 2 px
+  // ist hier OK — d.h. leicht versetzt ist okay, solange die Differenz
+  // winzig ist). Falls jemand später align-items:center einführt, würden
+  // Caret + Lead bei gh2/gh3 um ~9 px nach unten rutschen — der Test
+  // fängt das dann zuverlässig.
+  check(
+    'Section-Head: zweizeiliger/gh3-Kopf wächst in der Höhe, einzeiliger/gh1 nicht',
+    P.gh2.headHeight > P.gh1.headHeight && P.gh3.headHeight > P.gh2.headHeight,
+    `gh1=${P.gh1.headHeight} gh2=${P.gh2.headHeight} gh3=${P.gh3.headHeight}`
+  )
+
+  // ── 0b) Actions-Spalte (Add/Edit/Lösen): eigene Spalte, zentriert ────────
+  // align-self:stretch über die Kopf-Content-Box + align-items:center →
+  // das Icon sitzt vertikal in der Mitte der Kopfzeile. Die Kopf-Box hat
+  // symmetrisches Padding (2px oben/unten), die Content-Mitte fällt mit
+  // der Box-Mitte zusammen; messbar bleiben bis zu 1-2 px Abweichung
+  // durch Rundung — die Toleranz von 3 px ist hier die richtige Marke.
+  for (const id of ['gh1', 'gh2', 'gh3']) {
+    const h = P[id]
+    check(
+      `Actions-Spalte ${id}: align-self=stretch (volle Kopf-Höhe)`,
+      h && h.actionsAlign === 'stretch',
+      h ? `got=${h.actionsAlign}` : 'null'
+    )
+    check(
+      `Actions-Spalte ${id}: Icon zentriert (Δ Mitte ≤ 3 px)`,
+      h && h.actionsHeight > 0 &&
+        Math.abs(h.actionsRelTop + h.actionsHeight / 2 - h.headHeight / 2) <= 3,
+      h ? `relTop=${h.actionsRelTop} h=${h.actionsHeight} head=${h.headHeight}` : 'null'
+    )
+    check(
+      `Actions-Spalte ${id}: Klickfläche ≥ 20 px`,
+      h && h.actionsHeight >= 20,
+      h ? `h=${h.actionsHeight} minWidth=${h.actionsMinWidth}` : 'null'
+    )
+  }
+
+  // ── 1) Design AN: Grid übernimmt Verlauf + Alpha (Kern-Bugfix) ────────────
+  // (P wurde oben schon gelesen — wiederverwenden, keine zweite Probe.)
   check(
     'Grid-Karte zeigt Zeilen-Verlauf (war vorher: color-mix-Fläche)',
     has(P.g1.bgImage, 'linear-gradient(120deg'),
@@ -439,7 +591,12 @@ try {
     const zone = getComputedStyle(document.getElementById('zoneSurface'))
     return { z: layer.zIndex, pointer: layer.pointerEvents, zoneBg: zone.backgroundColor }
   })
-  check('Hintergrund: Layer liegt hinter dem Inhalt (z-index -1)', wallpaper.z === '-1' && wallpaper.pointer === 'none', `${wallpaper.z}/${wallpaper.pointer}`)
+  // Layer muss ÜBER der Parent-Background sitzen (sonst frisst die Chat-Surface-
+  // Background in opaken Themes das Bild) und gleichzeitig UNTER den
+  // Geschwister-Content-Elementen (per DOM-Ordnung: insertBefore firstChild).
+  // Wir prüfen hier die statische CSS-Regel (z-index:0) — die Render-Reihen-
+  // folge ist ein JS-Detail und wird im Render-Test gespiegelt.
+  check('Hintergrund: Layer sitzt z-index=0 (nicht mehr -1, sonst frisst Parent-BG)', wallpaper.z === '0' && wallpaper.pointer === 'none', `${wallpaper.z}/${wallpaper.pointer}`)
   check('Hintergrund: Scope=alle macht die Zonenfläche transparent', wallpaper.zoneBg === 'rgba(0, 0, 0, 0)', wallpaper.zoneBg)
   // ── 13) Info-Dichte: Detailreich bricht Beschreibungen zweizeilig um ─────
   const D = await readDensity()

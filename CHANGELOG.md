@@ -3,9 +3,22 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
-## [Unreleased]
+## [1.18.0] — 2026-10-05
 
 ### Added
+- **Gateway-Bootstrap-Gate (Start-/Reconnect-Initialisierung)**: Der erste
+  Daten-Satz (Sessions, Pins, Live-Status, Projekt-Baum) wird nicht mehr blind
+  beim Plugin-Load gefeuert — vor dem ersten Socket-Open wirft jeder
+  `host.request` ab („Hermes gateway unavailable“), wodurch beim App-Start
+  Fehlerbanner + „Kein Projekt“-Gruppierung bis zum manuellen Aktualisieren
+  standen. `bootstrapSessionData()`/`scheduleGatewayBootstrap()` koppeln den
+  Initial-Satz an `host.state.gateway`: erstes `open` feuert den kompletten
+  Satz (Session-Liste + Projekt-Zuordnung kommen gemeinsam), schon-offen beim
+  Load (Hot-Reload) lädt sofort, ein 20-s-Fallback deckt ältere Builds ohne
+  das Atom ab, und jeder spätere `closed→open`-Wechsel (Standby,
+  Backend-Neustart) zieht Sessions + Live-Status automatisch nach — manuelles
+  Aktualisieren ist damit obsolet. Tests: Gate-Sektion im Render-Smoketest
+  (kein RPC vor `open`, Initial-Satz beim `open`, Reconnect-Nachziehen).
 - **Fertig-Effekt (`tabs.doneFx`)**: Wenn eine Session fertig wird, glüht
   ihre Zeile einmal dezent auf und/oder wackelt kurz perspektivisch in der
   gewählten Achse (`tabs.doneFxAxis`: X/Y/Z) — Stärke über
@@ -40,6 +53,26 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   bestehende Installationen wird der Wert beim nächsten Start einmalig
   zurückgesetzt. Wer den Frosted-Look wieder möchte, schaltet die Option
   in den Glass-Einstellungen manuell wieder ein.
+- **Hintergrund-Bild/Video wird jetzt zuverlässig angezeigt**. Der
+  `.sf-bg-layer` lag mit `z-index: -1` UNTER der Hintergrund-Farbe der
+  Chat-Surface (`bg-(--ui-chat-surface-background)`, in den meisten
+  Themes opaque) — der Layer wurde also von der Chat-Surface übermalt
+  und blieb unsichtbar. Fix: `z-index: 0` (Layer über der Parent-BG)
+  und `insertBefore(target.firstChild)` (DOM-Ordnung hält den Layer
+  HINTER positionierten Geschwistern = Chat-Inhalt). Auswahl + Dimmer
+  bleiben unverändert.
+- **Hintergrund-Bilder werden jetzt geladen (Desktop-Protokoll)**.
+  `hermes-media://stream/…` lehnte Bild-Endungen mit HTTP 415 ab und
+  lieferte für bekannte Endungen `application/octet-stream` (Chromium
+  lädt dann nichts). Fix in `electron/media-protocol.ts` (Erlaubnis-Liste
+  um `.png/.jpg/.jpeg/.webp/.gif/.avif/.apng/.bmp/.svg`) und in
+  `electron/media-range.ts` (`MEDIA_MIME` um die passenden
+  `image/*`-Typen). Tests in beiden Suites decken den Pfad ab.
+- **Hintergrund-Videos: Autoplay robust gegen „Standbild"**. Das
+  `<video>`-Element bekommt `muted/loop/autoplay/playsinline` jetzt
+  sowohl als DOM-Property ALS AUCH als HTML-Attribut, und `play()`
+  wird nach `loadeddata` erneut angestoßen — das erste `play()` fällt
+  oft in den Lade-Puffer und zeigt sonst nur Frame 1.
 
 ### Intern
 - Style-Test: Fixture-Zeile „Liste aktiv+ausgewählt" (`l5`) ergänzt; Sektion
