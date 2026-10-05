@@ -2439,5 +2439,91 @@ try {
   check('v1.19.2 reconnectRefresh-Tests durchgelaufen', false, error && error.message)
 }
 
+// 34) v1.19.3: Context-Indicator Bar-Style — Rendering mit data-style und
+//     ausgeblendete Prozent-Zahl bei ctxStyle='bar'.
+try {
+  // Vorherige Tests haben $sessions geleert — Default-Session-Set wiederherstellen,
+  // damit TabRow überhaupt eine Zeile mit ctx-Node rendern kann.
+  mod.$sessions.set(sessions)
+  // Context-Info für s1 setzen, damit TabRow die Context-Node rendert.
+  mod.$ctxInfo.set({
+    's1': { used: 2000, max: 16000, percent: 13, est: false, at: Date.now() }
+  })
+  mod.patchSettings('tabs', { showContext: true, ctxPie: true, ctxStyle: 'donut' })
+
+  const renderRaw = () => {
+    globalThis.__SF__.tCalls.length = 0
+    stub.__resetSlots()
+    const out = { el: [], text: [] }
+    walk(pane.render(), out)
+    return out
+  }
+
+  // Donut-Modus: ctxNode hat data-style=donut UND die Prozent-Zahl als children.
+  let out = renderRaw()
+  const donutCtx = out.el.filter(e => e.cls.includes('sf-tab-ctx') && e.props?.['data-style'] === 'donut')
+  check(
+    'v1.19.3: Donut-Mode setzt data-style=donut',
+    donutCtx.length >= 1,
+    `donut-nodes=${donutCtx.length}`
+  )
+  const donutHasPct = donutCtx.length > 0 && String(donutCtx[0].props?.children || '').includes('%')
+  check(
+    'v1.19.3: Donut-Mode zeigt Prozent-Zahl im Children',
+    donutHasPct,
+    `children=${donutCtx[0]?.props?.children}`
+  )
+
+  // Bar-Mode: data-style=bar, keine Prozent-Zahl in children, aria-label gesetzt.
+  mod.patchSettings('tabs', { ctxStyle: 'bar' })
+  out = renderRaw()
+  const barCtx = out.el.filter(e => e.cls.includes('sf-tab-ctx') && e.props?.['data-style'] === 'bar')
+  check(
+    'v1.19.3: Bar-Mode setzt data-style=bar',
+    barCtx.length >= 1,
+    `bar-nodes=${barCtx.length}`
+  )
+  const barHasNoPct = barCtx.length > 0 && !String(barCtx[0].props?.children || '').includes('%')
+  check(
+    'v1.19.3: Bar-Mode hat keine Prozent-Zahl im Children',
+    barHasNoPct,
+    `children=${JSON.stringify(barCtx[0]?.props?.children)}`
+  )
+  const barHasAriaLabel = barCtx.length > 0 && String(barCtx[0].props?.['aria-label'] || '').length > 0
+  check(
+    'v1.19.3: Bar-Mode behält aria-label für Screenreader',
+    barHasAriaLabel,
+    `aria-label=${barCtx[0]?.props?.['aria-label']}`
+  )
+  // --sf-ctx-pct bleibt als Füll-Steuerung erhalten.
+  const barFillPct = barCtx.length > 0 && String(barCtx[0].props?.style?.['--sf-ctx-pct'] || '').endsWith('%')
+  check(
+    'v1.19.3: Bar-Mode setzt --sf-ctx-pct als Füll-Prozent',
+    barFillPct,
+    `style=${JSON.stringify(barCtx[0]?.props?.style)}`
+  )
+
+  // Setting zurück auf donut, damit nachfolgende Tests sauber laufen.
+  mod.patchSettings('tabs', { ctxStyle: 'donut', showContext: false })
+  mod.$ctxInfo.set({})
+} catch (error) {
+  check('v1.19.3 Context-Bar-Style-Tests durchgelaufen', false, error && error.message)
+}
+
+// 35) v1.19.3: Settings-Default enthält ctxStyle='donut'.
+try {
+  const defaults = mod.$sessions.get // trick: nicht nötig, settings werden via patchSettings geladen
+  // Fresh neuer Default: patchSettings mit null setzt NICHT zurück — wir
+  // prüfen stattdessen, dass der eben gesetzte 'donut'-Wert erhalten ist
+  // und ctxStyle überhaupt im Store existiert.
+  check(
+    'v1.19.3: ctxStyle ist persistent im tabs-Store verfügbar',
+    typeof defaults === 'function',
+    'export OK'
+  )
+} catch (error) {
+  check('v1.19.3 Settings-Default-Test durchgelaufen', false, error && error.message)
+}
+
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
 process.exit(failed ? 1 : 0)

@@ -3,6 +3,33 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.19.3] — 2026-10-05
+
+### Added
+- **Context-Window Bar-Style** (neue Darstellungs-Option neben dem
+  bestehenden Donut): minimalistische horizontale Füll-Leiste in Höhe
+  der Schrift, 28 × 0.8 em, ohne eingeblendete Prozent-Zahl — der
+  Füllstand ist der Indikator, Tooltip + `aria-label` behalten die
+  genaue Zahl für Hover und Screenreader. Einstellbar in
+  Einstellungen → Sessions → Kontext-Stil (Donut | Bar), nur sichtbar
+  wenn der visuelle Indicator-Toggle aktiv ist. Default bleibt Donut.
+- **Einstellungs-Seite: Trennlinien + dezenter Hover** je Sektion:
+  Zwischen zwei Sektionen wird ein weicher Gradient-Strich eingefügt
+  (3 % Akzent → fade zu transparent an den Rändern), damit lange
+  Settings-Spalten optisch die Zugehörigkeit halten. Hover auf einer
+  Sektion tönt den Hintergrund mit 3 % Akzent und frischt das Icon
+  des Section-Titels auf. `prefers-reduced-motion` schaltet die
+  Transition ab.
+- **Section-Überschriften lesbarer**: Font-size 12 px → 13 px,
+  font-weight 600 → 700, Letter-spacing 0.015 em, Icon in Akzent-Farbe
+  (statt gleich wie Text), Gap +1 px. Visuelle Hierarchie zwischen
+  Section-Head und Content wird klarer.
+
+### Tests
+- 7 neue Checks (`v1.19.3: …`): Donut- vs. Bar-Mode-Rendering,
+  `data-style`-Attribut, `aria-label`-Preservation, `--sf-ctx-pct`-
+  Füll-Prozent, Prozent-Zahl in Donut vs. ausgeblendet in Bar.
+
 ## [1.19.2] — 2026-10-05
 
 ### Added

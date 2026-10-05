@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.19.2'
+const VERSION = '1.19.3'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -183,6 +183,7 @@ const DEFAULT_SETTINGS = {
     alignTop: true,
     showContext: false,
     ctxPie: true,
+    ctxStyle: 'donut',
     rowGradOn: false,
     rowGradFrom: '#7c3aed',
     rowGradTo: '#00dbda',
@@ -581,6 +582,7 @@ function clearRows() {
     'data-sf-aligntop',
     'data-sf-hoverlift',
     'data-sf-ctxpie',
+    'data-sf-ctxstyle',
     'data-sf-liveframe',
     'data-sf-rowlive',
     'data-sf-donefx',
@@ -650,6 +652,7 @@ function applyRows() {
     root.setAttribute('data-sf-aligntop', tabs.alignTop === false ? 'off' : 'on')
     root.setAttribute('data-sf-hoverlift', tabs.hoverLift === false ? 'off' : 'on')
     root.setAttribute('data-sf-ctxpie', tabs.ctxPie === false ? 'off' : 'on')
+    root.setAttribute('data-sf-ctxstyle', tabs.ctxStyle === 'bar' ? 'bar' : 'donut')
     root.setAttribute('data-sf-liveframe', ['off', 'ring', 'glow'].includes(tabs.liveFrame) ? tabs.liveFrame : 'glow')
   } catch (error) {
     console.warn(`[${ID}] rows apply failed`, error)
@@ -3468,6 +3471,10 @@ const EN = {
   tabsShowContextDesc: 'Compact percent label per row/card for live sessions (read-only context breakdown; no provider call). Turns amber above 70 % and red above 90 %.',
   tabsCtxPie: 'Context window as pie',
   tabsCtxPieDesc: 'Shows the context value on top of a small pie chart (the value keeps a text shadow for readability). Off = plain percent label.',
+  tabsCtxStyle: 'Context style',
+  tabsCtxStyleDesc: 'Donut = classic ring with the percent inside. Bar = minimalist horizontal fill in text height (no number, tooltip stays).',
+  tabsCtxStyleDonut: 'Donut',
+  tabsCtxStyleBar: 'Bar',
   ctxTooltip: (used, max, pct) => `Context window: ${used} / ${max} (${pct} %)`,
 
   tabsShowTime: 'Show time',
@@ -4024,6 +4031,10 @@ const DE = {
   tabsShowContextDesc: 'Kompaktes Prozent-Label je Zeile/Karte für Live-Sessions (read-only Context-Breakdown; kein Provider-Call). Ab 70 % bernstein, ab 90 % rot.',
   tabsCtxPie: 'Kontextfenster als Torten-Diagramm',
   tabsCtxPieDesc: 'Zeigt den Kontextwert über einem kleinen Torten-Diagramm (der Wert behält einen Text-Schatten für Lesbarkeit). Aus = reines Prozent-Label.',
+  tabsCtxStyle: 'Kontext-Stil',
+  tabsCtxStyleDesc: 'Donut = klassischer Ring mit Prozentzahl in der Mitte. Bar = minimalistische horizontale Füll-Leiste in Schrifthöhe (ohne Zahl, Tooltip bleibt).',
+  tabsCtxStyleDonut: 'Donut',
+  tabsCtxStyleBar: 'Bar',
   ctxTooltip: (used, max, pct) => `Kontextfenster: ${used} / ${max} (${pct} %)`,
 
   tabsShowTime: 'Zeit anzeigen',
@@ -4509,6 +4520,15 @@ html[data-sf-ctxpie~=on] .sf-tab-ctx{position:relative;isolation:isolate;display
 html[data-sf-ctxpie~=on] .sf-tab-ctx::before{content:'';position:absolute;inset:0;z-index:-1;border-radius:50%;background:conic-gradient(from -90deg,var(--sf-ctx-color,var(--ui-accent)) var(--sf-ctx-pct,0%),color-mix(in srgb,var(--sf-ctx-color,var(--ui-accent)) 18%,transparent) 0deg);-webkit-mask:radial-gradient(closest-side,transparent 0 50%,#000 52%);mask:radial-gradient(closest-side,transparent 0 50%,#000 52%)}
 html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=warn]{--sf-ctx-color:#d97706}
 html[data-sf-ctxpie~=on] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destructive,#dc2626)}
+/* Bar-Style (minimalistisch): kleine horizontale Füll-Bar in Höhe der
+   Schrift, ohne Prozent-Zahl drin. Breite ca. 22px, Höhe = 1em / 10px.
+   Rundungen bleiben scharf-dezent; der Füllstand nutzt denselben
+   --sf-ctx-pct wie der Donut, nur als width der Innenfüllung. */
+html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx{position:relative;isolation:auto;display:inline-flex;align-items:center;justify-content:flex-start;width:28px;height:0.8em;min-height:9px;border-radius:3px;padding:0;font-size:0;line-height:0;color:transparent;background:color-mix(in srgb,var(--sf-ctx-color,var(--ui-accent)) 14%,transparent);text-shadow:none;overflow:hidden}
+html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx::before{content:'';position:absolute;inset:0;z-index:auto;border-radius:inherit;background:var(--sf-ctx-color,var(--ui-accent));width:var(--sf-ctx-pct,0%);height:100%;-webkit-mask:none;mask:none;transition:width .22s ease-out}
+html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx[data-level=warn]{--sf-ctx-color:#d97706}
+html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx[data-level=high]{--sf-ctx-color:var(--destructive,#dc2626)}
+@media (prefers-reduced-motion:reduce){html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx::before{transition:none}}
 .sf-tab-time{font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-tab-badge{font-size:9.5px;padding:0 4px;border-radius:4px;background:var(--ui-bg-tertiary,rgba(127,127,127,.12));color:var(--ui-text-tertiary);line-height:14px}
 .sf-tab-count{font-size:10px;color:var(--ui-text-quaternary)}
@@ -4592,9 +4612,21 @@ html[data-renderer-animations-paused] .sf-load-bar::after{animation-play-state:p
 .sf-settings-head{margin-bottom:14px}
 .sf-settings-title{font-size:15px;font-weight:600;color:var(--foreground)}
 .sf-settings-sub{font-size:12px;color:var(--ui-text-tertiary);margin-top:3px}
-.sf-section-title{display:flex;align-items:center;gap:6px;margin:22px 0 4px;font-size:12px;font-weight:600;color:var(--foreground)}
+.sf-section-title{display:flex;align-items:center;gap:7px;margin:22px 0 4px;font-size:13px;font-weight:700;letter-spacing:.015em;color:var(--foreground)}
 .sf-section-title:first-of-type{margin-top:8px}
+.sf-section-title > svg,.sf-section-title [class*=codicon]{color:var(--ui-accent);flex-shrink:0}
+.sf-section-title > span{line-height:1.2}
 .sf-section-desc{font-size:11px;line-height:1.5;color:var(--ui-text-tertiary);margin:1px 0 2px}
+/* Einstellungs-Sektion: Trennlinie + dezenter Hover, damit man in der
+   Breite der Seite die Zugehörigkeit nicht verliert. Hover tönt nur
+   minimal — der Settings-Content soll weiterhin ruhig lesbar bleiben. */
+section[id^=sf-sec-]{position:relative;padding:4px 10px 10px;margin:0 -10px;border-radius:10px;transition:background-color .18s ease}
+section[id^=sf-sec-] + section[id^=sf-sec-]{margin-top:14px}
+section[id^=sf-sec-] + section[id^=sf-sec-]::before{content:'';position:absolute;top:-7px;left:12px;right:12px;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--foreground) 14%,transparent) 20%,color-mix(in srgb,var(--foreground) 14%,transparent) 80%,transparent)}
+section[id^=sf-sec-]:hover{background:color-mix(in srgb,var(--ui-accent) 3%,transparent)}
+section[id^=sf-sec-]:hover .sf-section-title{color:var(--foreground)}
+section[id^=sf-sec-]:hover .sf-section-title > svg,section[id^=sf-sec-]:hover .sf-section-title [class*=codicon]{color:color-mix(in srgb,var(--ui-accent) 85%,var(--foreground))}
+@media (prefers-reduced-motion:reduce){section[id^=sf-sec-]{transition:none}}
 .sf-hint{font-size:11px;line-height:1.55;color:var(--ui-text-quaternary);margin:6px 0 0}
 .sf-wide{width:16rem}
 .sf-dialog{max-width:24rem}
@@ -6473,14 +6505,22 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     const ctxLevel = ctx.percent >= 90 ? 'high' : ctx.percent >= 70 ? 'warn' : 'ok'
     const usedLabel = `${ctx.est ? '~' : ''}${compactNumber ? compactNumber(ctx.used) : String(ctx.used)}`
     const maxLabel = compactNumber ? compactNumber(ctx.max) : String(ctx.max)
+    // Bar-Style blendet die Zahl bewusst aus (optisches Minimum): die
+    // Bar selbst ist der Indikator, Prozent-Zahl bleibt aber als
+    // `title` + `aria-label` für Hover-Tooltip und Screenreader.
+    const barStyle = tabsCfg.ctxStyle === 'bar'
+    const pctValue = Math.max(0, Math.min(100, Number(ctx.percent) || 0))
 
     ctxNode = jsx('span', {
       className: 'sf-tab-ctx',
       'data-level': ctxLevel,
+      'data-style': barStyle ? 'bar' : 'donut',
+      'aria-label': t('ctxTooltip', usedLabel, maxLabel, String(ctx.percent)),
+      role: 'img',
       key: 'ctx',
-      style: { '--sf-ctx-pct': `${Math.max(0, Math.min(100, Number(ctx.percent) || 0))}%` },
+      style: { '--sf-ctx-pct': `${pctValue}%` },
       title: t('ctxTooltip', usedLabel, maxLabel, String(ctx.percent)),
-      children: `${ctx.percent}%`
+      children: barStyle ? '' : `${ctx.percent}%`
     })
   }
 
@@ -8899,6 +8939,22 @@ function SettingsPage() {
             checked: tabs.ctxPie,
             onChange: value => patch('tabs', 'ctxPie', value)
           }),
+          // Darstellungs-Stil nur relevant wenn die visuelle Darstellung
+          // überhaupt aktiv ist — Toggle oben entscheidet darüber.
+          tabs.ctxPie
+            ? jsx(Row, {
+                title: t('tabsCtxStyle'),
+                description: t('tabsCtxStyleDesc'),
+                action: jsx(Segment, {
+                  options: [
+                    { id: 'donut', label: t('tabsCtxStyleDonut') },
+                    { id: 'bar', label: t('tabsCtxStyleBar') }
+                  ],
+                  value: tabs.ctxStyle === 'bar' ? 'bar' : 'donut',
+                  onChange: value => patch('tabs', 'ctxStyle', value === 'bar' ? 'bar' : 'donut')
+                })
+              })
+            : null,
           jsx(Row, {
             title: t('tabsStatusStyle'),
             description: t('tabsStatusStyleDesc'),
