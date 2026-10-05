@@ -98,6 +98,10 @@ const densityRow = (id, level) =>
 const inlineMetaRow = id =>
   `<div class="sf-tab" id="${id}" data-density="comfortable"><span class="sf-tab-lead"></span><div class="sf-tab-main"><div class="sf-tab-title">Dichte komfortabel einspaltig</div><div class="sf-tab-details">deepseek-flash · 152 Nachrichten · zuletzt aktiv 11m</div><div class="sf-tab-meta sf-tab-meta-inline"><span class="sf-tab-time">11m</span><span class="sf-tab-ctx" data-level="ok" style="--sf-ctx-pct:22%">22%</span></div></div></div>`
 
+// Fertig-Effekt-Zeilen (data-done-fx) für die Animations-Checks.
+const fxRow = (id, label, withShine) =>
+  `<div class="sf-tab" id="${id}" data-done-fx="true"><span class="sf-tab-lead"></span><div class="sf-tab-main"><div class="sf-tab-title">${label}</div></div>${withShine ? '<span class="sf-done-shine"></span>' : ''}</div>`
+
 const html = `<!doctype html>
 <html lang="de"
   data-sf-rowgrad="on" data-sf-rowshadow="medium" data-sf-titlegrad="on"
@@ -119,6 +123,8 @@ const html = `<!doctype html>
         ${row('l2', 'Liste aktiv', ' data-active="true"')}
         ${row('l3', 'Liste busy', ' data-live="busy"')}
         ${row('l5', 'Liste aktiv+ausgewählt', ' data-active="true" data-live="busy"')}
+        ${fxRow('l6', 'Fertig FX')}
+        ${fxRow('l7', 'Fertig Shine', true)}
       </div>
     </div>
     <div class="sf-section">
@@ -532,6 +538,37 @@ try {
     LV.busyGrid.bg === LV.normal.bg && LV.busyGrid.shadow.includes('inset'),
     `bg=${LV.busyGrid.bg.slice(0, 80)}`
   )
+
+  // ── 16) Fertig-Effekt: Animation, Achse, Stärke, Shine ────────────────────
+  const FX = await page.evaluate(() => {
+    const r = document.documentElement
+    r.setAttribute('data-sf-donefx', 'glow-wobble')
+    r.setAttribute('data-sf-donefx-axis', 'x')
+    r.setAttribute('data-sf-donefx-strength', 'medium')
+    const a1 = window.getComputedStyle(document.getElementById('l6')).animationName
+    r.setAttribute('data-sf-donefx-axis', 'y')
+    const a2 = window.getComputedStyle(document.getElementById('l6')).animationName
+    r.setAttribute('data-sf-donefx', 'shine')
+    const shineEl = document.querySelector('#l7 .sf-done-shine')
+    const shineAnim = shineEl ? window.getComputedStyle(shineEl, '::before').animationName : ''
+    const amp = window.getComputedStyle(r).getPropertyValue('--sf-done-amp').trim()
+    r.removeAttribute('data-sf-donefx')
+    r.removeAttribute('data-sf-donefx-axis')
+    r.removeAttribute('data-sf-donefx-strength')
+    return { a1, a2, shineAnim, amp }
+  })
+  check(
+    'Fertig-Effekt: glow-wobble (X) → sf-done-glow + sf-done-wob-x',
+    FX.a1.includes('sf-done-glow') && FX.a1.includes('sf-done-wob-x'),
+    FX.a1
+  )
+  check(
+    'Fertig-Effekt: Achse Y wechselt auf sf-done-wob-y',
+    FX.a2.includes('sf-done-wob-y') && !FX.a2.includes('sf-done-wob-x'),
+    FX.a2
+  )
+  check('Fertig-Effekt: Stärke medium → --sf-done-amp: 6deg', FX.amp === '6deg', FX.amp)
+  check('Fertig-Effekt: shine animiert sf-done-sweep am Glanzstreifen', FX.shineAnim.includes('sf-done-sweep'), FX.shineAnim)
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }

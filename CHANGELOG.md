@@ -5,6 +5,20 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+### Added
+- **Fertig-Effekt (`tabs.doneFx`)**: Wenn eine Session fertig wird, glüht
+  ihre Zeile einmal dezent auf und/oder wackelt kurz perspektivisch in der
+  gewählten Achse (`tabs.doneFxAxis`: X/Y/Z) — Stärke über
+  `tabs.doneFxStrength` (dezent/mittel/stark). Weitere Presets: Glanzstreifen
+  („shine") und „pop". Auslösung in Echtzeit: `message.complete` stößt einen
+  frischen Live-Poll an (Transition beschäftigt→ruhig im Poll); der Poll
+  bereinigt die Aktivität fertig gewordener Sessions zugleich sofort
+  (statt TTL-Latenz), sodass Statuspunkt und Effekt zusammen kommen.
+- **„Aktiv"-Subtab als flache Liste**: zeigt nur noch laufende Sessions
+  (oben) plus Sessions mit HEUTIGER Aktivität — ohne Gruppen-Kopfzeilen und
+  ohne Sektionen. Alles andere wird ausgeblendet; Zähler („x von y") und
+  Leerzustand greifen jetzt auch im Aktiv-Modus.
+
 ### Changed
 - **Live-Kennzeichnung neu verteilt — Schiene auf die aktive Auswahl**:
   „Aktiv ohne Auswahl" zeigt jetzt NUR den Rahmen (Inset-Ring) und lässt
@@ -19,6 +33,10 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 - Style-Test: Fixture-Zeile „Liste aktiv+ausgewählt" (`l5`) ergänzt; Sektion
   15 prüft Rahmen-only (Hintergrund identisch zur normalen Zeile; Schiene
   nur an der aktiven Auswahl als `::before`), Sektion 4 auf „nur Rahmen".
+- Tests (Aktiv-Flat + Fertig-Effekt): Render-Sektion 23 auf die Flat-Semantik
+  umgestellt (nur beschäftigt + heute, keine Sektionen), Sektion 25 prüft die
+  Poll-Transition (working→idle → doneFx; kein Fehl-Feuern bei Weiterlaufen).
+  Style-Test Sektion 16: Glow/Wobble-Achsen/Stärke/Shine (Fixtures l6/l7).
 
 ## [1.17.2] — 2026-10-05
 

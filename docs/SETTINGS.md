@@ -63,6 +63,9 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.selHover` | `soft` | Hover-Verhalten des ausgewählten Eintrags (Liste & Grid): `soft` (Tönung vertiefen), `strong` (stärker), `off` (unverändert). |
 | `tabs.rowLive` | `false` | Aktiv & Wartend hervorheben: Inset-Ring um aktive Zeilen (kein Hintergrund-Eingriff) + pulsierendes Status-Icon + Live-Rahmen; die aktive AUSWAHL (aktiv + selektiert) trägt zusätzlich die linke Live-Schiene (Bildsprache wie im Tab-Design). |
 | `tabs.liveFrame` | `glow` | Rahmen für arbeitende/wartende Einträge: `off`/`ring` (statisch)/`glow` (glühender, umlaufender Ring — App-Technik). Nur sichtbar mit `rowLive`. |
+| `tabs.doneFx` | `glow-wobble` | Einmaliger „Fertig"-Effekt, wenn eine Session fertig wird: `off` / `glow` (aufglühen) / `wobble` (Achsen-Wackeln) / `glow-wobble` / `shine` (Glanzstreifen) / `pop`. |
+| `tabs.doneFxAxis` | `x` | Wackel-Achse des Fertig-Effekts: `x` (kippen) / `y` (drehen) / `z` (rütteln). |
+| `tabs.doneFxStrength` | `subtle` | Stärke des Wackel-Effekts: `subtle` (dezent) / `medium` / `strong`. |
 | `tabs.showContext` | `false` | Kontextfenster (kompakt): Prozent-Label je Zeile/Karte für **Live-Sessions** (read-only `session.context_breakdown`, kein Provider-Call). Ab 70 % bernstein, ab 90 % rot; Tooltip zeigt used/max. |
 | `tabs.ctxPie` | `true` | Kontextfenster als **Donut**: Außenring = Füllstand, Innenkreis ausgespart (die Zeilenfläche scheint durch). Der Wert steht im Loch — weiß mit mehrlagigem Text-Schatten (Kontur + Glow); Farbstufen ab 70 %/90 %. Aus = reines Prozent-Label. **Listen-Ansicht:** Donut ganz rechts am Ende (nach der Zeit); **Grid:** vor der Zeit. |
 | `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |
@@ -87,14 +90,14 @@ Pane-Besuch startet die Filter immer frisch):
 - **Suche**: Textfeld, durchsucht Titel, Branch und Vorschau (klein-/
   großschreibungsunabhängig). Ein ✕ im Feld leert die Suche.
 - **Schnellfilter**: `Alle` / `Aktiv` als Segmented-Control (der frühere
-  `Angepinnt`-Chip ist seit v1.17.0 die feste Angepinnt-Sektion). `Alle`
-  zeigt die Startzeit-Reihenfolge; `Aktiv` blendet seit v1.17.1 **nichts
-  mehr aus**, sondern sortiert alle Sessions absteigend nach der letzten
-  Aktivität (Live-Liste → Gateway-Events → Startzeit) — aktive Sessions
-  stehen dadurch automatisch oben.
-- Trifft die **Suche** keine Sessions, erscheint ein eigener Leerzustand
-  („Keine Sessions passen zu diesem Filter") statt des generischen
-  „keine Sessions"-Hinweises.
+  `Angepinnt`-Chip ist die feste Angepinnt-Sektion). `Alle` zeigt die
+  Startzeit-Reihenfolge mit Gruppen; `Aktiv` zeigt eine **flache Liste ohne
+  Kopfzeilen**: laufende Sessions oben, darunter nur Sessions, die **heute**
+  aktiv waren (lokale Mitternacht als Grenze) — je absteigend nach letzter
+  Aktivität. Alles andere wird ausgeblendet.
+- Wird die Liste durch Suche bzw. den Aktiv-Modus leer, erscheint ein eigener
+  Leerzustand („Keine Sessions passen zu diesem Filter") statt des
+  generischen „keine Sessions"-Hinweises.
 - Gruppen, deren gesamter Inhalt durch Suche/Filter fällt, verschwinden
   aus der Liste (keine leeren Header).
 

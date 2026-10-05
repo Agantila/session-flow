@@ -11,11 +11,10 @@ zugesagt.
   Tabs auf einen Projekt-Header ruft `session.workspace.move` auf — echte
   Verschiebung, nicht nur Anzeige. Hover-Hervorhebung + Inline-Zielhinweis +
   „Gelandet"-Flash machen den DnD-Ausgang vorab und danach sichtbar.
-- **Filter-Leiste** (v1.14.0, v1.17.1): Textsuche + Schnellfilter
-  (Alle/Aktiv) über der Liste, clientseitig, eigener Leerzustand bei 0
-  Treffern; `Aktiv` sortiert seit v1.17.1 alles absteigend nach der letzten
-  Aktivität (früher: blendete Inaktive aus), `Alle` bleibt die
-  Startzeit-Reihenfolge.
+- **Filter-Leiste** (v1.14.0): Textsuche + Schnellfilter (Alle/Aktiv) über
+  der Liste, clientseitig, eigener Leerzustand bei 0 Treffern; `Aktiv` zeigt
+  seit dem Aktiv-Flat-Umbau nur laufende + heutige Sessions als flache Liste
+  (keine Kopfzeilen), `Alle` bleibt die Startzeit-Reihenfolge mit Gruppen.
 - **Tab-Selektor-Modus** (v1.14.0): `tabs.asTabSelector` blendet die native
   Content-Tab-Leiste für Session-Tabs aus (`:has()`-Selektor), wenn
   Liste/Grid dieselbe Navigation schon abdecken.

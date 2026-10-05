@@ -348,7 +348,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, refreshSessions }\n'
+    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, refreshSessions }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -1326,12 +1326,18 @@ try {
   check('v1.17.0-Tests durchgelaufen', false, error && error.message)
 }
 
-// 23) v1.17.1: „Aktiv"-Subtab sortiert ALLE Sessions nach letzter Aktivität
+// 23) Aktiv-Flat: beschäftigte Sessions oben + nur heutige Aktivität, flache
+// Liste ohne Kopfzeilen (ersetzt die v1.17.1-Semantik „alles sortiert")
 try {
-  // Fixtures: rec-b hat die ÄLTESTE Startzeit, ist aber laut Live-Liste
-  // zuletzt aktiv — im Aktiv-Modus muss sie nach oben wandern.
+  // Fixtures: rec-b läuft (live, busy), rec-a war HEUTE aktiv (frischer
+  // Start), rec-c ist alt und inaktiv → darf nicht erscheinen.
+  const dayStart = (() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return Math.max(d.getTime() + 60_000, Date.now() - 60_000)
+  })()
   mod.$sessions.set([
-    { id: 'rec-a', title: 'Recent Alpha', preview: '', cwd: '', branch: 'main', model: 'test/model', toolCount: 0, pinned: false, source: 'desktop', startedAt: 3000, messageCount: 1, live: 0 },
+    { id: 'rec-a', title: 'Recent Alpha', preview: '', cwd: '', branch: 'main', model: 'test/model', toolCount: 0, pinned: false, source: 'desktop', startedAt: dayStart, messageCount: 1, live: 0 },
     { id: 'rec-b', title: 'Recent Beta', preview: '', cwd: '', branch: 'main', model: 'test/model', toolCount: 0, pinned: false, source: 'desktop', startedAt: 1000, messageCount: 1, live: 0 },
     { id: 'rec-c', title: 'Recent Gamma', preview: '', cwd: '', branch: 'main', model: 'test/model', toolCount: 0, pinned: false, source: 'desktop', startedAt: 2000, messageCount: 1, live: 0 }
   ])
@@ -1366,41 +1372,41 @@ try {
   const outAll = renderRaw()
   const titlesAll = titlesOf(outAll)
   check(
-    'v1.17.1: „Alle" behält die gespeicherte Reihenfolge (Startzeit)',
+    'Aktiv-Flat: „Alle" zeigt weiterhin alle drei Zeilen in Speicher-Reihenfolge',
     titlesAll.length === 3 && titlesAll.join('|') === 'Recent Alpha|Recent Beta|Recent Gamma',
     titlesAll.join(' | ')
   )
 
-  // Schnellfilter „Aktiv" umschalten (Segment-Knoten aus dem Filterbar-Baum).
   const filterbarEl = outAll.el.find(e => e.cls.includes('sf-filterbar'))
   const segNode = rawKids(filterbarEl && filterbarEl.props).find(
     n => n && n.p && Array.isArray(n.p.options) && typeof n.p.onChange === 'function'
   )
-  check('v1.17.1: Aktiv-Segment im Filterbar gefunden', Boolean(segNode))
+  check('Aktiv-Flat: Aktiv-Segment im Filterbar gefunden', Boolean(segNode))
 
   if (segNode) {
     segNode.p.onChange('active')
     const outActive = renderRaw()
     const titlesActive = titlesOf(outActive)
     check(
-      'v1.17.1: Aktiv zeigt ALLE Sessions (nichts wird ausgeblendet)',
-      titlesActive.length === 3,
+      'Aktiv-Flat: nur beschäftigte + heute aktive Sessions (rec-c ausgeblendet)',
+      titlesActive.length === 2 && !titlesActive.includes('Recent Gamma'),
       titlesActive.join(' | ')
     )
     check(
-      'v1.17.1: Aktiv sortiert absteigend nach letzter Aktivität (Live zuerst)',
-      titlesActive[0] === 'Recent Beta' && titlesActive[1] === 'Recent Alpha' && titlesActive[2] === 'Recent Gamma',
+      'Aktiv-Flat: beschäftigte Session steht oben (rec-b vor rec-a)',
+      titlesActive[0] === 'Recent Beta' && titlesActive[1] === 'Recent Alpha',
       titlesActive.join(' | ')
     )
-
-    // Ohne Live-/Event-Daten fällt die Sortierung auf die Startzeit zurück.
-    mod.$liveMap.set({})
-    const outFallback = renderRaw()
-    const titlesFallback = titlesOf(outFallback)
     check(
-      'v1.17.1: ohne Live-Daten sortiert Aktiv nach Startzeit (Fallback)',
-      titlesFallback[0] === 'Recent Alpha' && titlesFallback[1] === 'Recent Gamma' && titlesFallback[2] === 'Recent Beta',
-      titlesFallback.join(' | ')
+      'Aktiv-Flat: keine Sektionen/Kopfzeilen (flache Liste)',
+      outActive.el.filter(e => e.cls.includes('sf-section')).length === 0 &&
+        outActive.el.filter(e => e.cls.includes('sf-group-head')).length === 0,
+      ''
+    )
+    check(
+      'Aktiv-Flat: „Alle" rendert weiterhin mit Sektion',
+      outAll.el.filter(e => e.cls.includes('sf-section')).length >= 1,
+      ''
     )
 
     segNode.p.onChange('all')
@@ -1408,7 +1414,53 @@ try {
 
   mod.$liveMap.set({})
 } catch (error) {
-  check('v1.17.1-Tests durchgelaufen', false, error && error.message)
+  check('Aktiv-Flat-Tests durchgelaufen', false, error && error.message)
+}
+
+// 25) Fertig-Effekt: Poll-Transition working→idle markiert die Session
+try {
+  mod.$doneFx.set({})
+  mod.$liveMap.set({
+    'rt-fin': { storedId: 'fin-1', status: 'working', at: Date.now(), model: 'm', lastActive: Date.now() }
+  })
+  // Poll-Antwort: Session ist jetzt idle → Transition löst den Effekt aus.
+  const prevRequest = hostStub.request
+  hostStub.request = async (method, params) => {
+    if (method === 'session.active_list') {
+      return { sessions: [{ id: 'rt-fin', session_key: 'fin-1', status: 'idle', model: 'm', last_active: Math.floor(Date.now() / 1000) }] }
+    }
+    return prevRequest ? prevRequest(method, params) : null
+  }
+  await mod.pollLiveSessions()
+  hostStub.request = prevRequest
+  check(
+    'Fertig-Effekt: Transition working→idle löst doneFx aus',
+    Boolean(mod.$doneFx.get()['fin-1']),
+    JSON.stringify(mod.$doneFx.get())
+  )
+
+  // Gegenprobe: läuft die Session weiter, darf nichts feuern.
+  mod.$doneFx.set({})
+  mod.$liveMap.set({
+    'rt-fin2': { storedId: 'fin-2', status: 'working', at: Date.now(), model: 'm', lastActive: Date.now() }
+  })
+  const prev2 = hostStub.request
+  hostStub.request = async (method, params) => {
+    if (method === 'session.active_list') {
+      return { sessions: [{ id: 'rt-fin2', session_key: 'fin-2', status: 'streaming', model: 'm', last_active: Math.floor(Date.now() / 1000) }] }
+    }
+    return prev2 ? prev2(method, params) : null
+  }
+  await mod.pollLiveSessions()
+  hostStub.request = prev2
+  check(
+    'Fertig-Effekt: weiterlaufende Session feuert nichts',
+    !mod.$doneFx.get()['fin-2'],
+    JSON.stringify(mod.$doneFx.get())
+  )
+  mod.$liveMap.set({})
+} catch (error) {
+  check('Fertig-Effekt-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

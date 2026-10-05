@@ -196,6 +196,9 @@ const DEFAULT_SETTINGS = {
     selHover: 'soft',
     rowLive: false,
     liveFrame: 'glow',
+    doneFx: 'glow-wobble',
+    doneFxAxis: 'x',
+    doneFxStrength: 'subtle',
     maxVisible: 0,
     asTabSelector: false
   },
@@ -544,7 +547,10 @@ function clearRows() {
     'data-sf-hoverlift',
     'data-sf-ctxpie',
     'data-sf-liveframe',
-    'data-sf-rowlive'
+    'data-sf-rowlive',
+    'data-sf-donefx',
+    'data-sf-donefx-axis',
+    'data-sf-donefx-strength'
   ]) {
     root.removeAttribute(attr)
   }
@@ -598,6 +604,12 @@ function applyRows() {
 
     // 5) Live-Status: Aktiv/Wartend wie im Tab-Design hervorheben.
     root.setAttribute('data-sf-rowlive', tabs.rowLive ? 'on' : 'off')
+
+    // 5b) Fertig-Effekt: einmaliges Aufglühen/Wackeln, wenn eine Session
+    // fertig wird (Achse + Stärke einstellbar).
+    root.setAttribute('data-sf-donefx', ['off', 'glow', 'wobble', 'glow-wobble', 'shine', 'pop'].includes(tabs.doneFx) ? tabs.doneFx : 'glow-wobble')
+    root.setAttribute('data-sf-donefx-axis', ['x', 'y', 'z'].includes(tabs.doneFxAxis) ? tabs.doneFxAxis : 'x')
+    root.setAttribute('data-sf-donefx-strength', ['subtle', 'medium', 'strong'].includes(tabs.doneFxStrength) ? tabs.doneFxStrength : 'subtle')
 
     // 6) App-Optik: Text oben, Hover-Anhebung, Live-Rahmen, Kontext-Pie.
     root.setAttribute('data-sf-aligntop', tabs.alignTop === false ? 'off' : 'on')
@@ -1587,6 +1599,11 @@ function scheduleSessionsRefresh(delay = 1500) {
 
 const $ctxInfo = atom({}) // storedId -> { used, max, percent, est, at }
 
+// Einmaliger „Fertig"-Effekt: storedId -> Zeitstempel. Der Eintrag wird
+// kurz nach dem Auslösen wieder entfernt, damit die Animation genau
+// einmal spielt (data-done-fx an der Zeile).
+const $doneFx = atom({})
+
 let ctxRefreshTimer = 0
 let ctxRefreshInFlight = false
 
@@ -1671,6 +1688,7 @@ async function pollLiveSessions() {
     const items = Array.isArray(result?.sessions) ? result.sessions : []
     const next = {}
     const now = Date.now()
+    const prevLive = $liveMap.get()
 
     for (const item of items) {
       const runtimeId = String(item?.id || '')
@@ -1711,6 +1729,26 @@ async function pollLiveSessions() {
 
       if (!existing || now - existing.at > 60_000 || existing.kind === 'done' || existing.kind === 'error') {
         activity[info.storedId] = { kind: mapped, name: '', at: now, from: 'live' }
+      }
+    }
+
+    // „Fertig"-Erkennung: Was im vorigen Poll noch beschäftigt war und
+    // jetzt ruhig (oder ganz weg) ist, hat gerade abgeschlossen —
+    // Aktivität sofort bereinigen (statt bis zu ~90 s TTL zu warten)
+    // und den einmaligen Fertig-Effekt auslösen.
+    const doneBusyStatus = status => ['waiting', 'streaming', 'working', 'starting', 'resuming'].includes(String(status))
+    const busyNowIds = new Set()
+
+    for (const info of Object.values(next)) {
+      if (doneBusyStatus(info.status)) {
+        busyNowIds.add(info.storedId)
+      }
+    }
+
+    for (const info of Object.values(prevLive)) {
+      if (doneBusyStatus(info.status) && !busyNowIds.has(info.storedId)) {
+        delete activity[info.storedId]
+        noteSessionDone(info.storedId)
       }
     }
 
@@ -1768,6 +1806,45 @@ function noteEvent(runtimeId, kind, name) {
   const activity = { ...$activity.get() }
   activity[storedId] = { kind, name: name || '', at: Date.now(), from: 'event' }
   $activity.set(activity)
+}
+
+/** Einmaligen „Fertig"-Effekt auslösen. Dedupe ~4 s je Session; der
+ *  Eintrag räumt sich nach ~1,6 s selbst weg, damit die Animation genau
+ *  einmal spielt. */
+function noteSessionDone(storedId) {
+  if (!storedId) {
+    return
+  }
+
+  const cfg = $settings.get().tabs || {}
+
+  if ((cfg.doneFx || 'glow-wobble') === 'off') {
+    return
+  }
+
+  const current = $doneFx.get()
+  const at = Date.now()
+
+  if (current[storedId] && at - current[storedId] < 4000) {
+    return
+  }
+
+  $doneFx.set({ ...current, [storedId]: at })
+
+  try {
+    globalThis.setTimeout(() => {
+      const entries = $doneFx.get()
+
+      if (entries[storedId] === at) {
+        const next = { ...entries }
+        delete next[storedId]
+        $doneFx.set(next)
+      }
+    }, 1600)
+  } catch {
+    /* Ohne Timer bleibt der Eintrag stehen — die Animation ist ohnehin
+       einmalig; harmlos. */
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2215,6 +2292,24 @@ const EN = {
   liveFrameOff: 'Off',
   liveFrameRing: 'Static ring',
   liveFrameGlow: 'Glowing ring',
+  tabsDoneFx: 'Completion effect',
+  tabsDoneFxDesc: 'One-shot effect when a session stops working (row flash).',
+  doneFxOff: 'Off',
+  doneFxGlow: 'Glow',
+  doneFxWobble: 'Wobble',
+  doneFxGlowWobble: 'Glow + wobble',
+  doneFxShine: 'Shine',
+  doneFxPop: 'Pop',
+  tabsDoneFxAxis: 'Wobble axis',
+  tabsDoneFxAxisDesc: 'Perspective axis of the wobble (x: tilt, y: turn, z: shake).',
+  doneFxAxisX: 'X (tilt)',
+  doneFxAxisY: 'Y (turn)',
+  doneFxAxisZ: 'Z (shake)',
+  tabsDoneFxStrength: 'Wobble strength',
+  tabsDoneFxStrengthDesc: 'Amplitude of the wobble effect.',
+  doneFxSubtle: 'Subtle',
+  doneFxMedium: 'Medium',
+  doneFxStrong: 'Strong',
   tabsShowContext: 'Context window (compact)',
   tabsShowContextDesc: 'Compact percent label per row/card for live sessions (read-only context breakdown; no provider call). Turns amber above 70 % and red above 90 %.',
   tabsCtxPie: 'Context window as pie',
@@ -2668,6 +2763,24 @@ const DE = {
   liveFrameOff: 'Aus',
   liveFrameRing: 'Statischer Ring',
   liveFrameGlow: 'Glühender Ring',
+  tabsDoneFx: 'Fertig-Effekt',
+  tabsDoneFxDesc: 'Einmaliger Effekt, wenn eine Session fertig wird (kurzes Aufleuchten der Zeile).',
+  doneFxOff: 'Aus',
+  doneFxGlow: 'Aufglühen',
+  doneFxWobble: 'Wackeln',
+  doneFxGlowWobble: 'Aufglühen + Wackeln',
+  doneFxShine: 'Glanzstreifen',
+  doneFxPop: 'Pop',
+  tabsDoneFxAxis: 'Wackel-Achse',
+  tabsDoneFxAxisDesc: 'Perspektiv-Achse des Wackelns (X: kippen, Y: drehen, Z: rütteln).',
+  doneFxAxisX: 'X (kippen)',
+  doneFxAxisY: 'Y (drehen)',
+  doneFxAxisZ: 'Z (rütteln)',
+  tabsDoneFxStrength: 'Wackel-Stärke',
+  tabsDoneFxStrengthDesc: 'Amplitude des Wackel-Effekts.',
+  doneFxSubtle: 'Dezent',
+  doneFxMedium: 'Mittel',
+  doneFxStrong: 'Stark',
   tabsShowContext: 'Kontextfenster (kompakt)',
   tabsShowContextDesc: 'Kompaktes Prozent-Label je Zeile/Karte für Live-Sessions (read-only Context-Breakdown; kein Provider-Call). Ab 70 % bernstein, ab 90 % rot.',
   tabsCtxPie: 'Kontextfenster als Torten-Diagramm',
@@ -3463,6 +3576,33 @@ html[data-sf-liveframe~=ring] .sf-tab[data-live=busy]::after,html[data-sf-livefr
 html[data-sf-liveframe~=ring] .sf-tab[data-live=waiting]::after{border-color:color-mix(in srgb,#f59e0b 50%,transparent)}
 @media (prefers-reduced-motion:reduce){html[data-sf-liveframe~=glow] .sf-tab[data-live=busy]::after,html[data-sf-liveframe~=glow] .sf-tab[data-live=waiting]::after{animation:none}}
 html[data-renderer-animations-paused] .sf-tab[data-live=busy]::after,html[data-renderer-animations-paused] .sf-tab[data-live=waiting]::after{animation-play-state:paused}
+
+/* Fertig-Effekt (Stand 2026-10-05): einmalige, dezente Animation, wenn
+   eine Session fertig wird (data-done-fx=true an der Zeile, ~1,6 s).
+   Presets über data-sf-donefx (glow/wobble/glow-wobble/shine/pop), Achse
+   über data-sf-donefx-axis (x/y/z), Stärke über data-sf-donefx-strength. */
+html[data-sf-donefx-strength=subtle]{--sf-done-amp:3deg;--sf-done-amp-z:1.2deg}
+html[data-sf-donefx-strength=medium]{--sf-done-amp:6deg;--sf-done-amp-z:2.4deg}
+html[data-sf-donefx-strength=strong]{--sf-done-amp:10deg;--sf-done-amp-z:4deg}
+@keyframes sf-done-glow{0%{box-shadow:0 0 0 0 transparent}35%{box-shadow:0 0 0 2px color-mix(in srgb,var(--ui-success,var(--ui-accent)) 42%,transparent),0 0 16px 2px color-mix(in srgb,var(--ui-success,var(--ui-accent)) 26%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes sf-done-wob-x{0%{transform:perspective(560px) rotateX(0)}32%{transform:perspective(560px) rotateX(var(--sf-done-amp,3deg))}64%{transform:perspective(560px) rotateX(calc(var(--sf-done-amp,3deg) * -0.55))}100%{transform:perspective(560px) rotateX(0)}}
+@keyframes sf-done-wob-y{0%{transform:perspective(560px) rotateY(0)}32%{transform:perspective(560px) rotateY(var(--sf-done-amp,3deg))}64%{transform:perspective(560px) rotateY(calc(var(--sf-done-amp,3deg) * -0.55))}100%{transform:perspective(560px) rotateY(0)}}
+@keyframes sf-done-wob-z{0%{transform:rotate(0)}30%{transform:rotate(var(--sf-done-amp-z,1.2deg))}60%{transform:rotate(calc(var(--sf-done-amp-z,1.2deg) * -0.7))}100%{transform:rotate(0)}}
+@keyframes sf-done-pop{0%{transform:scale(1)}40%{transform:scale(1.03)}100%{transform:scale(1)}}
+html[data-sf-donefx=glow] .sf-tab[data-done-fx=true]{animation:sf-done-glow .75s ease-out 1}
+html[data-sf-donefx=wobble][data-sf-donefx-axis=x] .sf-tab[data-done-fx=true]{animation:sf-done-wob-x .6s ease-in-out 1}
+html[data-sf-donefx=wobble][data-sf-donefx-axis=y] .sf-tab[data-done-fx=true]{animation:sf-done-wob-y .6s ease-in-out 1}
+html[data-sf-donefx=wobble][data-sf-donefx-axis=z] .sf-tab[data-done-fx=true]{animation:sf-done-wob-z .6s ease-in-out 1}
+html[data-sf-donefx=glow-wobble][data-sf-donefx-axis=x] .sf-tab[data-done-fx=true]{animation:sf-done-glow .75s ease-out 1,sf-done-wob-x .6s ease-in-out 1}
+html[data-sf-donefx=glow-wobble][data-sf-donefx-axis=y] .sf-tab[data-done-fx=true]{animation:sf-done-glow .75s ease-out 1,sf-done-wob-y .6s ease-in-out 1}
+html[data-sf-donefx=glow-wobble][data-sf-donefx-axis=z] .sf-tab[data-done-fx=true]{animation:sf-done-glow .75s ease-out 1,sf-done-wob-z .6s ease-in-out 1}
+html[data-sf-donefx=pop] .sf-tab[data-done-fx=true]{animation:sf-done-pop .55s ease-out 1}
+.sf-done-shine{position:absolute;inset:0;border-radius:inherit;pointer-events:none;overflow:hidden}
+.sf-done-shine::before{content:'';position:absolute;top:-30%;bottom:-30%;left:-34%;width:26%;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--foreground,#fff) 13%,transparent),transparent);transform:translateX(0) skewX(-16deg);animation:sf-done-sweep .8s ease-out 1}
+@keyframes sf-done-sweep{to{transform:translateX(560%) skewX(-16deg)}}
+@media (prefers-reduced-motion:reduce){html[data-sf-donefx] .sf-tab[data-done-fx=true]{animation:none}html[data-sf-donefx=shine] .sf-tab[data-done-fx=true] .sf-done-shine{display:none}}
+html[data-renderer-animations-paused] .sf-tab[data-done-fx=true]{animation-play-state:paused}
+html[data-renderer-animations-paused] .sf-done-shine::before{animation-play-state:paused}
 
 /* Drehung für Status-Icons (Arbeits-Indikator). Die App-Komponente dreht über
    den Prop spinning (codicon-modifier-spin); diese Klasse ist der Fallback für
@@ -4666,9 +4806,11 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   const activity = useValue($activity)
   const live = useValue($liveMap)
   const ctxInfo = useValue($ctxInfo)
+  const doneFx = useValue($doneFx)
   const tabsCfg = settings.tabs
   const cozy = tabsCfg.density === 'cozy'
   const liveEntry = Object.values(live).find(entry => entry && entry.storedId === row.id) || null
+  const justDone = Boolean(doneFx && doneFx[row.id])
   const group = section.kind === 'manual' ? groupsState.groups.find(entry => entry.id === section.groupId) : null
 
   const menuItems = []
@@ -4931,6 +5073,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     'data-live': liveBucket,
     'data-dragging': dragging === row.id,
     'data-just-moved': justMoved ? 'true' : undefined,
+    'data-done-fx': justDone ? 'true' : undefined,
     'data-density': infoDensity,
     draggable: true,
     onClick: () => onOpen(row, null),
@@ -4964,7 +5107,10 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         ]
       }),
       !metaInline && meta.length ? jsx('div', { className: 'sf-tab-meta', children: meta }) : null,
-      moreRowMenu
+      moreRowMenu,
+      justDone && tabsCfg.doneFx === 'shine'
+        ? jsx('span', { key: 'done-shine', className: 'sf-done-shine', 'aria-hidden': 'true' })
+        : null
     ]
   })
 
@@ -5509,6 +5655,9 @@ function ShowMoreRow({ hidden, expanded, onClick, t }) {
   })
 }
 
+// Synthetische „Sektion" für die flache Aktiv-Liste (ohne Kopfzeilen).
+const FLAT_SECTION = { color: null, collapsed: false, items: [], key: 'flat-active', kind: 'ungrouped', title: null, titleKey: null }
+
 function SessionsPane() {
   const t = usePluginI18n(ID)
   const rows = useValue($sessions)
@@ -5548,8 +5697,8 @@ function SessionsPane() {
     return [row.title, row.branch, row.preview].some(value => String(value || '').toLowerCase().includes(needle))
   }
 
-  // Nur die Textsuche gilt noch als „aktiver Filter" (Zähler, Leerzustand).
-  const filterActive = Boolean(needle)
+  // Suche UND der Aktiv-Modus gelten als aktive Filter (Zähler, Leerzustand).
+  const filterActive = Boolean(needle) || filterMode === 'active'
   const filteredSections = useMemo(() => {
     if (!needle && filterMode !== 'active') {
       return sections
@@ -5569,6 +5718,48 @@ function SessionsPane() {
       })
       .filter(section => section.items.length > 0)
   }, [sections, needle, filterMode, liveForSort])
+
+  const activeMode = filterMode === 'active'
+
+  // „Aktiv" als flache, kopfzeilenfreie Liste: laufende Sessions oben,
+  // darunter nur Sessions mit HEUTIGER Aktivität (lokale Mitternacht als
+  // Grenze) — je absteigend nach letzter Aktivität.
+  const activeFlatRows = useMemo(() => {
+    if (!activeMode) {
+      return []
+    }
+
+    const live = $liveMap.get()
+    const activity = $activity.get()
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const dayStart = startOfToday.getTime()
+    const hideCron = settings.tabs.hideCron
+    const items = []
+
+    for (const row of rows) {
+      if (hideCron && row.source === 'cron') {
+        continue
+      }
+
+      if (!matchesFilter(row)) {
+        continue
+      }
+
+      const kind = activityFor(row, live, activity).kind
+      const busy = ['waiting', 'streaming', 'working', 'tool', 'thinking'].includes(kind)
+      const last = lastActivityAt(row, live, activity)
+
+      if (!busy && last < dayStart) {
+        continue
+      }
+
+      items.push({ row, busy, last })
+    }
+
+    items.sort((a, b) => (b.busy ? 1 : 0) - (a.busy ? 1 : 0) || b.last - a.last)
+    return items.map(entry => entry.row)
+  }, [rows, activeMode, needle, liveForSort, settings])
 
   // Ein kurzer "Gelandet"-Flash auf der Zeile zeigt deutlich, wo eine Session
   // nach einem Drag&Drop angekommen ist (Zuordnung/Projekt-Verschieben).
@@ -5764,6 +5955,49 @@ function SessionsPane() {
     }
   }
 
+  const flatLimit = activeMode && maxVisible > 0 && activeFlatRows.length > maxVisible
+  const flatShowingAll = flatLimit && showAllSections.has('flat-active')
+  const flatVisible = flatLimit && !flatShowingAll ? activeFlatRows.slice(0, maxVisible) : activeFlatRows
+
+  const flatList = jsx('div', {
+    className: 'sf-list sf-list-flat',
+    'data-flat': 'active',
+    children:
+      activeFlatRows.length > 0
+        ? jsx('div', {
+            className: 'sf-items',
+            'data-view': settings.tabs.view === 'grid' ? 'grid' : 'list',
+            children: [
+              ...flatVisible.map(row =>
+                jsx(TabRow, {
+                  key: row.id,
+                  row,
+                  active: row.id === (focused || active),
+                  section: FLAT_SECTION,
+                  t,
+                  onOpen: open,
+                  onMore,
+                  groupsState,
+                  onAssign: assign,
+                  dragging,
+                  setDragging,
+                  justMoved: row.id === justMovedId
+                })
+              ),
+              flatLimit
+                ? jsx(ShowMoreRow, {
+                    key: 'sf-showmore',
+                    hidden: activeFlatRows.length - flatVisible.length,
+                    expanded: flatShowingAll,
+                    onClick: () => toggleShowAll('flat-active'),
+                    t
+                  })
+                : null
+            ]
+          })
+        : null
+  })
+
   const list = jsx('div', {
     className: 'sf-list',
     children: filteredSections.map(section => {
@@ -5933,7 +6167,7 @@ function SessionsPane() {
     children: [
       jsx('span', {
         className: 'sf-toolbar-count',
-        children: filterActive ? t('paneCountFiltered', totalCount, filteredSections.reduce((sum, section) => sum + section.items.length, 0)) : t('paneCount', totalCount)
+        children: filterActive ? t('paneCountFiltered', totalCount, activeMode ? activeFlatRows.length : filteredSections.reduce((sum, section) => sum + section.items.length, 0)) : t('paneCount', totalCount)
       }),
       jsx(Tip, {
         label: t('viewSwitch'),
@@ -6048,6 +6282,16 @@ function SessionsPane() {
         jsx('div', { className: 'sf-empty-body', children: t('emptyHint') })
       ]
     })
+  } else if (activeMode && activeFlatRows.length === 0) {
+    body = jsxs('div', {
+      className: 'sf-empty',
+      children: [
+        jsx('div', { className: 'sf-empty-title', children: t('filterEmpty') }),
+        jsx('div', { className: 'sf-empty-body', children: t('filterEmptyHint') })
+      ]
+    })
+  } else if (activeMode) {
+    body = flatList
   } else if (filterActive && filteredSections.length === 0) {
     body = jsxs('div', {
       className: 'sf-empty',
@@ -6752,6 +6996,48 @@ function SettingsPage() {
               ],
               value: tabs.liveFrame,
               onChange: value => patch('tabs', 'liveFrame', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsDoneFx'),
+            description: t('tabsDoneFxDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'off', label: t('doneFxOff') },
+                { id: 'glow', label: t('doneFxGlow') },
+                { id: 'wobble', label: t('doneFxWobble') },
+                { id: 'glow-wobble', label: t('doneFxGlowWobble') },
+                { id: 'shine', label: t('doneFxShine') },
+                { id: 'pop', label: t('doneFxPop') }
+              ],
+              value: tabs.doneFx,
+              onChange: value => patch('tabs', 'doneFx', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsDoneFxAxis'),
+            description: t('tabsDoneFxAxisDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'x', label: t('doneFxAxisX') },
+                { id: 'y', label: t('doneFxAxisY') },
+                { id: 'z', label: t('doneFxAxisZ') }
+              ],
+              value: tabs.doneFxAxis,
+              onChange: value => patch('tabs', 'doneFxAxis', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsDoneFxStrength'),
+            description: t('tabsDoneFxStrengthDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'subtle', label: t('doneFxSubtle') },
+                { id: 'medium', label: t('doneFxMedium') },
+                { id: 'strong', label: t('doneFxStrong') }
+              ],
+              value: tabs.doneFxStrength,
+              onChange: value => patch('tabs', 'doneFxStrength', value)
             })
           }),
           jsx(ToggleRow, {
@@ -7542,11 +7828,39 @@ export default {
     void refreshProjectsList()
     pruneSessionProjectSeeds()
 
-    ctx.onEvent('message.complete', () => {
+    ctx.onEvent('message.complete', event => {
       scheduleSessionsRefresh(1200)
+      // Frischer Live-Status direkt nach Abschluss: die Transition im
+      // Poll erkennt „fertig" in Sekunden statt erst beim nächsten
+      // 30-s-Takt; noteSessionDone dedupliziert Doppel-Auslösungen.
+      const completedStoredId = resolveStoredId(String(event?.session_id || ''))
+
+      void pollLiveSessions().then(() => {
+        if (!completedStoredId) {
+          return
+        }
+
+        const cfg = $settings.get().tabs || {}
+
+        if ((cfg.doneFx || 'glow-wobble') === 'off') {
+          return
+        }
+
+        const busy = Object.values($liveMap.get()).some(
+          entry =>
+            entry &&
+            entry.storedId === completedStoredId &&
+            ['waiting', 'streaming', 'working', 'starting', 'resuming'].includes(String(entry.status))
+        )
+
+        if (!busy) {
+          noteSessionDone(completedStoredId)
+        }
+      })
     })
     ctx.onEvent('session.info', () => {
       scheduleSessionsRefresh(2500)
+      void pollLiveSessions()
     })
 
     ctx.setInterval(() => {
