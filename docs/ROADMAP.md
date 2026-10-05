@@ -1,10 +1,21 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.19.0 (2026-10-05). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.20.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **App-Schnellstart-Zeile + Pane-Fläche** (v1.20.0): Icon-Button-Zeile über
+  der Toolbar (Neue Session, Fähigkeiten, Messaging, Artefakte, Geplante
+  Jobs, Kanban bei laufendem Plugin) mit `host.navigate`-Whitelist und
+  flex-wrap-Umbruch; Pane-Hintergrund wählbar (Einstellungen →
+  Individualisierung → Pane-Fläche): **Native Sidebar** (Default, exakt die
+  Variable der nativen Sessions-Sidebar), **Chat** (bisheriger Look),
+  **Ohne**. Pläne: `docs/plans/2026-10-05-app-nav-icon-row.md`,
+  `docs/plans/2026-10-06-pane-surface-option.md`.
+- **Context-Bar + Settings-Hierarchie** (v1.19.3): Kontext-Stil Donut/Bar,
+  Trennlinien + Hover je Settings-Sektion. Plan:
+  `docs/plans/2026-10-05-context-bar-style-settings-hierarchie.md`.
 - **Ladeerlebnis, Projekt-Verwaltung & Filter-Parität** (v1.19.0): Sichtbares
   Loading (`$loadPhase` + `.sf-load`-Block mit Gateway-Hinweis),
   Projekte-laden-Pending-Sektion (statt falscher „Kein Projekt“-Gruppierung

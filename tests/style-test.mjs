@@ -83,7 +83,9 @@ const tokens = [
   '--ui-bg-tertiary:rgba(127,127,127,.12)',
   '--ui-stroke-tertiary:rgba(127,127,127,.2)',
   '--ui-editor-surface-background:#101014',
-  '--foreground:#e5e5e5'
+  '--foreground:#e5e5e5',
+  '--ui-sidebar-surface-background:#1a1c20',
+  '--ui-chat-surface-background:#232529'
 ].join(';')
 
 const row = (id, label, extra = '') =>
@@ -121,6 +123,15 @@ const html = `<!doctype html>
 </head>
 <body>
   <div class="sf-pane">
+    <div class="sf-navapps" id="nv" style="width:120px">
+      <button class="sf-navapps-btn" data-nav="new-session" type="button">n</button>
+      <button class="sf-navapps-btn" data-nav="capabilities" type="button">c</button>
+      <button class="sf-navapps-btn" data-nav="messaging" type="button">m</button>
+      <button class="sf-navapps-btn" data-nav="artifacts" type="button">a</button>
+      <button class="sf-navapps-btn" data-nav="cron" type="button">j</button>
+      <button class="sf-navapps-btn" data-nav="kanban" type="button">k</button>
+      <span class="sf-navapps-rule"></span>
+    </div>
     <div class="sf-section">
       <div class="sf-items" data-view="list">
         ${row('l1', 'Liste normal')}
@@ -765,6 +776,85 @@ try {
     AN.tickOverflow === 'hidden' && AN.tickHeight === '14px',
     `${AN.tickOverflow} / ${AN.tickHeight}`
   )
+
+  // ── App-Nav-Zeile (v1.20): flex-wrap + Umbruch-Geometrie ─────────────────
+  // Die Zeile muss dynamisch in weitere Zeilen umbrechen (Anforderung
+  // „umfließend"): bei 120 px Zwangsbreite passen 4×24-px-Buttons in eine
+  // Reihe, die restlichen zwei rutschen nach unten. Der „Umbruch-Spacer"
+  // (.sf-navapps-rule, flex-basis:100%) beendet die letzte Reihe sauber.
+  await settle()
+  const NV = await page.evaluate(() => {
+    const bar = document.getElementById('nv')
+    const btns = [...bar.querySelectorAll('.sf-navapps-btn')]
+    const cs = getComputedStyle(bar)
+    const top = btns.map(b => Math.round(b.getBoundingClientRect().top))
+    const rows = [...new Set(top)]
+    const rule = bar.querySelector('.sf-navapps-rule')
+    const btn = btns[0]
+    const bcs = getComputedStyle(btn)
+    return {
+      wrap: cs.flexWrap,
+      display: cs.display,
+      btnW: Math.round(btn.getBoundingClientRect().width),
+      btnH: Math.round(btn.getBoundingClientRect().height),
+      rows: rows.length,
+      rowTops: rows,
+      ruleBasis: rule ? getComputedStyle(rule).flexBasis : null,
+      btnBg: bcs.backgroundColor
+    }
+  })
+  check(
+    'App-Nav: Zeile ist flex mit flex-wrap=wrap (dynamisches Umfließen)',
+    NV.display === 'flex' && NV.wrap === 'wrap',
+    `${NV.display} / ${NV.wrap}`
+  )
+  check(
+    'App-Nav: Buttons als 24-px-Quadrat gerendert',
+    NV.btnW === 24 && NV.btnH === 24,
+    `${NV.btnW}x${NV.btnH}`
+  )
+  check(
+    'App-Nav: 6 Buttons brechen bei 120 px in 2+ Reihen um',
+    NV.rows >= 2,
+    `rows=${NV.rows} tops=${JSON.stringify(NV.rowTops)}`
+  )
+  check(
+    'App-Nav: Umbruch-Spacer (.sf-navapps-rule) trägt flex-basis 100%',
+    NV.ruleBasis === '100%',
+    `basis=${NV.ruleBasis}`
+  )
+
+  // ── Pane-Fläche (v1.20): native / chat / none am .sf-pane ────────────────
+  // Ohne Attribut (vor dem ersten applyPersonal bzw. nach clearPersonal)
+  // malt das Pane bewusst NICHTS — Dispose muss restlos in den App-Zustand
+  // zurückgeben. native löst --ui-sidebar-surface-background auf, chat die
+  // Chat-Variable, none ist transparent.
+  await settle()
+  const SF = await page.evaluate(() => {
+    const pane = document.querySelector('.sf-pane')
+    const cs = getComputedStyle(pane)
+    return { bg: cs.backgroundColor }
+  })
+  check(
+    'Pane-Fläche: ohne Attribut (Dispose-Zustand) kein eigener Fill',
+    SF.bg === 'rgba(0, 0, 0, 0)',
+    `bg=${SF.bg}`
+  )
+
+  await page.evaluate(() => document.documentElement.setAttribute('data-sf-panesurface', 'chat'))
+  await settle()
+  const SFc = await page.evaluate(() => getComputedStyle(document.querySelector('.sf-pane')).backgroundColor)
+  check('Pane-Fläche: chat löst Chat-Variable auf', SFc === 'rgb(35, 37, 41)', `bg=${SFc}`)
+
+  await page.evaluate(() => document.documentElement.setAttribute('data-sf-panesurface', 'none'))
+  await settle()
+  const SFn = await page.evaluate(() => getComputedStyle(document.querySelector('.sf-pane')).backgroundColor)
+  check('Pane-Fläche: none ist transparent (App-Durchblick)', SFn === 'rgba(0, 0, 0, 0)', `bg=${SFn}`)
+
+  await page.evaluate(() => document.documentElement.setAttribute('data-sf-panesurface', 'native'))
+  await settle()
+  const SFn2 = await page.evaluate(() => getComputedStyle(document.querySelector('.sf-pane')).backgroundColor)
+  check('Pane-Fläche: native (per Attribut) löst Sidebar-Variable auf', SFn2 === 'rgb(26, 28, 32)', `bg=${SFn2}`)
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }

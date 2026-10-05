@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -2523,6 +2523,167 @@ try {
   )
 } catch (error) {
   check('v1.19.3 Settings-Default-Test durchgelaufen', false, error && error.message)
+}
+
+// 36) v1.20.0: App-Nav-Zeile — Icon-Buttons der ersten App-Sidebar-Sektionen.
+try {
+  mod.patchSettings('tabs', { appNav: true, maxVisible: 0 })
+
+  // host.navigate-Spy (navigateAppRoute liest host.navigate zur Laufzeit).
+  const navLog = []
+  const realNavigate = globalThis.__SF__.host.navigate
+  globalThis.__SF__.host.navigate = path => {
+    navLog.push(path)
+  }
+  // document.querySelector-Spy für den Kanban-Feature-Detect (Stub-DOM hat
+  // kein echtes Query — positives Szenario gezielt einspeisen).
+  const realQuery = globalThis.document.querySelector
+
+  try {
+    stub.__resetSlots()
+    globalThis.__SF__.tCalls.length = 0
+    const out36 = { el: [], text: [] }
+    walk(pane.render(), out36)
+
+    const navBar = out36.el.find(e => e.tag === 'div' && e.cls.includes('sf-navapps')) || null
+    check('v1.20: App-Nav-Zeile gerendert (appNav an)', Boolean(navBar))
+
+    const navBtns = out36.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn'))
+    const navIds = navBtns.map(b => (b.props ? b.props['data-nav'] : undefined))
+    check(
+      'v1.20: 5 Icon-Buttons ohne Kanban (Feature-Detect negativ), App-Reihenfolge',
+      navIds.length === 5 &&
+        navIds[0] === 'new-session' &&
+        navIds[1] === 'capabilities' &&
+        navIds[2] === 'messaging' &&
+        navIds[3] === 'artifacts' &&
+        navIds[4] === 'cron',
+      navIds.join(',')
+    )
+    check(
+      'v1.20: Zeile markiert data-kanban=off',
+      Boolean(navBar) && navBar.props['data-kanban'] === 'off',
+      navBar ? String(navBar.props['data-kanban']) : 'keine Zeile'
+    )
+
+    const t36 = globalThis.__SF__.tCalls.map(([k]) => k)
+    check(
+      'v1.20: i18n-Keys aller sichtbaren App-Buttons benutzt, Kanban-Key nicht',
+      ['navAppNewSession', 'navAppCapabilities', 'navAppMessaging', 'navAppArtifacts', 'navAppCron'].every(k => t36.includes(k)) &&
+        !t36.includes('navAppKanban'),
+      t36.filter(k => k.startsWith('navApp')).join(',')
+    )
+
+    check(
+      'v1.20: Whitelist-Route /capabilities wird navigiert',
+      mod.navigateAppRoute('/capabilities') === true && navLog.includes('/capabilities'),
+      navLog.join(',')
+    )
+    navLog.length = 0
+    check(
+      'v1.20: Nicht-Whitelist-Routen werden abgewiesen (kein navigate)',
+      mod.navigateAppRoute('/etc/passwd') === false && mod.navigateAppRoute(null) === false && navLog.length === 0
+    )
+    check(
+      'v1.20: NAV_APPS-Katalog vollständig (6 Einträge, 5 erlaubte Routen)',
+      Array.isArray(mod.NAV_APPS) && mod.NAV_APPS.length === 6 && mod.SF_NAV_ROUTES.size === 5
+    )
+
+    const bundles = globalThis.__SF__.bundles
+    check(
+      'v1.20: DE-Bundle trägt deutsche App-Nav-Labels',
+      Boolean(bundles && bundles.de) &&
+        bundles.de.navAppCapabilities === 'Fähigkeiten' &&
+        bundles.de.navAppCron === 'Geplante Jobs' &&
+        bundles.de.navAppKanban === 'Kanban',
+      bundles && bundles.de ? `${bundles.de.navAppCapabilities}/${bundles.de.navAppCron}` : 'kein Bundle'
+    )
+
+    // Kanban anwesend simulieren: positiver Feature-Detect + Klick → /kanban.
+    globalThis.document.querySelector = selector =>
+      selector === '.kanban-drawer-content' ? { className: 'kanban-drawer-content' } : realQuery.call(globalThis.document, selector)
+    stub.__resetSlots()
+    globalThis.__SF__.tCalls.length = 0
+    const out36k = { el: [], text: [] }
+    walk(pane.render(), out36k)
+    const btnsK = out36k.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn'))
+    const barK = out36k.el.find(e => e.cls.includes('sf-navapps') && !e.cls.includes('sf-navapps-btn'))
+    check(
+      'v1.20: Kanban-Button erscheint bei positivem Feature-Detect (6 Buttons, data-kanban=on)',
+      btnsK.length === 6 && btnsK[5].props['data-nav'] === 'kanban' && barK && barK.props['data-kanban'] === 'on',
+      `n=${btnsK.length}`
+    )
+    check('v1.20: Kanban-Label-Key wird bei Detect benutzt', globalThis.__SF__.tCalls.some(([k]) => k === 'navAppKanban'))
+    navLog.length = 0
+    btnsK[5].props.onClick()
+    check('v1.20: Kanban-Klick navigiert nach /kanban', navLog.length === 1 && navLog[0] === '/kanban', navLog.join(','))
+
+    // Neue-Session-Button klickt NICHT den Router (sondern den Pane-Pfad).
+    navLog.length = 0
+    btnsK[0].props.onClick()
+    check('v1.20: Neue-Session-Klick geht nicht über host.navigate', navLog.length === 0)
+
+    // Toggle aus → Zeile komplett weg.
+    mod.patchSettings('tabs', { appNav: false })
+    stub.__resetSlots()
+    const out36b = { el: [], text: [] }
+    walk(pane.render(), out36b)
+    check(
+      'v1.20: appNav=false entfernt die Zeile komplett',
+      !out36b.el.some(e => e.cls.includes('sf-navapps') || e.cls.includes('sf-navapps-btn')),
+      `navapps=${out36b.el.filter(e => e.cls.includes('sf-navapps')).length}`
+    )
+  } finally {
+    globalThis.__SF__.host.navigate = realNavigate
+    globalThis.document.querySelector = realQuery
+  }
+
+  // Default wiederherstellen, damit spätere/parellele Sektionen sauber starten.
+  mod.patchSettings('tabs', { appNav: true })
+} catch (error) {
+  check('v1.20 App-Nav-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// 37) v1.20: Pane-Fläche — applyPersonal spiegelt data-sf-panesurface.
+try {
+  mod.patchSettings('personal', { paneSurface: 'native' })
+  mod.applyPersonal()
+  check(
+    'v1.20 Pane-Fläche: native → data-sf-panesurface=native auf <html>',
+    rootHtml.attrs['data-sf-panesurface'] === 'native',
+    `got=${rootHtml.attrs['data-sf-panesurface']}`
+  )
+
+  mod.patchSettings('personal', { paneSurface: 'chat' })
+  mod.applyPersonal()
+  check('v1.20 Pane-Fläche: chat → Attribut=chat', rootHtml.attrs['data-sf-panesurface'] === 'chat')
+
+  mod.patchSettings('personal', { paneSurface: 'none' })
+  mod.applyPersonal()
+  check('v1.20 Pane-Fläche: none → Attribut=none', rootHtml.attrs['data-sf-panesurface'] === 'none')
+
+  mod.patchSettings('personal', { paneSurface: 'quatsch' })
+  mod.applyPersonal()
+  check(
+    'v1.20 Pane-Fläche: ungültiger Wert → Fallback native',
+    rootHtml.attrs['data-sf-panesurface'] === 'native',
+    `got=${rootHtml.attrs['data-sf-panesurface']}`
+  )
+
+  // Settings-Default prüfen: DEFAULT wird nicht exportiert — aber nach dem
+  // Ungültig-Wert muss applyPersonal mit dem Fallback 'native' geschrieben
+  // haben; der Settings-Store hält den ungültigen Wert trotzdem. Wir prüfen
+  // stattdessen, dass clearPersonal das Attribut restlos entfernt (Dispose).
+  mod.applyPersonal()
+  mod.clearPersonal()
+  check('v1.20 Pane-Fläche: clearPersonal entfernt das Attribut', !('data-sf-panesurface' in rootHtml.attrs))
+
+  // Für nachfolgende Sektionen sauber wieder an.
+  mod.patchSettings('personal', { paneSurface: 'native' })
+  mod.applyPersonal()
+  check('v1.20 Pane-Fläche: nach Re-Apply wieder native', rootHtml.attrs['data-sf-panesurface'] === 'native')
+} catch (error) {
+  check('v1.20 Pane-Fläche-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.19.3'
+const VERSION = '1.20.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -205,7 +205,8 @@ const DEFAULT_SETTINGS = {
     doneFxAxis: 'x',
     doneFxStrength: 'subtle',
     maxVisible: 0,
-    asTabSelector: false
+    asTabSelector: false,
+    appNav: true
   },
   groups: {
     enabled: true,
@@ -262,6 +263,10 @@ const DEFAULT_SETTINGS = {
   personal: {
     accentOn: false,
     accentColor: '#7c3aed',
+    // Pane-Fläche des Sessions-Panes: 'native' malt dieselbe Variable wie die
+    // native Sessions-Sidebar (--ui-sidebar-surface-background), 'chat' den
+    // bisherigen Chat-Look, 'none' ganz ohne eigenen Fill.
+    paneSurface: 'native',
     bgOn: false,
     bgKind: 'image',
     bgPath: '',
@@ -494,7 +499,8 @@ function clearPersonal() {
     'data-sf-accent',
     'data-sf-bg',
     'data-sf-bg-kind',
-    'data-sf-bg-scope'
+    'data-sf-bg-scope',
+    'data-sf-panesurface'
   ]) {
     root.removeAttribute(attr)
   }
@@ -508,6 +514,13 @@ function applyPersonal() {
 
   try {
     const root = document.documentElement
+
+    // 0) Pane-Fläche: 'native' = dieselbe Variable wie die native
+    //    Sessions-Sidebar, 'chat' = Chat-Surface-Farbe (alter Look),
+    //    'none' = kein eigener Fill. Immer spiegeln — auch 'none' braucht
+    //    das Attribut, damit alte Inline-Fills nie zurückbleiben.
+    const surface = p.paneSurface === 'chat' ? 'chat' : p.paneSurface === 'none' ? 'none' : 'native'
+    root.setAttribute('data-sf-panesurface', surface)
 
     // 1) Akzentfarbe → --ui-accent (färbt Buttons, aktive Zustände, Hover,
     //    Fokusringe und Hervorhebungen der App).
@@ -3759,8 +3772,16 @@ const EN = {
   noProjectAnchor: 'New session has no project anchor — pick a project in the header to anchor it.',
   moveSessionNotLive: 'Assignment is visible — permanent only after the session is opened.',
   viewSwitch: 'Switch view (list/grid)',
+  navAppNewSession: 'New session',
+  navAppCapabilities: 'Skills',
+  navAppMessaging: 'Messaging',
+  navAppArtifacts: 'Artifacts',
+  navAppCron: 'Scheduled jobs',
+  navAppKanban: 'Kanban',
   tabsView: 'View',
   tabsViewDesc: 'Show sessions as a compact list or as grid cards.',
+  tabsAppNav: 'App quick-start row',
+  tabsAppNavDesc: 'Icon buttons for New session, Skills, Messaging, Artifacts, Scheduled jobs and Kanban above the toolbar. Wraps into more rows when the pane is narrow.',
   tabsViewList: 'List',
   tabsViewGrid: 'Grid',
   tabsGridMin: 'Grid: card width (px)',
@@ -3810,6 +3831,11 @@ const EN = {
   personalAccentColorDesc: 'Pick a swatch or type a hex value (#rrggbb).',
   personalAccentReset: 'Reset',
   personalAccentHint: 'Takes effect immediately; disabling restores the theme accent.',
+  personalPaneSurface: 'Pane surface',
+  personalPaneSurfaceDesc: 'Background of the Session Flow pane. Native = the same color as the built-in Sessions sidebar (Hermes default). Chat = chat color (previous look). None = no own fill.',
+  personalPaneSurfaceNative: 'Native sidebar',
+  personalPaneSurfaceChat: 'Chat',
+  personalPaneSurfaceNone: 'None',
   personalBgOn: 'Chat background',
   personalBgOnDesc: 'Shows your own image or video behind the chat messages.',
   personalBgKind: 'Background type',
@@ -4317,8 +4343,16 @@ const DE = {
   noProjectAnchor: 'Neue Session ohne Projekt-Anker — bitte Projekt in der Kopfzeile wählen.',
   moveSessionNotLive: 'Zuordnung sichtbar — dauerhaft erst nach dem Öffnen der Session.',
   viewSwitch: 'Ansicht wechseln (Liste/Grid)',
+  navAppNewSession: 'Neue Session',
+  navAppCapabilities: 'Fähigkeiten',
+  navAppMessaging: 'Messaging',
+  navAppArtifacts: 'Artefakte',
+  navAppCron: 'Geplante Jobs',
+  navAppKanban: 'Kanban',
   tabsView: 'Ansicht',
   tabsViewDesc: 'Sessions als kompakte Liste oder als Grid-Karten anzeigen.',
+  tabsAppNav: 'App-Schnellstart-Zeile',
+  tabsAppNavDesc: 'Icon-Buttons für Neue Session, Fähigkeiten, Messaging, Artefakte, Geplante Jobs und Kanban über der Toolbar. Bricht bei schmalen Panes in weitere Zeilen um.',
   tabsViewList: 'Liste',
   tabsViewGrid: 'Grid',
   tabsGridMin: 'Grid: Kartenbreite (px)',
@@ -4368,6 +4402,11 @@ const DE = {
   personalAccentColorDesc: 'Swatch wählen oder Hex-Wert eintippen (#rrggbb).',
   personalAccentReset: 'Zurücksetzen',
   personalAccentHint: 'Wirkt sofort; Deaktivieren stellt die Theme-Akzentfarbe wieder her.',
+  personalPaneSurface: 'Pane-Fläche',
+  personalPaneSurfaceDesc: 'Hintergrund des Session-Flow-Panes. Native = dieselbe Farbe wie die eingebaute Sessions-Sidebar (Hermes-Default). Chat = Chat-Farbe (bisheriger Look). Ohne = kein eigener Fill.',
+  personalPaneSurfaceNative: 'Native Sidebar',
+  personalPaneSurfaceChat: 'Chat',
+  personalPaneSurfaceNone: 'Ohne',
   personalBgOn: 'Chat-Hintergrund',
   personalBgOnDesc: 'Zeigt ein eigenes Bild oder Video hinter den Chat-Nachrichten.',
   personalBgKind: 'Art des Hintergrunds',
@@ -4410,8 +4449,27 @@ const LOCALES = { en: EN, de: DE }
 
 const CSS = `
 .sf-pane{display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px}
+/* Pane-Fläche (v1.20): 'native' malt exakt die Variable, die auch die native
+   Sessions-Sidebar der App füllt (inkl. Theme-/Glass-Varianten), 'chat' den
+   bisherigen Chat-Look (body-Farbe), 'none' gar nichts. Unlayered → gewinnt
+   über die App-Layer. Ohne Attribut (altes Settings-File vor dem ersten
+   apply) bleibt der Zustand undefiniert → App-Durchblick wie bisher. */
+.sf-pane[data-sf-panesurface]{background:var(--ui-sidebar-surface-background)}
+:root[data-sf-panesurface='native'] .sf-pane{background:var(--ui-sidebar-surface-background)}
+:root[data-sf-panesurface='chat'] .sf-pane{background:var(--ui-chat-surface-background)}
+:root[data-sf-panesurface='none'] .sf-pane{background:transparent}
 .sf-toolbar{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary);color:var(--ui-text-tertiary)}
 .sf-toolbar-count{flex:1;min-width:0;padding-left:2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ui-text-quaternary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* App-Nav-Zeile (v1.20): Icon-Buttons der ersten App-Sidebar-Sektionen.
+   flex-wrap = dynamisches Umfließen in weitere Zeilen bei schmaler Breite
+   oder vielen Buttons (Anforderung „umfließend"). Nur Theme-Variablen. */
+.sf-navapps{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:1px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary)}
+.sf-navapps-btn{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:6px;padding:0;background:transparent;color:var(--ui-text-tertiary);cursor:pointer;transition:background-color .12s ease,color .12s ease}
+.sf-navapps-btn:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
+.sf-navapps-btn:focus-visible{outline:1px solid var(--ui-accent);outline-offset:1px}
+.sf-navapps-btn:active{background:color-mix(in srgb,var(--ui-accent) 14%,transparent)}
+.sf-navapps-rule{flex-basis:100%;height:0}
+@media (prefers-reduced-motion:reduce){.sf-navapps-btn{transition:none}}
 .sf-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 4px 12px}
 .sf-group-head{display:flex;align-items:flex-start;gap:4px;min-height:27px;padding:2px 4px 2px 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none;transition:background-color .12s ease,box-shadow .12s ease}
 .sf-group-head:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
@@ -7432,6 +7490,82 @@ function ShowMoreRow({ hidden, expanded, onClick, t }) {
 // Synthetische „Sektion" für die flache Aktiv-Liste (ohne Kopfzeilen).
 const FLAT_SECTION = { color: null, collapsed: false, items: [], key: 'flat-active', kind: 'ungrouped', title: null, titleKey: null }
 
+// ── App-Nav-Zeile (v1.20): Icon-Buttons für die ersten Sidebar-Sektionen ────
+// Spiegel von SIDEBAR_NAV der App-Chat-Sidebar (Neue Session, Fähigkeiten,
+// Messaging, Artefakte, Geplante Jobs) + Kanban-Beitrag (Plugin, Route
+// /kanban). Buttons navigieren über host.navigate (App-Router), Neue Session
+// läuft über den bestehenden Projekt-Scope-Pfad (startNewProjectSession).
+// Kanban ist Plugin: bleibt der Button weg, statt einen toten Button zu
+// zeigen (Feature-Detect unten — niemals geraten).
+const SF_NAV_ROUTES = new Set(['/capabilities', '/messaging', '/artifacts', '/cron', '/kanban'])
+
+const NAV_APPS = [
+  { id: 'new-session', icon: 'robot', route: null, labelKey: 'navAppNewSession' },
+  { id: 'capabilities', icon: 'symbol-misc', route: '/capabilities', labelKey: 'navAppCapabilities' },
+  { id: 'messaging', icon: 'comment', route: '/messaging', labelKey: 'navAppMessaging' },
+  { id: 'artifacts', icon: 'files', route: '/artifacts', labelKey: 'navAppArtifacts' },
+  { id: 'cron', icon: 'watch', route: '/cron', labelKey: 'navAppCron' },
+  { id: 'kanban', icon: 'project', route: '/kanban', labelKey: 'navAppKanban' }
+]
+
+function navigateAppRoute(route) {
+  if (typeof route !== 'string' || !SF_NAV_ROUTES.has(route)) {
+    return false
+  }
+
+  host.navigate(route)
+  return true
+}
+
+// Feature-Detect für das Kanban-Plugin: registriert es läuft, mountet der
+// Drawer irgendwo im DOM (Klasse aus plugins/kanban/drawer.tsx). document ist
+// immer da — im Render-Test ein Stub ohne Treffer, im echten App-DOM sonst wo.
+function kanbanAvailable() {
+  return Boolean(document.querySelector('.kanban-drawer-content'))
+}
+
+function NavAppsBar({ t, onNewSession }) {
+  const showKanban = kanbanAvailable()
+  const buttons = []
+
+  for (const item of NAV_APPS) {
+    if (item.id === 'kanban' && !showKanban) {
+      continue
+    }
+
+    buttons.push(
+      jsx(
+        'button',
+        {
+          type: 'button',
+          className: 'sf-navapps-btn',
+          'data-nav': item.id,
+          onClick: () => {
+            if (item.route) {
+              navigateAppRoute(item.route)
+            } else {
+              onNewSession()
+            }
+          },
+          title: t(item.labelKey),
+          'aria-label': t(item.labelKey),
+          children: jsx(Codicon, { name: item.icon, size: '0.875rem' })
+        },
+        item.id
+      )
+    )
+  }
+
+  return jsxs(
+    'div',
+    {
+      className: 'sf-navapps',
+      'data-kanban': showKanban ? 'on' : 'off',
+      children: [buttons, jsx('span', { className: 'sf-navapps-rule' })]
+    }
+  )
+}
+
 function SessionsPane() {
   const t = usePluginI18n(ID)
   const rows = useValue($sessions)
@@ -8174,6 +8308,13 @@ function SessionsPane() {
         })
       : null
 
+  // App-Nav-Zeile (v1.20): Icon-Buttons für Neue Session + die ersten
+  // Sidebar-Seiten der App, flex-wrap (bricht um, je nach Pane-Breite).
+  // Mit der Option schaltet der Nutzer die ganze Zeile ab.
+  const navAppsBar = settings.tabs.appNav === false
+    ? null
+    : jsx(NavAppsBar, { t, onNewSession: () => void startNewProjectSession() })
+
   const toolbar = jsxs('div', {
     className: 'sf-toolbar',
     children: [
@@ -8392,6 +8533,7 @@ function SessionsPane() {
   return jsxs('div', {
     className: 'sf-pane',
     children: [
+      navAppsBar,
       toolbar,
       filterBar,
       body,
@@ -8858,6 +9000,12 @@ function SettingsPage() {
               value: tabs.view,
               onChange: value => patch('tabs', 'view', value)
             })
+          }),
+          jsx(ToggleRow, {
+            label: t('tabsAppNav'),
+            description: t('tabsAppNavDesc'),
+            checked: tabs.appNav !== false,
+            onChange: value => patch('tabs', 'appNav', value)
           }),
           jsx(Row, {
             title: t('tabsGridMin'),
@@ -9704,6 +9852,19 @@ function SettingsPage() {
             })
           }),
           jsx('p', { className: 'sf-hint', children: t('personalAccentHint') }),
+          jsx(Row, {
+            title: t('personalPaneSurface'),
+            description: t('personalPaneSurfaceDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'native', label: t('personalPaneSurfaceNative') },
+                { id: 'chat', label: t('personalPaneSurfaceChat') },
+                { id: 'none', label: t('personalPaneSurfaceNone') }
+              ],
+              value: personal.paneSurface === 'chat' || personal.paneSurface === 'none' ? personal.paneSurface : 'native',
+              onChange: value => patch('personal', 'paneSurface', value)
+            })
+          }),
           jsx(ToggleRow, {
             label: t('personalBgOn'),
             description: t('personalBgOnDesc'),

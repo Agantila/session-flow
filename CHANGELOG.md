@@ -3,6 +3,43 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.20.0] — 2026-10-06
+
+### Added
+- **App-Schnellstart-Zeile** (neue Icon-Button-Zeile über der Pane-Toolbar,
+  Plan: [docs/plans/2026-10-05-app-nav-icon-row.md](docs/plans/2026-10-05-app-nav-icon-row.md)):
+  Neue Session, Fähigkeiten, Messaging, Artefakte, Geplante Jobs und Kanban —
+  gleiche Reihenfolge/Codicons wie die erste Sektion der App-Sidebar
+  (`SIDEBAR_NAV`), Navigation über `host.navigate` mit Route-Whitelist.
+  Kanban erscheint nur bei installiertem/laufendem Kanban-Plugin
+  (Feature-Detect am Drawer-DOM), sonst fällt der Button weg. Die Zeile ist
+  `flex-wrap` und bricht bei schmaler Pane-Breite dynamisch in weitere
+  Zeilen um. Neue Session läuft über den bestehenden Projekt-Scope-Pfad.
+  Option „App-Schnellstart-Zeile" in Einstellungen → Sessions
+  (`tabs.appNav`, Default an). i18n EN+DE.
+- **Pane-Fläche** (Hintergrund des Session-Flow-Panes einstellbar, Plan:
+  [docs/plans/2026-10-06-pane-surface-option.md](docs/plans/2026-10-06-pane-surface-option.md)):
+  Bis jetzt fiel das Pane auf die Chat-Farbe des `body` durch. Neu: Segment
+  in Einstellungen → Individualisierung (`personal.paneSurface`) mit
+  **Native Sidebar** (Default — exakt die Variable, die auch die eingebaute
+  Sessions-Sidebar malt: `--ui-sidebar-surface-background`, inkl.
+  Theme-/Glass-Varianten), **Chat** (bisheriger Look,
+  `--ui-chat-surface-background`) und **Ohne** (kein eigener Fill,
+  App-Durchblick). Umsetzung als `data-sf-panesurface`-Attribut auf
+  `<html>` + deklarative CSS-Regeln; `clearPersonal()` räumt restlos auf
+  (Dispose-Zustand = kein eigener Fill). i18n EN+DE.
+
+### Tests
+- Render-Smoketest: 18 neue Checks (`v1.20: …`) zur App-Nav-Zeile
+  (Reihenfolge, Feature-Detect, Whitelist-Navigation, DE-Labels, Toggle)
+  und 7 zur Pane-Fläche (Attribut-Spiegelung je Modus, Fallback,
+  `clearPersonal`).
+- Style-Test (Chromium): 4 Checks zur Nav-Zeilen-Geometrie (flex-wrap,
+  24-px-Buttons, Reihen-Umbruch, Spacer) und 4 zur Pane-Fläche
+  (gemessene Flächenfarben je Modus inkl. Dispose-Zustand);
+  Test-Tokens `--ui-sidebar-surface-background`/`--ui-chat-surface-background`
+  ergänzt.
+
 ## [1.19.3] — 2026-10-05
 
 ### Added

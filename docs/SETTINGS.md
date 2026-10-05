@@ -76,6 +76,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.openIntent` | `in-place` | `in-place` (ersetzen), `stack` (neben dran), `tab`. |
 | `tabs.asTabSelector` | `false` | Blendet die native Content-Tab-Leiste für Session-Tabs aus (strukturell über `:has()` — nur Streifen mit mindestens einem Session-Tile-Tab; Terminal/Dateien/sonstige Pane-Tabs bleiben unberührt). Sinnvoll, sobald Liste/Grid als alleiniger Tab-Selektor dienen soll. |
 | `tabs.maxItems` | `60` | Maximal geladene Sessions. |
+| `tabs.appNav` | `true` | **App-Schnellstart-Zeile**: Icon-Buttons für Neue Session, Fähigkeiten, Messaging, Artefakte, Geplante Jobs und Kanban über der Toolbar (gleiche Reihenfolge/Codicons wie die erste Sektion der App-Sidebar). Kanban erscheint nur bei laufendem Kanban-Plugin. Die Zeile bricht bei schmaler Pane-Breite dynamisch in weitere Zeilen um. |
 | `tabs.maxVisible` | `0` | Max. sichtbare Einträge je Gruppe in Liste & Grid; der Rest erscheint hinter „Mehr anzeigen (n)" — erneuter Klick klappt wieder ein („Weniger anzeigen"). `0` = aus. |
 | `tabs.hideCron` | `true` | Cron-Sessions ausblenden. |
 | `tabs.livePollSec` | `30` | Intervall der Live-Status-Abfrage (`session.active_list`). Min. 10s. |
@@ -302,7 +303,23 @@ Hinweise:
 ## Individualisierung
 
 Eigene Akzentfarbe und eigener Chat-Hintergrund. Alle Optionen sind standardmäßig
-**aus** — es ändert sich nichts, bis du sie einschaltest.
+**aus** — es ändert sich nichts, bis du sie einschaltest. Einzige Ausnahme:
+die **Pane-Fläche** steht seit v1.20.0 auf `native` und macht das Session-Flow-
+Pane farbgleich mit der nativen Sessions-Sidebar.
+
+### Pane-Fläche (Key `personal.paneSurface`)
+
+- Hintergrund des gesamten Session-Flow-Panes (Content-Bereich). Bis v1.19
+  fiel die Fläche auf die Chat-Farbe des Fensters durch — jetzt wählbar:
+  - **Native Sidebar** (`native`, Default): exakt dieselbe Variable, die auch
+    die eingebaute Hermes-Sessions-Sidebar malt
+    (`--ui-sidebar-surface-background`) — folgt Theme- und Glass-Varianten
+    automatisch.
+  - **Chat** (`chat`): die Chat-Surface-Farbe (`--ui-chat-surface-background`),
+    der bisherige Look.
+  - **Ohne** (`none`): kein eigener Fill — der App-Untergrund scheint durch.
+- Technik: `data-sf-panesurface`-Attribut auf `<html>`, deklarative CSS-Regeln
+  auf `.sf-pane`; beim Plugin-Dispose wird der Fill restlos entfernt.
 
 ### Akzent-Tönung (Keys `personal.accent*`)
 
