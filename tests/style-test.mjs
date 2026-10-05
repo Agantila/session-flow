@@ -292,8 +292,12 @@ try {
   check('Auswahl: Schatten medium aktiv (nicht Row-Schatten)', has(P.g2.shadow, '0.35'), P.g2.shadow)
   check('Parität: Auswahl Liste==Grid (Schatten+Kontur)', P.l2.shadow === P.g2.shadow && P.l2.outline === P.g2.outline, '')
 
-  // ── 4) Live-Status im Grid (9 %-Akzent-Layer über Verlauf) ────────────────
-  check('Live busy Grid: Akzent-Layer (9 %)', has(P.g3.bgImage, '0.09'), P.g3.bgImage.slice(0, 120))
+  // ── 4) Live-Status im Grid (Richtungs-Verlauf + Live-Schiene, v1.17.2) ────
+  check(
+    'Live busy Grid: Richtungs-Verlauf + Live-Schiene (2× 90deg)',
+    has(P.g3.bgImage, '90deg') && (P.g3.bgImage.match(/90deg/g) || []).length === 2,
+    P.g3.bgImage.slice(0, 120)
+  )
   check('Parität: Live Liste==Grid', P.l3.bgImage === P.g3.bgImage, '')
 
   // ── 5) Hover: Nicht-Auswahl behält Verlauf (Brightness), Auswahl vertieft ─
@@ -474,6 +478,35 @@ try {
   })
   check('Dichte einspaltig: Meta-Zeile als Flex-Zeile unter dem Text', IM.display === 'flex' && IM.below, JSON.stringify(IM))
   check('Dichte einspaltig: 3 px Abstand, alignTop-Padding ausgesetzt', IM.marginTop === '3px' && IM.paddingTop === '0px', JSON.stringify(IM))
+
+  // ── 15) v1.17.2: Live-Hintergrund klar von der Auswahl abgesetzt ──────────
+  // Frühere Sektionen entfernen die data-sf-*-Attribute des Fixtures — für
+  // die Live-/Auswahl-Regeln die nötigen Flags hier explizit setzen.
+  await page.evaluate(() => {
+    const r = document.documentElement
+    r.setAttribute('data-sf-rowgrad', 'on')
+    r.setAttribute('data-sf-seltint', 'custom')
+    r.setAttribute('data-sf-rowlive', 'on')
+  })
+  const LV = await page.evaluate(() => {
+    const read = id => window.getComputedStyle(document.getElementById(id)).backgroundImage
+    return { busyList: read('l3'), busyGrid: read('g3'), selected: read('l2') }
+  })
+  check(
+    'v1.17.2: Aktiv-Zeile nutzt Richtungs-Verlauf + Live-Schiene (2× 90deg)',
+    LV.busyList.startsWith('linear-gradient(90deg') && (LV.busyList.match(/90deg/g) || []).length === 2,
+    LV.busyList.slice(0, 150)
+  )
+  check(
+    'v1.17.2: Auswahl-Zeile bleibt flach (kein 90deg-Verlauf)',
+    LV.selected.startsWith('linear-gradient(') && !LV.selected.includes('90deg'),
+    LV.selected.slice(0, 150)
+  )
+  check(
+    'v1.17.2: Grid-Karte (aktiv) ebenfalls mit Richtungs-Verlauf',
+    LV.busyGrid.startsWith('linear-gradient(90deg') && (LV.busyGrid.match(/90deg/g) || []).length === 2,
+    LV.busyGrid.slice(0, 150)
+  )
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }

@@ -5,6 +5,24 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+## [1.17.2] — 2026-10-05
+
+### Changed
+- **Live-Hintergrund klar von der Auswahl abgesetzt** — aktive (arbeitende/
+  wartende) Zeilen tragen mit `tabs.rowLive` jetzt einen Richtungs-Verlauf
+  mit linker Live-Schiene statt einer flächigen Akzent-Tönung. Bisher lagen
+  „aktiv" (Akzent 9 %, flach) und „ausgewählt" (Akzent 16 %, flach — bei
+  `selTint: accent`) so dicht beieinander, dass beide auf einen Blick kaum
+  zu unterscheiden waren. Die Verlaufs-Form (Schiene links, auslaufend nach
+  rechts) trennt die Zustände nun deutlich, auch wenn beide denselben
+  Akzent-Farbton verwenden. Wartende Zeilen (Bernstein) bekommen dieselbe
+  Form; Ring, Puls und Live-Frame bleiben unverändert. Wirkt in Liste & Grid.
+
+### Intern
+- Style-Test (Sektion 15): Aktiv-Zeile (Liste + Grid) beginnt mit
+  `linear-gradient(90deg …)` (Schiene + Verlauf, 2× 90deg), Auswahl-Zeile
+  bleibt flach.
+
 ## [1.17.1] — 2026-10-05
 
 ### Changed

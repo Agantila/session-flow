@@ -113,7 +113,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.17.1'
+const VERSION = '1.17.2'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -3364,8 +3364,11 @@ html[data-sf-hoverlift~=on] .sf-tab{transition:transform .13s ease,box-shadow .1
 html[data-sf-hoverlift~=on] .sf-tab:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.42)}
 html[data-sf-hoverlift~=on] .sf-tab[data-dragging=true]:hover{transform:scale(.97);box-shadow:0 2px 10px rgba(0,0,0,.35)}
 html[data-sf-titlegrad~=on] .sf-tab-title{background-image:linear-gradient(var(--sf-title-angle,90deg),var(--sf-title-from,#e4e4e7),var(--sf-title-to,#8b8b93));-webkit-background-clip:text;background-clip:text;color:transparent}
-html[data-sf-rowlive~=on] .sf-tab[data-live=busy]{background:linear-gradient(color-mix(in srgb,var(--ui-accent) 9%,transparent),color-mix(in srgb,var(--ui-accent) 9%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 28%,transparent)}
-html[data-sf-rowlive~=on] .sf-tab[data-live=waiting]{background:linear-gradient(color-mix(in srgb,#f59e0b 9%,transparent),color-mix(in srgb,#f59e0b 9%,transparent)),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,#f59e0b 30%,transparent)}
+/* Live-Hintergrund (v1.17.2): Richtungs-Verlauf + linke Live-Schiene statt
+   flacher Tönung — hält „aktiv" auch bei gleichem Farbton klar von der
+   flachen Auswahl-Tönung getrennt (Deckkraft/Breite bewusst gewählt). */
+html[data-sf-rowlive~=on] .sf-tab[data-live=busy]{background:linear-gradient(90deg,color-mix(in srgb,var(--ui-accent) 70%,transparent) 0 3px,transparent 3px),linear-gradient(90deg,color-mix(in srgb,var(--ui-accent) 26%,transparent) 0,color-mix(in srgb,var(--ui-accent) 7%,transparent) 112px),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 28%,transparent)}
+html[data-sf-rowlive~=on] .sf-tab[data-live=waiting]{background:linear-gradient(90deg,color-mix(in srgb,#f59e0b 70%,transparent) 0 3px,transparent 3px),linear-gradient(90deg,color-mix(in srgb,#f59e0b 26%,transparent) 0,color-mix(in srgb,#f59e0b 7%,transparent) 112px),var(--sf-row-layer,linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0)));box-shadow:inset 0 0 0 1px color-mix(in srgb,#f59e0b 30%,transparent)}
 html[data-sf-rowlive~=on] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on] .sf-tab[data-live=waiting] .sf-tab-lead{animation:sf-live-pulse 1.6s ease-in-out infinite}
 @keyframes sf-live-pulse{0%,100%{opacity:1}50%{opacity:.4}}
 @media (prefers-reduced-motion:reduce){html[data-sf-rowlive~=on] .sf-tab[data-live=busy] .sf-tab-lead,html[data-sf-rowlive~=on] .sf-tab[data-live=waiting] .sf-tab-lead{animation:none}}
