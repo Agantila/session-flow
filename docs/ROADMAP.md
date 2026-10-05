@@ -1,10 +1,22 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.20.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.21.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Projekt-Kontext-Chip vor dem Composer-„+“** (v1.21.0): Chip
+  (Farb-Dot + Name + Caret) in der Eingabezeile des Composers, direkt vor dem
+  „+“-Add-IconButton — Projekt-Kontext immer sichtbar vor der ersten Eingabe.
+  Draft-Pick = sofortiger verankerter Create (Pane-„+“-Pfad), Session-Pick =
+  Re-Home per `session.workspace.move` (Fallback `session.cwd.set`), plus
+  best-effort `projects.set_active`. Injektion per Sync-Loop am
+  `.codicon-add`-Anker des fokussierten/sichtbaren Composer-Roots.
+  Plan: `docs/plans/2026-10-06-composer-projekt-kontext-pill.md`.
+  **Bekannte Grenze (bewusst)**: die App löst den CWD eines App-Drafts erst
+  beim Senden aus `$projectScope`/`$currentCwd` — ein echter Draft-CWD-Hebel
+  (Chip stellt den offenen App-Draft um, statt Ersatz-Create) braucht eine
+  Plugin-Tür in der App (Idee, siehe unten).
 - **App-Schnellstart-Zeile + Pane-Fläche** (v1.20.0): Icon-Button-Zeile über
   der Toolbar (Neue Session, Fähigkeiten, Messaging, Artefakte, Geplante
   Jobs, Kanban bei laufendem Plugin) mit `host.navigate`-Whitelist und
@@ -73,6 +85,11 @@ Vollständige Pläne zu v1.14.0: `docs/plans/2026-10-04-grouping-filter-dnd-tab-
 und docs/plans/2026-10-04-info-dichte-abstufung.md.
 
 ## Geplant / Ideen
+
+- **Echter Draft-CWD-Hebel (App-PR)**: Plugin-Tür für `$projectScope`/einen
+  `setCurrentCwd`-Door, damit der Projekt-Chip den offenen App-Draft direkt
+  umstellt — statt des jetzigen Ersatz-Creates (der App-Draft bleibt dann
+  unberührt liegen statt geschlossen zu werden).
 
 - **Donut-Feinschliff**: Ringdicke/Lochgröße als Option, einstellbare
   Warnschwellen (statt fix 70/90 %) und alternatives Label (`used/max`).

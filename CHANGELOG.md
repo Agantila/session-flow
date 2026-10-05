@@ -3,6 +3,27 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.21.0] — 2026-10-06
+
+### Added
+- **Projekt-Kontext-Chip vor dem Composer-„+“** (Plan:
+  [docs/plans/2026-10-06-composer-projekt-kontext-pill.md](docs/plans/2026-10-06-composer-projekt-kontext-pill.md)):
+  Minimalistischer Chip (Farb-Dot + Projektname + Caret) in der Eingabezeile
+  des Composers, **direkt vor dem „+“-Add-IconButton** — der Projekt-Kontext
+  ist damit vor der ersten Eingabe immer sichtbar. Klick öffnet ein Menü mit
+  „Kein Projekt (Home)“ + allen Projekten (`projects.tree`). **Draft**: der
+  Pick erzeugt SOFORT die verankerte Session (derselbe Pfad wie der Pane-„+“:
+  `session.create` mit cwd + `cwd_explicit` → `session.cwd.set` →
+  Overlay-Seed → open) — die Zuweisung steht garantiert vor der ersten
+  Eingabe. **Bestehende Session**: Re-Home per `session.workspace.move`
+  (persistiert per session_key; Fallback `session.cwd.set` für ältere
+  Gateways), plus best-effort `projects.set_active` (dauerhafter Aktiv-Zeiger
+  der App/CLI). Injektion über einen deklarativen Sync-Loop (2,5 s) am
+  `.codicon-add`-Anker des fokussierten, sichtbaren Composer-Roots;
+  Keep-Alive-/Pop-out-Tiles bekommen bewusst keinen Chip; Dispose entfernt
+  Chip + Menü restlos. Option „Projekt-Chip im Composer“ in Einstellungen →
+  Sessions (`composer.projectPill`, Default an). i18n EN+DE.
+
 ## [1.20.0] — 2026-10-06
 
 ### Added

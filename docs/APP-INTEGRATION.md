@@ -13,6 +13,7 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | Selektor | Wofür | Risiko / Hinweise |
 |---|---|---|
 | `[data-slot='composer-root']` | Glass-Fill-Variable (`--composer-fill`) + Radius-Quelle (`rounded-2xl`) | stabil; Wert des Radius hängt am Theme-Skalar |
+| `[data-slot='composer-root'] .codicon-add` (nächster `button`-Vorfahre) | **Projekt-Kontext-Chip (v1.21)**: Wrapper-Button = Injektionsanker, Chip als erstes Kind davor (Eingabezeile, vor dem „+“) | stabil (Codicon-Name `add` nur am Composer-Add-Button); bei Umbau der Composer-Controls verliert nur der Chip seinen Halt |
 | `[data-slot='composer-surface']` | Composer-Box: Fläche/Verlauf/Blur + Radius-Messung | stabil; `relative z-4 isolate`, 1px Border |
 | `[data-slot='composer-surface'] > [class~='-z-10']` | Fill-Layer → **Glow-Ring-Host** (transparent gemacht, Maske + `::before`) | Klasse `-z-10` = Tailwind-Konvention; wenn sie wandert, verliert nur der Ringhalt (Regeln greifen nicht mehr), kein Bruch |
 | `[data-tour='model-pill']` | Chips-Scope (nur Primär-Chat) | stabil; Tiles haben den Marker nicht |

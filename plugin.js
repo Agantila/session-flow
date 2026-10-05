@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.20.0'
+const VERSION = '1.21.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -274,6 +274,13 @@ const DEFAULT_SETTINGS = {
     bgDim: 35,
     bgBlur: 0,
     bgScope: 'chat',
+  },
+  composer: {
+    // Projekt-Kontext-Pill im Composer-Statusstapel (erste Zeile über dem
+    // Eingabefeld): zeigt bei New Session das Ziel-Projekt und erlaubt den
+    // Wechsel VOR der ersten Eingabe. Default an — die Zuweisung ist der
+    // Kern des v1.17.3/v1.19.x-Ankers.
+    projectPill: true
   }
 }
 
@@ -1409,6 +1416,544 @@ function pruneSessionProjectSeeds() {
 
   if (Object.keys(next).length !== Object.keys(seeds).length) {
     $sessionProjectSeed.set(next)
+  }
+}
+
+// ── Composer-Projekt-Pill (Statusstapel, v1.21) ──────────────────────────────
+// Der App-eigene New-Session-Weg (Cmd+N / Tab) ist ein Draft, dessen CWD die
+// App erst beim Senden aus $currentCwd/$projectScope auflöst. Der App-Scope-
+// Atom hat KEINE Plugin-Schreib-Tür (persistentAtom liest localStorage nur beim
+// Modul-Init), also ist der ehrliche Hebel: der Pick im Pill-Menü erzeugt die
+// verankerte Session SOFORT über den bewährten Anker-Pfad (session.create mit
+// cwd + cwd_explicit → session.cwd.set → Overlay-Seed → open) — die Zuordnung
+// steht garantiert vor der ersten Eingabe. Bestehende Sessions re-homen wir per
+// session.workspace.move (session_key; persistiert Row + live re-home), mit
+// dem cwd.set-Fallback für ältere Gateways. Best-effort zusätzlich
+// projects.set_active (dauerhafter Aktiv-Zeiger der App/CLI).
+// Injektion: der Chip sitzt in der EINGABEZEILE des Composers, direkt VOR dem
+// „+"-Add-IconButton (Anker .codicon-add im [data-slot='composer-root']) —
+// damit der Projekt-Kontext immer der erste Blickpunkt am Eingabefeld ist.
+
+// Letzter Draft-Pick: storedId '': '' → Projekt, das der User vor der ersten
+// Eingabe gewählt hat (bis der Create es zur echten Session macht).
+const $composerPick = atom({ id: '', label: '', color: null, at: 0 })
+
+// DOM-Marker der injizierten Zeile — identifiziert sie auch nach App-Re-Render
+// (React lässt fremde Attribute in Ruhe; bei Remount setzt der Sync-Loop neu).
+// Anker: der „+"-Button des Composers (Codicon "add" → .codicon-add, NUR im
+// Composer-Root). Der Chip als erstes Kind seines Wrapper-Divs (menu-Grid-
+// Bereich) sitzt direkt VOR dem „+", in derselben Zeile wie die Eingabe —
+// der Projekt-Kontext ist damit immer der erste Blickfang am Eingabefeld.
+const CPROJ_MARKER = 'data-sf-cproj'
+const CPROJ_SYNC_MS = 2500
+
+/** Pill aktiv? (Settings-Namespace composer.projectPill, Default an.) */
+function composerPillEnabled() {
+  return readSetting('composer', 'projectPill') !== false
+}
+
+/**
+ * Projekt-Node für eine Stored-Session: Overlay-Seed hat Vorrang (0-Turn-
+ * Sessions fehlen im Baum), sonst projects.tree (sessionIds-Autorität).
+ */
+function projectForStoredSession(storedId) {
+  const seed = $sessionProjectSeed.get()[storedId]
+
+  if (seed && seed.id && seed.id !== '__no_project__') {
+    return { id: seed.id, label: seed.name || '', color: seed.color || null, path: seed.path || '' }
+  }
+
+  const node = $projectsList.get().find(entry => !entry.isNoProject && entry.sessionIds.has(storedId))
+
+  return node ? { id: node.id, label: node.label, color: node.color, path: node.path } : null
+}
+
+/** Anker, den die App selbst für einen Draft resolve-n würde (App-Logik gespiegelt). */
+function composerDraftAnchor() {
+  try {
+    return resolveNewProjectSessionCwd() || { cwd: '', label: '' }
+  } catch {
+    return { cwd: '', label: '' }
+  }
+}
+
+/**
+ * Draft: verankerte Session SOFORT erzeugen (vor der ersten Eingabe) — derselbe
+ * Pfad wie der Pane-„+" (startNewSessionInCwd). Session: re-home via
+ * session.workspace.move (Fallback cwd.set), Seed + Tree-Refresh sofort.
+ */
+async function applyComposerPick(node) {
+  const focusedStored = (() => {
+    try {
+      return String(host.state?.focusedStoredSessionId?.get?.() || '')
+    } catch {
+      return ''
+    }
+  })()
+
+  $composerPick.set({ id: node.id, label: node.label, color: node.color, at: Date.now() })
+
+  try {
+    if (focusedStored) {
+      await rehomeFocusedSession(focusedStored, node)
+    } else if (node.path) {
+      await startNewSessionInCwd(node.path, node.label)
+    } else {
+      host.notify({
+        kind: 'info',
+        message: CTX?.i18n?.t('composerProjectNoneHint')
+          || 'Home hat keinen Arbeitsordner — für einen Draft bitte ein Projekt wählen.'
+      })
+    }
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('composerProject') || 'Projekt')
+  }
+
+  // Best-effort: dauerhafter Aktiv-Zeiger (Ziel zukünftiger App-Scopes/CLI).
+  try {
+    await setActiveProject(node.id && !node.isNoProject ? node.id : null)
+  } catch {
+    // Nice-to-have — kein Fehlerfall für den Pill-Flow.
+  }
+}
+
+/** Bestehende (fokussierte) Session in das Projekt re-homen. */
+async function rehomeFocusedSession(storedId, node) {
+  const cwd = String(node.path || '').trim()
+
+  if (!cwd) {
+    // Home-Pick auf bestehender Session: ein echtes Detachen unterstützt das
+    // Gateway nicht (move braucht ein existierendes cwd) — ehrlich sagen.
+    host.notify({
+      kind: 'info',
+      message: CTX?.i18n?.t('composerProjectHomeSessionHint')
+        || 'Eine bestehende Session kann nicht nach Home verschoben werden.'
+    })
+    return
+  }
+
+  let persisted = false
+
+  try {
+    await host.request('session.workspace.move', { session_key: storedId, cwd })
+    persisted = true
+  } catch (error) {
+    console.warn(`[${ID}] session.workspace.move fehlgeschlagen — Fallback cwd.set`, error)
+  }
+
+  if (!persisted) {
+    const runtimeId = await findLiveSessionIdByKey(storedId)
+
+    if (runtimeId) {
+      try {
+        await host.request('session.cwd.set', { cwd, session_id: runtimeId })
+        persisted = true
+      } catch (error) {
+        console.warn(`[${ID}] session.cwd.set (Pill-Fallback) fehlgeschlagen`, error)
+      }
+    }
+  }
+
+  const targetNode = $projectsList.get().find(entry => !entry.isNoProject && entry.path === cwd)
+
+  if (targetNode) {
+    const seeds = $sessionProjectSeed.get()
+    seeds[storedId] = { id: targetNode.id, name: targetNode.label, color: targetNode.color, icon: targetNode.icon, path: targetNode.path, at: Date.now() }
+    $sessionProjectSeed.set({ ...seeds })
+  }
+
+  void invalidateProjectTree()
+  scheduleSessionsRefresh(400)
+  host.notify({
+    kind: persisted ? 'success' : 'info',
+    message: `${CTX?.i18n?.t('composerProjectRehomeOk') || 'Projekt gesetzt'}${node.label ? ` · ${node.label}` : ''}`
+  })
+}
+
+/**
+ * Draft-Anzeige: gelernter Anker (App-Logik gespiegelt — Scope/active_id/
+ * letzte Session-CWD), sobald ein Projekt daraus ablesbar ist.
+ */
+function composerDraftLabel() {
+  const picked = $composerPick.get()
+
+  if (picked.id && Date.now() - Number(picked.at || 0) < 30 * 60_000) {
+    return picked
+  }
+
+  const anchor = composerDraftAnchor()
+  const node = anchor.cwd
+    ? $projectsList.get().find(entry => !entry.isNoProject && entry.path && (anchor.cwd === entry.path || anchor.cwd.startsWith(`${entry.path}/`)))
+    : null
+
+  if (node) {
+    return { id: node.id, label: node.label, color: node.color }
+  }
+
+  return null
+}
+
+/** Eine Pill-Zeile bauen (imperatives DOM — kein react-dom im Plugin). */
+function buildComposerPillRow(doc) {
+  const row = doc.createElement('div')
+
+  row.className = 'sf-cproj-row'
+  row.setAttribute(CPROJ_MARKER, '')
+
+  const pill = doc.createElement('button')
+
+  pill.type = 'button'
+  pill.className = 'sf-cproj-pill'
+  pill.setAttribute('data-sf-cproj-trigger', '')
+
+  const dot = doc.createElement('span')
+
+  dot.className = 'sf-cproj-dot'
+
+  const name = doc.createElement('span')
+
+  name.className = 'sf-cproj-name'
+
+  const caret = doc.createElement('span')
+
+  caret.className = 'sf-cproj-caret'
+  caret.textContent = '▾'
+  caret.setAttribute('aria-hidden', 'true')
+
+  pill.appendChild(dot)
+  pill.appendChild(name)
+  pill.appendChild(caret)
+  row.appendChild(pill)
+
+  return row
+}
+
+/** Menü einmalig bauen und an document hängen (versteckt per [hidden]). */
+function buildComposerPillMenu(doc) {
+  const menu = doc.createElement('div')
+
+  menu.className = 'sf-cproj-menu'
+  menu.setAttribute('data-sf-cproj-menu', '')
+  menu.hidden = true
+  menu.setAttribute('role', 'menu')
+
+  const hint = doc.createElement('div')
+
+  hint.className = 'sf-cproj-menu-hint'
+  menu.appendChild(hint)
+  doc.body.appendChild(menu)
+
+  return menu
+}
+
+/** Menü-Einträge rendern (Draft: Home zuerst; Session: nur echte Projekte). */
+function renderComposerPillMenu(menu, isDraft) {
+  const doc = menu.ownerDocument
+
+  while (menu.firstChild) {
+    menu.removeChild(menu.firstChild)
+  }
+
+  const hint = doc.createElement('div')
+
+  hint.className = 'sf-cproj-menu-hint'
+  hint.textContent = CTX?.i18n?.t('composerProjectMenuHint') || 'Ziel-Projekt für die nächste Eingabe'
+  menu.appendChild(hint)
+
+  const entries = []
+
+  if (isDraft) {
+    entries.push({ id: '__no_project__', label: CTX?.i18n?.t('composerProjectNone') || 'Kein Projekt (Home)', color: null, path: '' })
+  }
+
+  for (const node of $projectsList.get()) {
+    if (!node.isNoProject) {
+      entries.push({ id: node.id, label: node.label, color: node.color, path: node.path, isNoProject: false })
+    }
+  }
+
+  for (const entry of entries) {
+    const item = doc.createElement('button')
+
+    item.type = 'button'
+    item.className = 'sf-cproj-item'
+    item.setAttribute('role', 'menuitem')
+    item.setAttribute('data-project', entry.id)
+
+    const dot = doc.createElement('span')
+
+    dot.className = 'sf-cproj-dot'
+    if (entry.color) {
+      dot.style.setProperty('--sf-cproj-color', entry.color)
+    }
+
+    const name = doc.createElement('span')
+
+    name.className = 'sf-cproj-name'
+    name.textContent = entry.label
+
+    item.appendChild(dot)
+    item.appendChild(name)
+    item.addEventListener('click', () => {
+      setComposerMenuOpen(null)
+      void applyComposerPick(entry)
+    })
+    menu.appendChild(item)
+  }
+
+  if (entries.length <= 1 && isDraft) {
+    const empty = doc.createElement('div')
+
+    empty.className = 'sf-cproj-empty'
+    empty.textContent = CTX?.i18n?.t('composerProjectPickToast') || 'Noch keine Projekte angelegt'
+    menu.appendChild(empty)
+  }
+}
+
+/** Menü-Zustand: Element-Referenz oder null; globaler Listener schließt. */
+let composerMenuEl = null
+let composerMenuOutside = null
+let composerMenuKey = null
+
+function setComposerMenuOpen(target) {
+  if (composerMenuEl && target !== composerMenuEl) {
+    composerMenuEl.hidden = true
+  }
+
+  composerMenuEl = target
+
+  if (composerMenuOutside) {
+    composerMenuOutside()
+    composerMenuOutside = null
+  }
+
+  if (!composerMenuEl) {
+    composerMenuKey = null
+    return
+  }
+
+  const onKey = event => {
+    if (event.key === 'Escape') {
+      setComposerMenuOpen(null)
+    }
+  }
+
+  const onDown = event => {
+    if (composerMenuEl && !composerMenuEl.contains(event.target) && !event.target.closest?.('[data-sf-cproj-trigger]')) {
+      setComposerMenuOpen(null)
+    }
+  }
+
+  document.addEventListener('keydown', onKey, true)
+  document.addEventListener('pointerdown', onDown, true)
+  composerMenuOutside = () => {
+    document.removeEventListener('keydown', onKey, true)
+    document.removeEventListener('pointerdown', onDown, true)
+  }
+}
+
+/**
+ * Pill-Zustand je DOM-Sync aktualisieren: Label/Color aus Fokus/Seed/Baum,
+ * Draft-Anzeige aus gelerntem Anker. Data-Marker steuern CSS-Zustände.
+ */
+function refreshComposerPillState(row) {
+  const pill = row.querySelector('.sf-cproj-pill')
+
+  if (!pill) {
+    return
+  }
+
+  let focusedStored = ''
+
+  try {
+    focusedStored = String(host.state?.focusedStoredSessionId?.get?.() || '')
+  } catch {
+    focusedStored = ''
+  }
+
+  let label = ''
+  let color = null
+  let isDraft = true
+
+  if (focusedStored) {
+    const proj = projectForStoredSession(focusedStored)
+
+    if (proj) {
+      label = proj.label
+      color = proj.color
+      isDraft = false
+    }
+  }
+
+  if (isDraft) {
+    const draft = composerDraftLabel()
+
+    if (draft) {
+      label = draft.label
+      color = draft.color
+    }
+  }
+
+  const name = pill.querySelector('.sf-cproj-name')
+  const dot = pill.querySelector('.sf-cproj-dot')
+
+  if (name) {
+    name.textContent = label || (CTX?.i18n?.t('composerProjectNone') || 'Kein Projekt')
+  }
+
+  if (dot) {
+    if (color) {
+      dot.style.setProperty('--sf-cproj-color', color)
+    } else {
+      dot.style.removeProperty('--sf-cproj-color')
+    }
+  }
+
+  row.setAttribute('data-sf-cproj-draft', isDraft ? 'true' : 'false')
+  row.setAttribute('data-sf-cproj-empty', label ? 'false' : 'true')
+  row.setAttribute('data-sf-cproj-focus', focusedStored ? 'session' : 'draft')
+}
+
+/**
+ * Sync-Loop: findet den „+"-Button des fokussierten, sichtbaren Composers und
+ * hängt den Chip als erstes Kind in dessen Wrapper (direkt VOR dem „+", selbe
+ * Zeile wie die Eingabe). Entfernt die Zeile wieder, wenn die Einstellung aus
+ * geht — nichts bleibt nach Dispose übrig.
+ */
+function syncComposerProjectPills() {
+  const doc = document
+
+  if (!doc || !doc.body) {
+    return
+  }
+
+  if (!composerPillEnabled()) {
+    doc.querySelectorAll(`[${CPROJ_MARKER}]`).forEach(el => el.remove())
+    setComposerMenuOpen(null)
+    return
+  }
+
+  // Composer-Roots: sichtbar (nicht overlayt), Fokus-Vorrang (Keep-Alive-Tiles
+  // sind [data-pane-hidden] und bekommen bewusst keinen Chip).
+  const roots = Array.from(doc.querySelectorAll("[data-slot='composer-root']"))
+  const focusedRuntime = (() => {
+    try {
+      return String(host.state?.focusedSessionId?.get?.() || '')
+    } catch {
+      return ''
+    }
+  })()
+
+  let hostRoot = null
+
+  for (const root of roots) {
+    // data-popped-out ist bei Pop-out PRESENT (leerer String), sonst ABSENT
+    // (null) — getAttribute liefert nie undefined. Der bisherige Vergleich
+    // gegen undefined war immer wahr und übersprang ALLE Roots (Probe:
+    // chips=0 roots=2 plusIcons=2).
+    if (root.closest('[data-pane-overlay]') || root.hasAttribute('data-popped-out')) {
+      continue
+    }
+
+    const pane = root.closest('[data-pane-host], [data-chat-surface], body')
+
+    if (!pane || pane.getAttribute('data-pane-hidden') === '') {
+      continue
+    }
+
+    if (pane !== doc.body && pane.offsetParent === null) {
+      continue
+    }
+
+    const isFocused = focusedRuntime
+      ? Array.from(pane.querySelectorAll('[data-session-id]')).some(el => el.getAttribute('data-session-id') === focusedRuntime)
+      : false
+
+    if (!hostRoot || isFocused) {
+      hostRoot = { root, pane, isFocused }
+    }
+
+    if (hostRoot.isFocused) {
+      break
+    }
+  }
+
+  if (!hostRoot) {
+    doc.querySelectorAll(`[${CPROJ_MARKER}]`).forEach(el => el.remove())
+    return
+  }
+
+  // „+"-Button: Codicon "add" ist eindeutig innerhalb des Composer-Roots
+  // (Add-Attach-Button). Sein Wrapper ist der menu-Grid-Bereich.
+  const plusBtn = hostRoot.root.querySelector('.codicon-add')?.closest('button')
+
+  if (!plusBtn) {
+    return
+  }
+
+  const row = plusBtn.parentElement
+
+  if (!row || row === hostRoot.root) {
+    return
+  }
+
+  let chip = row.querySelector(`:scope > [${CPROJ_MARKER}]`)
+
+  if (!chip) {
+    for (const existing of doc.querySelectorAll(`[${CPROJ_MARKER}]`)) {
+      existing.remove()
+    }
+    chip = buildComposerPillRow(doc)
+    row.insertBefore(chip, plusBtn)
+  }
+
+  if (chip.parentElement !== row) {
+    chip.parentElement?.removeChild(chip)
+    row.insertBefore(chip, plusBtn)
+  }
+
+  refreshComposerPillState(chip)
+
+  const pill = chip.querySelector('.sf-cproj-pill')
+
+  if (!pill) {
+    return
+  }
+
+  if (!pill.dataset.sfCprojBound) {
+    pill.dataset.sfCprojBound = '1'
+    pill.addEventListener('click', () => {
+      let menu = doc.querySelector('[data-sf-cproj-menu]')
+
+      if (!menu) {
+        menu = buildComposerPillMenu(doc)
+      }
+
+      if (menu.hidden && composerMenuKey !== pill) {
+        const isDraft = chip.getAttribute('data-sf-cproj-draft') === 'true'
+        renderComposerPillMenu(menu, isDraft)
+        const rect = pill.getBoundingClientRect()
+        menu.style.left = `${Math.max(8, Math.round(rect.left))}px`
+        menu.style.bottom = `${Math.max(8, Math.round(window.innerHeight - rect.top + 6))}px`
+        menu.hidden = false
+        composerMenuKey = pill
+        setComposerMenuOpen(menu)
+      } else {
+        setComposerMenuOpen(null)
+      }
+    })
+  }
+}
+
+/**
+ * Projekte/Baum und Pill-Zustand gemeinsam nachziehen — Listener-Kontext für
+ * register() und die Poll-Ticks.
+ */
+function kickComposerPillSync() {
+  try {
+    syncComposerProjectPills()
+  } catch (error) {
+    console.warn(`[${ID}] composer pill sync failed`, error)
   }
 }
 
@@ -3770,6 +4315,15 @@ const EN = {
   glassScopeStatusbarDesc: 'Items in the bar along the bottom edge.',
   newSession: 'New session',
   noProjectAnchor: 'New session has no project anchor — pick a project in the header to anchor it.',
+  composerProject: 'Project',
+  composerProjectNone: 'No project (Home)',
+  composerProjectNoneHint: 'Home has no working folder — pick a project to anchor a draft.',
+  composerProjectMenuHint: 'Target project for the next message',
+  composerProjectPickToast: 'No projects yet — create one in the sessions pane.',
+  composerProjectRehomeOk: 'Project set',
+  composerProjectHomeSessionHint: 'An existing session cannot move to Home.',
+  composerProjectPill: 'Project pill in composer',
+  composerProjectPillDesc: 'Shows the target project above the input field and lets you switch it before the first message (new session) or re-home the current session.',
   moveSessionNotLive: 'Assignment is visible — permanent only after the session is opened.',
   viewSwitch: 'Switch view (list/grid)',
   navAppNewSession: 'New session',
@@ -4341,6 +4895,15 @@ const DE = {
   glassScopeStatusbarDesc: 'Einträge in der Leiste am unteren Rand.',
   newSession: 'Neue Session',
   noProjectAnchor: 'Neue Session ohne Projekt-Anker — bitte Projekt in der Kopfzeile wählen.',
+  composerProject: 'Projekt',
+  composerProjectNone: 'Kein Projekt (Home)',
+  composerProjectNoneHint: 'Home hat keinen Arbeitsordner — für einen Draft bitte ein Projekt wählen.',
+  composerProjectMenuHint: 'Ziel-Projekt für die nächste Eingabe',
+  composerProjectPickToast: 'Noch keine Projekte — im Sessions-Pane anlegen.',
+  composerProjectRehomeOk: 'Projekt gesetzt',
+  composerProjectHomeSessionHint: 'Eine bestehende Session kann nicht nach Home verschoben werden.',
+  composerProjectPill: 'Projekt-Pill im Composer',
+  composerProjectPillDesc: 'Zeigt das Ziel-Projekt über dem Eingabefeld und erlaubt den Wechsel vor der ersten Eingabe (neue Session) bzw. das Verschieben der aktuellen Session.',
   moveSessionNotLive: 'Zuordnung sichtbar — dauerhaft erst nach dem Öffnen der Session.',
   viewSwitch: 'Ansicht wechseln (Liste/Grid)',
   navAppNewSession: 'Neue Session',
@@ -4470,6 +5033,23 @@ const CSS = `
 .sf-navapps-btn:active{background:color-mix(in srgb,var(--ui-accent) 14%,transparent)}
 .sf-navapps-rule{flex-basis:100%;height:0}
 @media (prefers-reduced-motion:reduce){.sf-navapps-btn{transition:none}}
+/* Composer-Projekt-Chip (v1.21): sitzt in der Eingabezeile des Composers,
+   direkt VOR dem „+"-Add-Button (Wrapper des .codicon-add). Minimalistisch:
+   Farb-Dot + Name + Caret, Höhe des Ghost-Icon-Buttons, nur Theme-Variablen. */
+.sf-cproj-row{display:flex;align-items:center}
+.sf-cproj-pill{display:inline-flex;align-items:center;gap:5px;max-width:200px;height:26px;padding:0 8px;border:1px solid color-mix(in srgb,var(--foreground) 10%,transparent);border-radius:999px;background:color-mix(in srgb,var(--foreground) 4%,transparent);color:var(--ui-text-secondary,var(--foreground));font-size:11px;line-height:1;cursor:pointer;transition:background-color .12s ease,border-color .12s ease,color .12s ease}
+.sf-cproj-pill:hover{background:color-mix(in srgb,var(--foreground) 8%,transparent);border-color:color-mix(in srgb,var(--foreground) 16%,transparent);color:var(--foreground)}
+.sf-cproj-pill:focus-visible{outline:1px solid var(--ui-accent);outline-offset:1px}
+.sf-cproj-dot{width:8px;height:8px;border-radius:999px;background:var(--sf-cproj-color,color-mix(in srgb,var(--foreground) 28%,transparent));flex:none}
+.sf-cproj-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sf-cproj-caret{flex:none;font-size:8px;opacity:.6}
+.sf-cproj-menu{position:fixed;z-index:60;min-width:200px;max-width:320px;max-height:40vh;overflow-y:auto;padding:4px;border:1px solid color-mix(in srgb,var(--foreground) 12%,transparent);border-radius:10px;background:var(--ui-chat-surface-background);box-shadow:0 8px 24px color-mix(in srgb,var(--foreground) 18%,transparent)}
+.sf-cproj-menu-hint{padding:4px 8px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ui-text-quaternary,var(--ui-text-tertiary))}
+.sf-cproj-item{display:flex;width:100%;align-items:center;gap:8px;padding:6px 8px;border:none;border-radius:7px;background:transparent;color:var(--foreground);font-size:12px;text-align:left;cursor:pointer}
+.sf-cproj-item:hover{background:color-mix(in srgb,var(--foreground) 7%,transparent)}
+.sf-cproj-item:focus-visible{outline:1px solid var(--ui-accent);outline-offset:-1px}
+.sf-cproj-empty{padding:6px 8px;font-size:11px;color:var(--ui-text-tertiary)}
+@media (prefers-reduced-motion:reduce){.sf-cproj-pill{transition:none}}
 .sf-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 4px 12px}
 .sf-group-head{display:flex;align-items:flex-start;gap:4px;min-height:27px;padding:2px 4px 2px 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none;transition:background-color .12s ease,box-shadow .12s ease}
 .sf-group-head:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
@@ -8762,6 +9342,7 @@ function SettingsPage() {
   const glass = settings.glass
   const uiTabs = settings.uiTabs
   const personal = settings.personal
+  const composer = settings.composer
 
   const patch = (section, key, value) => patchSettings(section, { [key]: value })
 
@@ -9015,6 +9596,15 @@ function SettingsPage() {
             description: t('tabsAppNavDesc'),
             checked: tabs.appNav !== false,
             onChange: value => patch('tabs', 'appNav', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('composerProjectPill'),
+            description: t('composerProjectPillDesc'),
+            checked: composer.projectPill !== false,
+            onChange: value => {
+              patch('composer', 'projectPill', value)
+              kickComposerPillSync()
+            }
           }),
           jsx(Row, {
             title: t('tabsGridMin'),
@@ -10198,6 +10788,18 @@ export default {
       void refreshProjectsList()
     }, 60_000)
 
+    // Composer-Projekt-Pill (v1.21): Sync-Takt fängt App-Re-Renders (Zeile weg
+    // → neu injizieren) und Pane-Wechsel; die Listener ziehen Label/Menu-
+    // Zustand sofort nach, wenn Projekte, Seed oder Fokus sich ändern.
+    kickComposerPillSync()
+    const stopComposerPillWatch = [
+      $projectsList.listen(() => kickComposerPillSync()),
+      $sessionProjectSeed.listen(() => kickComposerPillSync()),
+      $composerPick.listen(() => kickComposerPillSync()),
+      host.state.focusedStoredSessionId.listen(() => kickComposerPillSync())
+    ]
+    ctx.setInterval(() => kickComposerPillSync(), CPROJ_SYNC_MS)
+
     ctx.setInterval(() => {
       expireActivity()
     }, 30_000)
@@ -10375,6 +10977,11 @@ export default {
         clearRows()
         stopAppDensityWatch()
         stopCtxInfoWatch()
+        for (const stop of stopComposerPillWatch) stop()
+        setComposerMenuOpen(null)
+        document.querySelectorAll(`[${CPROJ_MARKER}]`).forEach(el => el.remove())
+        const cprojMenu = document.querySelector('[data-sf-cproj-menu]')
+        if (cprojMenu) cprojMenu.remove()
         window.clearTimeout(ctxRefreshTimer)
         if (typeof stopSidebarSync === 'function') stopSidebarSync()
         try {

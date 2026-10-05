@@ -77,6 +77,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.asTabSelector` | `false` | Blendet die native Content-Tab-Leiste für Session-Tabs aus (strukturell über `:has()` — nur Streifen mit mindestens einem Session-Tile-Tab; Terminal/Dateien/sonstige Pane-Tabs bleiben unberührt). Sinnvoll, sobald Liste/Grid als alleiniger Tab-Selektor dienen soll. |
 | `tabs.maxItems` | `60` | Maximal geladene Sessions. |
 | `tabs.appNav` | `true` | **App-Schnellstart-Zeile**: Icon-Buttons für Neue Session, Fähigkeiten, Messaging, Artefakte, Geplante Jobs und Kanban über der Toolbar (gleiche Reihenfolge/Codicons wie die erste Sektion der App-Sidebar). Kanban erscheint nur bei laufendem Kanban-Plugin. Die Zeile bricht bei schmaler Pane-Breite dynamisch in weitere Zeilen um. |
+| `composer.projectPill` | `true` | **Projekt-Kontext-Chip**: minimalistischer Chip (Farb-Dot + Projektname + Caret) in der Eingabezeile des Composers, direkt vor dem „+“-Add-IconButton. Klick öffnet ein Projekt-Menü: Draft → sofortiger verankerter Create (Zuweisung steht vor der ersten Eingabe); bestehende Session → Re-Home per `session.workspace.move` (Fallback `session.cwd.set`); zusätzlich best-effort `projects.set_active`. |
 | `tabs.maxVisible` | `0` | Max. sichtbare Einträge je Gruppe in Liste & Grid; der Rest erscheint hinter „Mehr anzeigen (n)" — erneuter Klick klappt wieder ein („Weniger anzeigen"). `0` = aus. |
 | `tabs.hideCron` | `true` | Cron-Sessions ausblenden. |
 | `tabs.livePollSec` | `30` | Intervall der Live-Status-Abfrage (`session.active_list`). Min. 10s. |

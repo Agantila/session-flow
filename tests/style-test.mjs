@@ -855,6 +855,79 @@ try {
   await settle()
   const SFn2 = await page.evaluate(() => getComputedStyle(document.querySelector('.sf-pane')).backgroundColor)
   check('Pane-Fläche: native (per Attribut) löst Sidebar-Variable auf', SFn2 === 'rgb(26, 28, 32)', `bg=${SFn2}`)
+
+  // ── Composer-Projekt-Chip (v1.21): Geometrie vor dem „+"-Button ──────────
+  // Fixture spiegelt die Injection-Situation: Chip als erstes Kind im Wrapper
+  // des „+"-Buttons (menu-Bereich der Eingabezeile). Geprüft wird die
+  // berechnete Geometrie — Chip inline-flex in einer Flex-Zeile, Pill-Höhe
+  // passend zum Ghost-Icon-Button, Farb-Dot 8 px, Caret-Behaltung.
+  const CP = await page.evaluate(() => {
+    const row = document.createElement('div')
+
+    row.className = 'sf-cproj-row'
+    row.id = 'cproj'
+
+    const pill = document.createElement('button')
+
+    pill.type = 'button'
+    pill.className = 'sf-cproj-pill'
+
+    const dot = document.createElement('span')
+
+    dot.className = 'sf-cproj-dot'
+    dot.style.setProperty('--sf-cproj-color', '#7c3aed')
+
+    const name = document.createElement('span')
+
+    name.className = 'sf-cproj-name'
+    name.textContent = 'AGANTILA'
+
+    const caret = document.createElement('span')
+
+    caret.className = 'sf-cproj-caret'
+    caret.textContent = '▾'
+    pill.appendChild(dot)
+    pill.appendChild(name)
+    pill.appendChild(caret)
+    row.appendChild(pill)
+
+    const plus = document.createElement('button')
+
+    plus.type = 'button'
+    plus.className = 'sf-cproj-plus-sim'
+    plus.textContent = '+'
+    row.appendChild(plus)
+
+    const menu = document.createElement('div')
+
+    menu.className = 'sf-cproj-menu'
+    menu.id = 'cproj-menu'
+    const item = document.createElement('button')
+
+    item.className = 'sf-cproj-item'
+    menu.appendChild(item)
+    document.body.appendChild(row)
+    document.body.appendChild(menu)
+
+    const pr = pill.getBoundingClientRect()
+    const cs = getComputedStyle(pill)
+    const dotcs = getComputedStyle(dot)
+    const mcs = getComputedStyle(menu)
+
+    return {
+      rowDisplay: getComputedStyle(row).display,
+      pillDisplay: cs.display,
+      pillH: Math.round(pr.height),
+      dotW: Math.round(dot.getBoundingClientRect().width),
+      dotColor: dotcs.backgroundColor,
+      menuPos: mcs.position,
+      menuZ: Number(mcs.zIndex)
+    }
+  })
+  check('Projekt-Chip: Zeile ist flex (Chip + „+" in einer Zeile)', CP.rowDisplay === 'flex', `row=${CP.rowDisplay}`)
+  check('Projekt-Chip: Pill ist Flex-Pill mit Icon-Button-Höhe (26 px)', (CP.pillDisplay === 'inline-flex' || CP.pillDisplay === 'flex') && CP.pillH === 26, `${CP.pillDisplay} / h=${CP.pillH}`)
+  check('Projekt-Chip: Farb-Dot 8 px und Projekt-Farbe --sf-cproj-color', CP.dotW === 8 && CP.dotColor === 'rgb(124, 58, 237)', `${CP.dotW}px / ${CP.dotColor}`)
+  check('Projekt-Chip: Menü fixed über der Eingabezeile (z≥50)', CP.menuPos === 'fixed' && CP.menuZ >= 50, `${CP.menuPos} / z=${CP.menuZ}`)
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }
