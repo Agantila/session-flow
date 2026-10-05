@@ -40,6 +40,16 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   Test-Tokens `--ui-sidebar-surface-background`/`--ui-chat-surface-background`
   ergänzt.
 
+### Fixed
+- **Kanban-Schnellstart-Button erschien nicht**: Der Feature-Detect suchte
+  nach `[data-tour="sidebar-nav-kanban"]` — der laufende Build namespaced
+  Plugin-Beiträge aber als `sidebar-nav-kanban:nav` (live verifiziert; die
+  Zeile existiert in der nativen Sessions-Sidebar). Der Detect matcht jetzt
+  per Präfix `[data-tour^="sidebar-nav-kanban"]` und deckt beide Schemas ab;
+  zweites Signal bleibt der offene Kanban-Drawer
+  (`.kanban-drawer-content`). Live-Verifikation: `navBtns=6`,
+  `data-kanban=on`, Labels `…|Kanban`.
+
 ## [1.19.3] — 2026-10-05
 
 ### Added

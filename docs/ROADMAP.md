@@ -12,7 +12,9 @@ zugesagt.
   Individualisierung → Pane-Fläche): **Native Sidebar** (Default, exakt die
   Variable der nativen Sessions-Sidebar), **Chat** (bisheriger Look),
   **Ohne**. Pläne: `docs/plans/2026-10-05-app-nav-icon-row.md`,
-  `docs/plans/2026-10-06-pane-surface-option.md`.
+  `docs/plans/2026-10-06-pane-surface-option.md`. Kanban-Detect über
+  `[data-tour^="sidebar-nav-kanban"]` (Plugin-Beiträge tragen das
+  Namensraum-Suffix `:nav`, live verifiziert) oder den offenen Drawer.
 - **Context-Bar + Settings-Hierarchie** (v1.19.3): Kontext-Stil Donut/Bar,
   Trennlinien + Hover je Settings-Sektion. Plan:
   `docs/plans/2026-10-05-context-bar-style-settings-hierarchie.md`.

@@ -7517,10 +7517,19 @@ function navigateAppRoute(route) {
   return true
 }
 
-// Feature-Detect für das Kanban-Plugin: registriert es läuft, mountet der
-// Drawer irgendwo im DOM (Klasse aus plugins/kanban/drawer.tsx). document ist
-// immer da — im Render-Test ein Stub ohne Treffer, im echten App-DOM sonst wo.
+// Feature-Detect für das Kanban-Plugin — zwei echte Signale, nie geraten:
+// 1) Die Nav-Zeile in der nativen Sessions-Sidebar. Die App markiert jede
+//    SIDEBAR_NAV-Zeile mit data-tour="sidebar-nav-<id>" — Built-ins ohne,
+//    Plugin-Beiträge MIT Namensraum-Suffix (live verifiziert:
+//    "sidebar-nav-kanban:nav"). Der Beitrag existiert nur, wenn das
+//    Kanban-Plugin registriert (aktiviert + geladen) ist → Präfix-Match.
+// 2) Der offene Kanban-Drawer (Klasse aus plugins/kanban/drawer.tsx) —
+//    greift auch, wenn die Sidebar gerade kein Nav rendert.
 function kanbanAvailable() {
+  if (document.querySelector('[data-tour^="sidebar-nav-kanban"]')) {
+    return true
+  }
+
   return Boolean(document.querySelector('.kanban-drawer-content'))
 }
 

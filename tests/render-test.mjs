@@ -2600,8 +2600,11 @@ try {
     )
 
     // Kanban anwesend simulieren: positiver Feature-Detect + Klick → /kanban.
+    // Pfad 1: Drawer-Klasse (offener Drawer).
     globalThis.document.querySelector = selector =>
-      selector === '.kanban-drawer-content' ? { className: 'kanban-drawer-content' } : realQuery.call(globalThis.document, selector)
+      selector === '.kanban-drawer-content' || selector === '[data-tour="sidebar-nav-kanban"]'
+        ? { className: 'kanban-drawer-content' }
+        : realQuery.call(globalThis.document, selector)
     stub.__resetSlots()
     globalThis.__SF__.tCalls.length = 0
     const out36k = { el: [], text: [] }
@@ -2609,13 +2612,40 @@ try {
     const btnsK = out36k.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn'))
     const barK = out36k.el.find(e => e.cls.includes('sf-navapps') && !e.cls.includes('sf-navapps-btn'))
     check(
-      'v1.20: Kanban-Button erscheint bei positivem Feature-Detect (6 Buttons, data-kanban=on)',
+      'v1.20: Kanban-Button bei Detect über Drawer-Klasse (6 Buttons, data-kanban=on)',
       btnsK.length === 6 && btnsK[5].props['data-nav'] === 'kanban' && barK && barK.props['data-kanban'] === 'on',
       `n=${btnsK.length}`
     )
     check('v1.20: Kanban-Label-Key wird bei Detect benutzt', globalThis.__SF__.tCalls.some(([k]) => k === 'navAppKanban'))
+
+    // Pfad 2: Nav-Zeilen-Handle der nativen Sessions-Sidebar (data-tour) —
+    // Plugin-Beiträge tragen live das Namensraum-Suffix ":nav" (verifiziert).
+    globalThis.document.querySelector = selector =>
+      selector === '[data-tour^="sidebar-nav-kanban"]'
+        ? { attrs: { 'data-tour': 'sidebar-nav-kanban:nav' } }
+        : realQuery.call(globalThis.document, selector)
+    stub.__resetSlots()
+    const out36t = { el: [], text: [] }
+    walk(pane.render(), out36t)
+    const btnsT = out36t.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn'))
+    check(
+      'v1.20: Kanban-Button bei Detect über sidebar-nav-Tour-Handle (6 Buttons)',
+      btnsT.length === 6 && btnsT[5].props['data-nav'] === 'kanban',
+      `n=${btnsT.length}`
+    )
+
+    // Negative Sperrung: keins der beiden Signale → wieder 5 Buttons.
+    globalThis.document.querySelector = realQuery
+    stub.__resetSlots()
+    const out36n = { el: [], text: [] }
+    walk(pane.render(), out36n)
+    check(
+      'v1.20: ohne beide Kanban-Signale wieder 5 Buttons (data-kanban=off)',
+      out36n.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn')).length === 5
+    )
+
     navLog.length = 0
-    btnsK[5].props.onClick()
+    btnsT[5].props.onClick()
     check('v1.20: Kanban-Klick navigiert nach /kanban', navLog.length === 1 && navLog[0] === '/kanban', navLog.join(','))
 
     // Neue-Session-Button klickt NICHT den Router (sondern den Pane-Pfad).

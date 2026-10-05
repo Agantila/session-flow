@@ -78,3 +78,15 @@ anfangs als eigener Zeilenblock über der Toolbar.
 
 - Aktiv-Zustand, sobald die App ihre Route plugin-sichtbar macht.
 - Evtl. konfigurierbare Button-Reihenfolge (Settings) — Roadmap-Idee.
+
+## Nachtrag (2026-10-06): Kanban-Detect gefixt
+
+Der erste Detect (`[data-tour="sidebar-nav-kanban"]`) griff im Live-Build
+nicht: Plugin-Nav-Beiträge werden als `sidebar-nav-kanban:nav` namespaced
+(live per Probe verifiziert; Nebenfunde: `sidebar-nav-next-steps:nav`,
+`sidebar-nav-session-flow:nav`). Fix: Präfix-Selektor
+`[data-tour^="sidebar-nav-kanban"]` — deckt Built-in- und Contrib-Schema
+ab; zweites Signal bleibt der offene Drawer (`.kanban-drawer-content`).
+Tests: Pfad-2-Spy auf das reale Live-Schema umgestellt + negative
+Sperrung (beide Signale weg → wieder 5 Buttons). Live-Verifikation:
+`handleFound=true navBtns=6 barKanban=on labels=…|Kanban`.
