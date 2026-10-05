@@ -63,3 +63,19 @@ CSS-Keyframes `sf-info-in`/`sf-info-out`.
 - Reasoning-Text in der Zeile, falls die Runtime ihn je im Event-Payload
   mitliefert (aktuell nicht der Fall).
 - Optional: Info-Zeile auch für Komfortabel (Wunsch bisher nur Detailreich).
+
+## Nachtrag — Zeile 2 in Komfortabel/Kompakt (2026-10-05)
+
+> Diese dynamische Anzeige was in der Session passiert soll auch in den
+> anderen Optionen "Komfortabel" und "Kompakt" in der zweiten Zeile angewendet
+> werden und den inhalt der zweiten Zeile für die Darstellung ausblenden
+> solange die Aktion läuft.
+
+- `comfortable`: Die Aktivitäts-Zeile belegt die ZWEITE Zeile; die Detail-Zeile
+  („Modell · Nachrichten · zuletzt aktiv …") wird ausgeblendet, solange die
+  Aktion läuft, und kommt danach zurück.
+- `compact`: hat regulär keine zweite Zeile — die Aktivitäts-Zeile erscheint
+  dort nur während der Aktion.
+- `detailed`: unverändert eigene dritte Zeile (Details bleiben sichtbar).
+- Aktivitätszeile trägt jetzt `data-line: inline|extra` (Test-/Stil-Anker);
+  Render-Sektion 27 prüft alle vier Kombinationen.

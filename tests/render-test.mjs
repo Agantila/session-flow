@@ -1520,7 +1520,11 @@ try {
 
   mod.patchSettings('tabs', { infoDensity: 'comfortable' })
   const out2 = renderRaw()
-  check('Info-Zeile: in Komfortabel NICHT vorhanden', !out2.el.some(e => e.cls.includes('sf-tab-activity')), '')
+  check(
+    'Info-Zeile: in Komfortabel als Inline-Zeile 2 (aktiv)',
+    out2.el.some(e => e.props && e.props['data-line'] === 'inline'),
+    ''
+  )
 
   mod.patchSettings('tabs', { infoDensity: 'detailed' })
   mod.$activity.set({})
@@ -1537,6 +1541,76 @@ try {
   mod.$activityPrev.set({})
 } catch (error) {
   check('Info-Zeile-Tests durchgelaufen', false, error && error.message)
+}
+
+// 27) Aktivitäts-Zeile in Komfortabel/Kompakt: belegt Zeile 2, blendet die
+// Details aus, solange die Aktion läuft
+try {
+  mod.patchSettings('groups', { enabled: false, autoMode: 'off', showUngrouped: true })
+  mod.$projectsList.set([])
+  mod.$sessions.set([
+    { id: 'dens-1', title: 'Dichte Probe', preview: 'vorschau', cwd: '', branch: 'main', model: 'm', toolCount: 0, pinned: false, source: 'desktop', startedAt: Date.now(), messageCount: 3, live: 0 }
+  ])
+  mod.$activityPrev.set({})
+
+  const renderRaw = () => {
+    stub.__resetSlots()
+    const out = { el: [], text: [] }
+    walk(pane.render(), out)
+    return out
+  }
+  const hasInline = out => out.el.some(e => e.props && e.props['data-line'] === 'inline')
+  const hasExtra = out => out.el.some(e => e.props && e.props['data-line'] === 'extra')
+  const hasDetails = out => out.el.some(e => e.cls.includes('sf-tab-details'))
+
+  mod.patchSettings('tabs', { maxVisible: 0, view: 'list', infoDensity: 'comfortable' })
+  mod.$activity.set({ 'dens-1': { kind: 'tool', name: 'read_file', at: Date.now(), from: 'event' } })
+  const busy = renderRaw()
+  check(
+    'Dichte-Zeile: Komfortabel+aktiv — Aktivität belegt Zeile 2, Details ausgeblendet',
+    hasInline(busy) && !hasDetails(busy),
+    `inline=${hasInline(busy)} details=${hasDetails(busy)}`
+  )
+
+  mod.$activity.set({})
+  const idle = renderRaw()
+  check(
+    'Dichte-Zeile: Komfortabel+idle — Detail-Zeile zurück, keine Aktivität',
+    hasDetails(idle) && !hasInline(idle) && !hasExtra(idle),
+    `details=${hasDetails(idle)} inline=${hasInline(idle)}`
+  )
+
+  mod.patchSettings('tabs', { infoDensity: 'compact' })
+  mod.$activity.set({ 'dens-1': { kind: 'thinking', name: '', at: Date.now(), from: 'event' } })
+  const compactBusy = renderRaw()
+  check(
+    'Dichte-Zeile: Kompakt+aktiv — Aktivität als zweite Zeile',
+    hasInline(compactBusy) && !hasDetails(compactBusy),
+    `inline=${hasInline(compactBusy)} details=${hasDetails(compactBusy)}`
+  )
+  mod.$activity.set({})
+  const compactIdle = renderRaw()
+  check(
+    'Dichte-Zeile: Kompakt+idle — keine zweite Zeile',
+    !hasInline(compactIdle) && !hasDetails(compactIdle),
+    `inline=${hasInline(compactIdle)} details=${hasDetails(compactIdle)}`
+  )
+
+  mod.patchSettings('tabs', { infoDensity: 'detailed' })
+  mod.$activity.set({ 'dens-1': { kind: 'tool', name: 'x', at: Date.now(), from: 'event' } })
+  const det = renderRaw()
+  check(
+    'Dichte-Zeile: Detailreich — Details bleiben, Aktivität als EIGENE Zeile (extra)',
+    hasDetails(det) && hasExtra(det) && !hasInline(det),
+    `details=${hasDetails(det)} extra=${hasExtra(det)} inline=${hasInline(det)}`
+  )
+
+  mod.patchSettings('tabs', { infoDensity: 'auto' })
+  mod.$activity.set({})
+  mod.$activityPrev.set({})
+  mod.$sessions.set([])
+} catch (error) {
+  check('Dichte-Zeile-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

@@ -14,10 +14,12 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   frischen Live-Poll an (Transition beschäftigt→ruhig im Poll); der Poll
   bereinigt die Aktivität fertig gewordener Sessions zugleich sofort
   (statt TTL-Latenz), sodass Statuspunkt und Effekt zusammen kommen.
-- **Detailreich-Info-Zeile**: Die Info-Dichte `detailed` zeigt unter der
-  „zuletzt aktiv"-Info eine eigene, animierte Aktivitäts-Zeile — den
-  aktuellen Tool Call (mit Namen) oder den Status („Denkt nach…",
-  „Schreibt…", „Wartet auf Antwort"). Beim Wechsel schiebt die neue Info
+- **Info-Zeile in allen Dichten**: Die animierte Aktivitäts-Zeile (aktueller
+  Tool Call mit Namen bzw. Status „Denkt nach…"/„Schreibt…"/„Wartet auf
+  Antwort") erscheint jetzt in JEDER Info-Dichte: `detailed` als eigene
+  dritte Zeile unter der „zuletzt aktiv"-Info, `comfortable` und `compact`
+  in der ZWEITEN Zeile — dort wird der Detail-Inhalt ausgeblendet, solange
+  die Aktion läuft. Beim Wechsel schiebt die neue Info
   von unten hoch ein, die vorherige nach oben heraus (nur CSS). Tool-Namen
   und Status kommen jetzt in Echtzeit aus den Gateway-Events
   (`tool.generating`/`tool.start`/`tool.complete`/`reasoning.delta`/
@@ -50,6 +52,9 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 - Tests (Info-Zeile): Render-Sektion 26 (Zeile nur in Detailreich, Tool-Label,
   Ausblend-Knoten, Position nach der Detail-Zeile, keine Phantom-Zeile ohne
   Aktivität); Style-Test Sektion 17 (Flex-Zeile, sf-info-in/-out, Klipp-Höhe).
+- Tests (Dichte-Zeile): Render-Sektion 27 (Komfortabel/Kompakt belegen die
+  zweite Zeile und blenden die Detail-Zeile aus, solange die Aktion läuft;
+  Detailreich behält Details + eigene Extra-Zeile).
 
 ## [1.17.2] — 2026-10-05
 

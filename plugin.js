@@ -4892,13 +4892,14 @@ function rowDetailsLine(row, t, liveEntry) {
  *  eigene Info. Beim Wechsel schiebt die neue Info von unten hoch, die
  *  vorherige nach oben heraus (rein per CSS; der Vorwert kommt aus
  *  $activityPrev, damit kein Komponenten-State nötig ist). */
-function ActivityTicker({ detail, previous, t }) {
+function ActivityTicker({ detail, previous, t, line }) {
   const glyph = ACTIVITY_GLYPHS[detail.kind] || ACTIVITY_GLYPHS.idle
   const label = activityLabel(t, detail)
   const fresh = Boolean(previous && previous.kind && Date.now() - (previous.at || 0) < 500)
 
   return jsxs('div', {
     className: 'sf-tab-activity',
+    'data-line': line || 'extra',
     'data-kind': detail.kind,
     'data-tone': detail.kind === 'waiting' ? 'waiting' : detail.kind === 'error' ? 'error' : 'accent',
     children: [
@@ -5076,6 +5077,12 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   // Info-Dichte (wie Hermes Desktop): kompakt = Basis, komfortabel = + Details-
   // Zeile (Branch · Modell · Zähler), detailreich = + Vorschau-Zeile.
   const infoDensity = tabsCfg.infoDensity === 'auto' ? appDensity : tabsCfg.infoDensity
+
+  // Detailreich: eigene dritte Zeile. Komfortabel/Kompakt: die Aktivität
+  // belegt die ZWEITE Zeile und blendet deren Detail-Inhalt aus, solange
+  // die Aktion läuft.
+  const activityInline = activityDetail && (infoDensity === 'comfortable' || infoDensity === 'compact') ? activityDetail : null
+  const activityExtra = activityDetail && infoDensity === 'detailed' ? activityDetail : null
   const detailsLine = infoDensity !== 'compact' ? rowDetailsLine(row, t, liveEntry) : ''
 
   const meta = []
@@ -5225,12 +5232,24 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         className: 'sf-tab-main',
         children: [
           jsx('div', { className: 'sf-tab-title', children: row.title || t('untitled') }),
-          detailsLine ? jsx('div', { className: 'sf-tab-details', children: detailsLine }) : null,
-          infoDensity === 'detailed' && activityDetail
+          infoDensity !== 'compact' && detailsLine && !activityInline
+            ? jsx('div', { className: 'sf-tab-details', children: detailsLine })
+            : null,
+          activityInline
+            ? jsx(ActivityTicker, {
+                key: 'activity-inline',
+                detail: activityInline,
+                previous: activityPrev[row.id] || null,
+                line: 'inline',
+                t
+              })
+            : null,
+          activityExtra
             ? jsx(ActivityTicker, {
                 key: 'activity',
-                detail: activityDetail,
+                detail: activityExtra,
                 previous: activityPrev[row.id] || null,
+                line: 'extra',
                 t
               })
             : null,
