@@ -1172,6 +1172,32 @@ async function refreshProjectsList() {
  * @returns {{id:string,name:string,color:?string,icon:?string,anchor:string,isAuto:boolean}|null}
  *   `null` → „Kein Projekt".
  */
+// Zielprojekt frisch erstellter Sessions — Live-Overlay wie Hermes Desktop:
+// projects.tree lässt 0-Turn-Sessions weg (min_message_count=1), eine neue
+// „+"-Session wäre bis zum ersten persistierten Turn „Kein Projekt". Der
+// Seed merkt sich (storedId → Projekt), bis der Baum die Session übernimmt
+// oder der Eintrag verfällt.
+const $sessionProjectSeed = atom({}) // storedId -> { id, name, color, icon, path, at }
+
+const SESSION_SEED_TTL_MS = 15 * 60_000
+
+/** Seed aufräumen — verhindert ewiges Wachstum bei vielen „+"-Klicks. */
+function pruneSessionProjectSeeds() {
+  const seeds = $sessionProjectSeed.get()
+  const now = Date.now()
+  const next = {}
+
+  for (const [storedId, seed] of Object.entries(seeds)) {
+    if (seed && now - Number(seed.at || 0) < SESSION_SEED_TTL_MS) {
+      next[storedId] = seed
+    }
+  }
+
+  if (Object.keys(next).length !== Object.keys(seeds).length) {
+    $sessionProjectSeed.set(next)
+  }
+}
+
 function resolveSessionProject(row) {
   const id = String(row?.id || '').trim()
 
@@ -1187,6 +1213,15 @@ function resolveSessionProject(row) {
     if (node.sessionIds.has(id)) {
       return { id: node.id, name: node.label, color: node.color, icon: node.icon, anchor: node.path, isAuto: node.isAuto }
     }
+  }
+
+  // Live-Overlay: der Baum führt die ID nicht (0-Turn-Session, noch nicht
+  // persistiert). Der Seed existiert NUR für Sessions, die wir selbst mit
+  // bekanntem Zielprojekt erstellt haben — unbekannte IDs bleiben null.
+  const seed = $sessionProjectSeed.get()[id]
+
+  if (seed) {
+    return { id: seed.id, name: seed.name, color: seed.color || null, icon: seed.icon || null, anchor: seed.path, isAuto: false }
   }
 
   return null
@@ -1243,6 +1278,19 @@ function watchAppDensity() {
 }
 
 let refreshInFlight = null
+
+/**
+ * Projekt-Baum sofort nachziehen — nach User-Aktionen (Session erstellt,
+ * Drag&Drop-Verschiebung), nicht erst beim 60-s-Takt. Setzt das Erfolgs-
+ * Zeitstempel zurück, damit auch der nächste scheduleSessionsRefresh-Tick
+ * noch einmal nachzieht, falls der hier gestartete Lauf die Änderung noch
+ * nicht gesehen hat (Inflight-Guard innerhalb von refreshProjectsList
+ * bleibt wirksam).
+ */
+function invalidateProjectTree() {
+  projectsListSucceededAt = 0
+  return refreshProjectsList()
+}
 
 /** CWD der zuletzt bekannten Session (Fallback, wenn kein Projekt bestimmt ist). */
 function lastSessionCwd() {
@@ -1339,8 +1387,39 @@ async function startNewSessionInCwd(cwd, label) {
       throw new Error('session.create lieferte keine Session-ID')
     }
 
+    // Sitzungssicher im Projekt verankern: session.create legt die DB-Row
+    // lazy an, und ein dort fehlendes cwd lässt die Session im Projekt-Baum
+    // unter den Radar fallen („Kein Projekt", live beobachtet: Row mit leerem
+    // cwd trotz gesetztem Create-Param). Der explizite Move auf dasselbe
+    // Ziel schreibt cwd/Repo-Root persistent in die Row — derselbe RPC, den
+    // auch Drag&Drop auf einen Projekt-Header benutzt; bei identischem Pfad
+    // ist er ein reines No-op-Update.
+    if (params.cwd) {
+      try {
+        await host.request('session.workspace.move', { cwd: params.cwd, session_key: createdId })
+      } catch {
+        // Best-effort: ohne Move bleibt die Zuordnung dem lazy Persist
+        // überlassen — kein Harter Fehler, die Session ist trotzdem offen.
+      }
+
+      // Live-Overlay-Seed: die neue Session hat 0 Turns → projects.tree
+      // lässt sie weg (min_message_count=1) → „Kein Projekt" bis zum ersten
+      // Turn. Der Seed meldet das Zielprojekt aus dem Create-Kontext, bis
+      // der Baum übernimmt (Live-Overlay-Prinzip der Desktop-Sidebar).
+      const node = $projectsList
+        .get()
+        .find(entry => !entry.isNoProject && entry.path && (params.cwd === entry.path || params.cwd.startsWith(`${entry.path}/`)))
+
+      if (node) {
+        const seeds = $sessionProjectSeed.get()
+        seeds[createdId] = { id: node.id, name: node.label, color: node.color, icon: node.icon, path: node.path, at: Date.now() }
+        $sessionProjectSeed.set({ ...seeds })
+      }
+    }
+
     await host.openSession(createdId, { intent: readSetting('tabs', 'openIntent') || 'in-place' })
-    scheduleSessionsRefresh(1500)
+    void invalidateProjectTree()
+    scheduleSessionsRefresh(600)
     host.notify({
       kind: 'success',
       message: `${CTX?.i18n?.t('newSession') || 'Neue Session'}${label ? ` · ${label}` : ''}`
@@ -5002,7 +5081,32 @@ async function moveSessionRow(row, project) {
   }
 
   await host.request('session.workspace.move', { cwd, session_key: row.id })
-  scheduleSessionsRefresh(1200)
+
+  // Live-Overlay-Seed: eine 0-Turn-Session taucht im Projekt-Baum nicht auf
+  // (min_message_count=1) — der Seed hält sie in der Ziel-Sektion, bis der
+  // erste Turn persistiert und der Baum übernimmt.
+  const targetNode = $projectsList.get().find(entry => !entry.isNoProject && entry.path === cwd)
+
+  if (targetNode) {
+    const seeds = $sessionProjectSeed.get()
+    seeds[row.id] = {
+      id: targetNode.id,
+      name: targetNode.label,
+      color: targetNode.color,
+      icon: targetNode.icon,
+      path: targetNode.path,
+      at: Date.now()
+    }
+    $sessionProjectSeed.set({ ...seeds })
+  }
+
+  // Zuordnung sofort sichtbar machen: Der Projekt-Baum ist die Gruppierungs-
+  // grundlage — ohne Nachzug bliebe die Zeile bis zum 60-s-Takt in der alten
+  // Sektion (live gemeldet: „Veränderungen via Drag and Drop werden nicht
+  // gleich aktualisiert").
+  void invalidateProjectTree()
+  scheduleSessionsRefresh(400)
+
   host.notify({ kind: 'success', message: `${CTX?.i18n?.t('moveToProject') || 'Projekt'} · ${project.name || cwd}` })
 }
 
@@ -7436,6 +7540,7 @@ export default {
     void refreshSessions()
     void pollLiveSessions()
     void refreshProjectsList()
+    pruneSessionProjectSeeds()
 
     ctx.onEvent('message.complete', () => {
       scheduleSessionsRefresh(1200)
