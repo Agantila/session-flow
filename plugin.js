@@ -4332,6 +4332,13 @@ const EN = {
   navAppArtifacts: 'Artifacts',
   navAppCron: 'Scheduled jobs',
   navAppKanban: 'Kanban',
+  navStatusRunning: count => `running: ${count}`,
+  navStatusScheduled: count => `scheduled: ${count}`,
+  navStatusBlocked: count => `blocked: ${count}`,
+  navStatusError: count => `error: ${count}`,
+  navStatusReview: count => `review: ${count}`,
+  navStatusReady: count => `ready: ${count}`,
+  navStatusPaused: count => `paused: ${count}`,
   tabsView: 'View',
   tabsViewDesc: 'Show sessions as a compact list or as grid cards.',
   tabsAppNav: 'App quick-start row',
@@ -4912,6 +4919,13 @@ const DE = {
   navAppArtifacts: 'Artefakte',
   navAppCron: 'Geplante Jobs',
   navAppKanban: 'Kanban',
+  navStatusRunning: count => `läuft: ${count}`,
+  navStatusScheduled: count => `geplant: ${count}`,
+  navStatusBlocked: count => `blockiert: ${count}`,
+  navStatusError: count => `Fehler: ${count}`,
+  navStatusReview: count => `Review: ${count}`,
+  navStatusReady: count => `bereit: ${count}`,
+  navStatusPaused: count => `pausiert: ${count}`,
   tabsView: 'Ansicht',
   tabsViewDesc: 'Sessions als kompakte Liste oder als Grid-Karten anzeigen.',
   tabsAppNav: 'App-Schnellstart-Zeile',
@@ -5031,6 +5045,16 @@ const CSS = `
 .sf-navapps-btn:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
 .sf-navapps-btn:focus-visible{outline:1px solid var(--ui-accent);outline-offset:1px}
 .sf-navapps-btn:active{background:color-mix(in srgb,var(--ui-accent) 14%,transparent)}
+/* Status-Pip (v1.20): 7-px-Punkt oben rechts, Tone über data-status.
+   Kein Punkt bei data-status="off" (idle/keine Daten). Farben rein über
+   Theme-Variablen; destructive als dokumentierte Ausnahme (wie im
+   Kontext-Donut bereits etabliert). */
+.sf-navapps-btn[data-status]{position:relative}
+.sf-navapps-btn[data-status=ok]::after,.sf-navapps-btn[data-status=bad]::after,.sf-navapps-btn[data-status=warn]::after,.sf-navapps-btn[data-status=info]::after{content:'';position:absolute;top:1px;right:1px;width:7px;height:7px;border-radius:50%;box-shadow:0 0 0 2px var(--ui-sidebar-surface-background,transparent);pointer-events:none}
+.sf-navapps-btn[data-status=ok]::after{background:var(--sf-status-ok,#34d399)}
+.sf-navapps-btn[data-status=bad]::after{background:var(--destructive,var(--sf-status-bad,#f87171))}
+.sf-navapps-btn[data-status=warn]::after{background:var(--sf-status-warn,#fbbf24)}
+.sf-navapps-btn[data-status=info]::after{background:var(--sf-status-info,#60a5fa)}
 .sf-navapps-rule{flex-basis:100%;height:0}
 @media (prefers-reduced-motion:reduce){.sf-navapps-btn{transition:none}}
 /* Composer-Projekt-Chip (v1.21): sitzt in der Eingabezeile des Composers,
@@ -8088,6 +8112,156 @@ const NAV_APPS = [
   { id: 'kanban', icon: 'project', route: '/kanban', labelKey: 'navAppKanban' }
 ]
 
+// ── Status-Pips auf den Nav-Buttons (v1.20): Kanban + Geplante Jobs ─────────
+// Ehrliche Quellen über die App-Bridge (hermesDesktop.api), dieselben
+// Endpunkte, die auch die App-Sidebar/das App-Plugin selbst lesen:
+//   Kanban → GET /api/plugins/kanban/board → Spalten-Counts
+//            (running/blocked/review — wie die Kanban-Statusbar-Pill zählt).
+//   Cron   → GET /api/cron/jobs → jobState()-Replik der App
+//            (state-String, sonst enabled-Flag; app/cron/job-state.ts).
+// Fehlt die Bridge oder schlägt ein Fetch fehl, bleibt der jeweilige Eintrag
+// null — kein Punkt, kein erfundener Zustand.
+const NAV_STATUS_POLL_MS = 60_000
+
+const $navStatus = atom({ kanban: null, cron: null })
+
+let navStatusInFlight = null
+
+/** Zahlen einer Kanban-Response auf Status mappen. board=null → idle-Signal
+ *  (Plugin da, aber nichts in Flight). */
+function kanbanBoardToStatus(board) {
+  const columns = Array.isArray(board?.columns) ? board.columns : []
+  const count = name => {
+    const col = columns.find(entry => entry && entry.name === name)
+
+    return Array.isArray(col?.tasks) ? col.tasks.length : 0
+  }
+
+  const running = count('running')
+  const blocked = count('blocked')
+  const review = count('review')
+  const ready = count('ready')
+
+  if (running > 0) {
+    return { state: 'running', count: running }
+  }
+
+  if (blocked > 0) {
+    return { state: 'blocked', count: blocked }
+  }
+
+  if (review > 0) {
+    return { state: 'review', count: review }
+  }
+
+  if (ready > 0) {
+    return { state: 'ready', count: ready }
+  }
+
+  return { state: 'idle', count: 0 }
+}
+
+/** Effektiver Cron-Job-Zustand — 1:1-Replik der App-Logik
+ *  (app/cron/job-state.ts jobState): expliziter state-String gewinnt,
+ *  sonst enabled-Flag. */
+function cronJobState(job) {
+  const state = typeof job?.state === 'string' ? job.state.trim() : ''
+
+  return state || (job?.enabled === false ? 'disabled' : 'scheduled')
+}
+
+/** Jobs-Liste auf den höchstrangigsten Zustand mappen (error > paused >
+ *  running/scheduled > disabled/completed → idle). */
+function cronJobsToStatus(jobs) {
+  const rows = Array.isArray(jobs) ? jobs : []
+
+  if (!rows.length) {
+    return { state: 'idle', count: 0 }
+  }
+
+  const by = name => rows.filter(job => cronJobState(job) === name).length
+  const error = by('error')
+  const paused = by('paused')
+  const running = by('running')
+  const scheduled = by('scheduled')
+
+  if (error > 0) {
+    return { state: 'error', count: error }
+  }
+
+  if (paused > 0) {
+    return { state: 'paused', count: paused }
+  }
+
+  if (running > 0) {
+    return { state: 'running', count: running }
+  }
+
+  if (scheduled > 0) {
+    return { state: 'scheduled', count: scheduled }
+  }
+
+  return { state: 'idle', count: 0 }
+}
+
+/** Tone-Name fürs CSS (data-tone am Button). 'off' = kein Punkt. */
+function navStatusTone(status) {
+  if (!status) {
+    return 'off'
+  }
+
+  if (status.state === 'running' || status.state === 'scheduled') {
+    return 'ok'
+  }
+
+  if (status.state === 'blocked' || status.state === 'error') {
+    return 'bad'
+  }
+
+  if (status.state === 'review' || status.state === 'paused') {
+    return 'warn'
+  }
+
+  if (status.state === 'ready') {
+    return 'info'
+  }
+
+  return 'off'
+}
+
+/** Beide Status-Quellen nachziehen (Bridge-gated, In-Flight-Guard). */
+function refreshNavStatus() {
+  if (navStatusInFlight) {
+    return navStatusInFlight
+  }
+
+  navStatusInFlight = (async () => {
+    try {
+      const bridge = globalThis.window?.hermesDesktop
+
+      if (!bridge || typeof bridge.api !== 'function') {
+        return
+      }
+
+      const [kanbanBoard, cronJobs] = await Promise.all([
+        bridge.api({ path: '/api/plugins/kanban/board', timeoutMs: 8000 }).catch(() => null),
+        bridge.api({ path: '/api/cron/jobs', timeoutMs: 8000 }).catch(() => null)
+      ])
+
+      $navStatus.set({
+        kanban: kanbanBoard ? kanbanBoardToStatus(kanbanBoard) : null,
+        cron: Array.isArray(cronJobs) ? cronJobsToStatus(cronJobs) : null
+      })
+    } catch {
+      // Bridge nicht da / Netzwerk — alter Stand bleibt, kein Crash.
+    } finally {
+      navStatusInFlight = null
+    }
+  })()
+
+  return navStatusInFlight
+}
+
 function navigateAppRoute(route) {
   if (typeof route !== 'string' || !SF_NAV_ROUTES.has(route)) {
     return false
@@ -8115,12 +8289,32 @@ function kanbanAvailable() {
 
 function NavAppsBar({ t, onNewSession }) {
   const showKanban = kanbanAvailable()
+  const status = useValue($navStatus)
   const buttons = []
+
+  // i18n-Key je Zustand (geteilt zwischen Kanban und Geplanten Jobs).
+  const stateKeyMap = {
+    running: 'navStatusRunning',
+    scheduled: 'navStatusScheduled',
+    blocked: 'navStatusBlocked',
+    error: 'navStatusError',
+    review: 'navStatusReview',
+    ready: 'navStatusReady',
+    paused: 'navStatusPaused'
+  }
 
   for (const item of NAV_APPS) {
     if (item.id === 'kanban' && !showKanban) {
       continue
     }
+
+    // Status-Pips nur für Kanban + Geplante Jobs (v1.20) — die anderen
+    // Buttons haben keine plugin-erreichbare Aktivitäts-Quelle.
+    const statusFor = item.id === 'kanban' && showKanban ? status.kanban : item.id === 'cron' ? status.cron : null
+    const tone = navStatusTone(statusFor)
+    const stateKey = statusFor ? stateKeyMap[statusFor.state] : null
+    const base = t(item.labelKey)
+    const label = stateKey && tone !== 'off' ? `${base} · ${t(stateKey, statusFor.count)}` : base
 
     buttons.push(
       jsx(
@@ -8129,6 +8323,7 @@ function NavAppsBar({ t, onNewSession }) {
           type: 'button',
           className: 'sf-navapps-btn',
           'data-nav': item.id,
+          'data-status': tone,
           onClick: () => {
             if (item.route) {
               navigateAppRoute(item.route)
@@ -8136,8 +8331,8 @@ function NavAppsBar({ t, onNewSession }) {
               onNewSession()
             }
           },
-          title: t(item.labelKey),
-          'aria-label': t(item.labelKey),
+          title: label,
+          'aria-label': label,
           children: jsx(Codicon, { name: item.icon, size: '0.875rem' })
         },
         item.id
@@ -10787,6 +10982,14 @@ export default {
     ctx.setInterval(() => {
       void refreshProjectsList()
     }, 60_000)
+
+    // Status-Pips der App-Nav-Zeile (v1.20): Kanban-Board + Cron-Jobs über
+    // die App-Bridge — gleicher Takt wie der Projekt-Cache, In-Flight-Guard
+    // drin. Sofortiger erster Satz + 60-s-Takt.
+    void refreshNavStatus()
+    ctx.setInterval(() => {
+      void refreshNavStatus()
+    }, NAV_STATUS_POLL_MS)
 
     // Composer-Projekt-Pill (v1.21): Sync-Takt fängt App-Re-Renders (Zeile weg
     // → neu injizieren) und Pane-Wechsel; die Listener ziehen Label/Menu-

@@ -27,6 +27,10 @@ zugesagt.
   `docs/plans/2026-10-06-pane-surface-option.md`. Kanban-Detect über
   `[data-tour^="sidebar-nav-kanban"]` (Plugin-Beiträge tragen das
   Namensraum-Suffix `:nav`, live verifiziert) oder den offenen Drawer.
+  **Status-Pips** auf Kanban + Geplante Jobs (7-px-Punkt oben rechts):
+  Kanban-Counts aus `/api/plugins/kanban/board`, Cron-Zustände (jobState-
+  Replik) aus `/api/cron/jobs`, 60-s-Poll, ohne Daten kein Punkt. Plan:
+  `docs/plans/2026-10-06-nav-status-pips.md`.
 - **Context-Bar + Settings-Hierarchie** (v1.19.3): Kontext-Stil Donut/Bar,
   Trennlinien + Hover je Settings-Sektion. Plan:
   `docs/plans/2026-10-05-context-bar-style-settings-hierarchie.md`.

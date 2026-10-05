@@ -124,12 +124,12 @@ const html = `<!doctype html>
 <body>
   <div class="sf-pane">
     <div class="sf-navapps" id="nv" style="width:120px">
-      <button class="sf-navapps-btn" data-nav="new-session" type="button">n</button>
-      <button class="sf-navapps-btn" data-nav="capabilities" type="button">c</button>
-      <button class="sf-navapps-btn" data-nav="messaging" type="button">m</button>
-      <button class="sf-navapps-btn" data-nav="artifacts" type="button">a</button>
-      <button class="sf-navapps-btn" data-nav="cron" type="button">j</button>
-      <button class="sf-navapps-btn" data-nav="kanban" type="button">k</button>
+      <button class="sf-navapps-btn" data-nav="new-session" data-status="off" type="button">n</button>
+      <button class="sf-navapps-btn" data-nav="capabilities" data-status="off" type="button">c</button>
+      <button class="sf-navapps-btn" data-nav="messaging" data-status="off" type="button">m</button>
+      <button class="sf-navapps-btn" data-nav="artifacts" data-status="off" type="button">a</button>
+      <button class="sf-navapps-btn" data-nav="cron" data-status="bad" type="button">j</button>
+      <button class="sf-navapps-btn" data-nav="kanban" data-status="ok" type="button">k</button>
       <span class="sf-navapps-rule"></span>
     </div>
     <div class="sf-section">
@@ -822,6 +822,50 @@ try {
     'App-Nav: Umbruch-Spacer (.sf-navapps-rule) trägt flex-basis 100%',
     NV.ruleBasis === '100%',
     `basis=${NV.ruleBasis}`
+  )
+
+  // ── Nav-Status-Pips (v1.20): 7-px-Punkt oben rechts je Tone ──────────────
+  await settle()
+  const PIP = await page.evaluate(() => {
+    const read = id => {
+      const btn = document.querySelector(`[data-nav="${id}"]`)
+      if (!btn) return null
+      const cs = getComputedStyle(btn, '::after')
+      const tone = btn.getAttribute('data-status')
+      return {
+        tone,
+        content: cs.content,
+        size: `${cs.width}x${cs.height}`,
+        radius: cs.borderRadius,
+        bg: cs.backgroundColor,
+        pos: getComputedStyle(btn).position
+      }
+    }
+    return { kanban: read('kanban'), cron: read('cron'), news: read('new-session') }
+  })
+  check(
+    'Nav-Pips: Tone-Attribute korrekt gesetzt (kanban=ok, cron=bad, news=off)',
+    PIP.kanban.tone === 'ok' && PIP.cron.tone === 'bad' && PIP.news.tone === 'off',
+    `kanban=${PIP.kanban.tone} cron=${PIP.cron.tone} news=${PIP.news.tone}`
+  )
+  check(
+    'Nav-Pips: Punkte erzeugt (content), 7px, rund, relativ positioniert',
+    PIP.kanban.content !== 'none' &&
+      PIP.kanban.content !== 'normal' &&
+      PIP.kanban.size === '7pxx7px' &&
+      PIP.kanban.radius === '50%' &&
+      PIP.kanban.pos === 'relative',
+    `${PIP.kanban.size} r=${PIP.kanban.radius} pos=${PIP.kanban.pos}`
+  )
+  check(
+    'Nav-Pips: Farben je Tone (ok=grün, bad=destructive-Fallback)',
+    PIP.kanban.bg === 'rgb(52, 211, 153)' && PIP.cron.bg === 'rgb(248, 113, 113)',
+    `ok=${PIP.kanban.bg} bad=${PIP.cron.bg}`
+  )
+  check(
+    'Nav-Pips: Kein ::after bei data-status=off',
+    (PIP.news.content === 'none' || PIP.news.content === 'normal'),
+    `content=${PIP.news.content}`
   )
 
   // ── Pane-Fläche (v1.20): native / chat / none am .sf-pane ────────────────

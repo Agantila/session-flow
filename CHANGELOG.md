@@ -71,6 +71,18 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   (`.kanban-drawer-content`). Live-Verifikation: `navBtns=6`,
   `data-kanban=on`, Labels `…|Kanban`.
 
+### Added (2026-10-06, nachträglich)
+- **Status-Pips auf der Schnellstart-Zeile** (Kanban + Geplante Jobs, Plan:
+  [docs/plans/2026-10-06-nav-status-pips.md](docs/plans/2026-10-06-nav-status-pips.md)):
+  Ein 7-px-Punkt oben rechts am Icon-Button zeigt den Aktivitäts-Zustand —
+  **Kanban**: läuft (grün, `running`-Spalte), blockiert (rot), Review
+  (amber), bereit (blau); **Geplante Jobs**: Fehler (rot), pausiert
+  (amber), läuft/geplant (grün) — Zustandslogik 1:1 aus der App
+  (`app/cron/job-state.ts` jobState) übernommen. Daten ehrlich über die
+  App-Bridge (`/api/plugins/kanban/board`, `/api/cron/jobs`, 60-s-Poll,
+  In-Flight-Guard); ohne Bridge/Fetch-Fehler kein Punkt (nie erfundene
+  Zustände). Tooltip ergänzt die Zustands-Zeile („läuft: 2", DE/EN).
+
 ## [1.19.3] — 2026-10-05
 
 ### Added

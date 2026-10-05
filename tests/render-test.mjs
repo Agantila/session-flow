@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -2708,12 +2708,138 @@ try {
   mod.clearPersonal()
   check('v1.20 Pane-Fläche: clearPersonal entfernt das Attribut', !('data-sf-panesurface' in rootHtml.attrs))
 
-  // Für nachfolgende Sektionen sauber wieder an.
+  // Settings-Default wiederherstellen, damit spätere/parellele Sektionen sauber starten.
   mod.patchSettings('personal', { paneSurface: 'native' })
   mod.applyPersonal()
   check('v1.20 Pane-Fläche: nach Re-Apply wieder native', rootHtml.attrs['data-sf-panesurface'] === 'native')
 } catch (error) {
   check('v1.20 Pane-Fläche-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// 38) v1.20: Status-Pips auf Kanban- + Cron-Button (Mapping + Rendering).
+try {
+  // Mapping: Kanban-Board → Status-Priorität running > blocked > review > ready.
+  const kb = mod.kanbanBoardToStatus
+  check(
+    'v1.20 Pips: Kanban-Mapping Priorität running>blocked>review>ready',
+    kb({ columns: [{ name: 'running', tasks: [{}] }, { name: 'blocked', tasks: [{}, {}] }] }).state === 'running' &&
+      kb({ columns: [{ name: 'blocked', tasks: [{}, {}] }, { name: 'review', tasks: [{}] }] }).state === 'blocked' &&
+      kb({ columns: [{ name: 'review', tasks: [{}] }] }).state === 'review' &&
+      kb({ columns: [{ name: 'ready', tasks: [{}, {}] }] }).state === 'ready' &&
+      kb({ columns: [] }).state === 'idle'
+  )
+  check(
+    'v1.20 Pips: Kanban-Mapping zählt Tasks je Spalte',
+    kb({ columns: [{ name: 'running', tasks: [{}, {}, {}] }] }).count === 3 &&
+      kb(null).state === 'idle' &&
+      kb({}).state === 'idle'
+  )
+
+  // Mapping: Cron-Jobs → jobState-Replik + Priorität error>paused>running>scheduled.
+  const cj = mod.cronJobsToStatus
+  check(
+    'v1.20 Pips: cronJobState-Replik (state-String gewinnt, sonst enabled)',
+    mod.cronJobState({ state: 'paused' }) === 'paused' &&
+      mod.cronJobState({ enabled: false }) === 'disabled' &&
+      mod.cronJobState({ enabled: true }) === 'scheduled' &&
+      mod.cronJobState({ state: '  error ', enabled: true }) === 'error'
+  )
+  check(
+    'v1.20 Pips: Cron-Mapping Priorität error>paused>running>scheduled>idle',
+    cj([{ state: 'paused' }, { state: 'error' }]).state === 'error' &&
+      cj([{ state: 'paused' }, { enabled: true }]).state === 'paused' &&
+      cj([{ enabled: true }]).state === 'scheduled' &&
+      cj([]).state === 'idle' &&
+      cj([{ enabled: false }]).state === 'idle'
+  )
+
+  // Tone-Mapping fürs CSS.
+  check(
+    'v1.20 Pips: Tone-Mapping (ok/bad/warn/info/off)',
+    mod.navStatusTone({ state: 'running' }) === 'ok' &&
+      mod.navStatusTone({ state: 'scheduled' }) === 'ok' &&
+      mod.navStatusTone({ state: 'blocked' }) === 'bad' &&
+      mod.navStatusTone({ state: 'error' }) === 'bad' &&
+      mod.navStatusTone({ state: 'review' }) === 'warn' &&
+      mod.navStatusTone({ state: 'paused' }) === 'warn' &&
+      mod.navStatusTone({ state: 'ready' }) === 'info' &&
+      mod.navStatusTone(null) === 'off' &&
+      mod.navStatusTone({ state: 'idle' }) === 'off'
+  )
+
+  // Rendering: Atom setzen → Buttons tragen data-status + Tooltip-Label.
+  const finder = globalThis.document.querySelector
+  globalThis.document.querySelector = selector =>
+    selector === '[data-tour^="sidebar-nav-kanban"]' ? { attrs: { 'data-tour': 'sidebar-nav-kanban:nav' } } : finder.call(globalThis.document, selector)
+
+  try {
+    mod.$navStatus.set({
+      kanban: { state: 'running', count: 2 },
+      cron: { state: 'error', count: 1 }
+    })
+    stub.__resetSlots()
+    const out38 = { el: [], text: [] }
+    walk(pane.render(), out38)
+    const btn38 = id => out38.el.find(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn') && e.props['data-nav'] === id)
+    const kan = btn38('kanban')
+    const crn = btn38('cron')
+    const newS = btn38('new-session')
+    check(
+      'v1.20 Pips: Kanban-Button trägt data-status=ok, Cron data-status=bad',
+      kan && kan.props['data-status'] === 'ok' && crn && crn.props['data-status'] === 'bad',
+      `kanban=${kan && kan.props['data-status']} cron=${crn && crn.props['data-status']}`
+    )
+    check(
+      'v1.20 Pips: Neue-Session-Button bleibt pips-frei (data-status=off)',
+      newS && newS.props['data-status'] === 'off'
+    )
+    const t38 = globalThis.__SF__.tCalls.map(([k]) => k)
+    check(
+      'v1.20 Pips: Status-i18n-Keys benutzt (läuft/Fehler-Zweige)',
+      t38.includes('navStatusRunning') && t38.includes('navStatusError'),
+      t38.filter(k => k.startsWith('navStatus')).join(',')
+    )
+    check(
+      'v1.20 Pips: DE-Labels deutsch',
+      globalThis.__SF__.bundles.de.navStatusRunning(2) === 'läuft: 2' &&
+        globalThis.__SF__.bundles.de.navStatusBlocked(3) === 'blockiert: 3'
+    )
+
+    // Idle + keine Daten → keine Pips.
+    mod.$navStatus.set({ kanban: { state: 'idle', count: 0 }, cron: null })
+    stub.__resetSlots()
+    globalThis.__SF__.tCalls.length = 0
+    const out38b = { el: [], text: [] }
+    walk(pane.render(), out38b)
+    const off38 = id => {
+      const btn = out38b.el.find(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn') && e.props['data-nav'] === id)
+      return btn ? btn.props['data-status'] : 'missing'
+    }
+    check(
+      'v1.20 Pips: idle/keine Daten → data-status=off (kein Punkt)',
+      off38('kanban') === 'off' && off38('cron') === 'off'
+    )
+    check(
+      'v1.20 Pips: keine Status-Keys bei off (Labels pur)',
+      !globalThis.__SF__.tCalls.some(([k]) => k.startsWith('navStatus'))
+    )
+
+    // refreshNavStatus ohne Bridge: darf nicht crashen, Atom unangetastet lassen.
+    const before = mod.$navStatus.get()
+    globalThis.window.hermesDesktop = undefined
+    await mod.refreshNavStatus()
+    check(
+      'v1.20 Pips: refreshNavStatus ohne Bridge degradiert still',
+      JSON.stringify(mod.$navStatus.get()) === JSON.stringify(before)
+    )
+  } finally {
+    globalThis.document.querySelector = finder
+  }
+
+  // Atom für spätere Sektionen neutral.
+  mod.$navStatus.set({ kanban: null, cron: null })
+} catch (error) {
+  check('v1.20 Pips-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')
