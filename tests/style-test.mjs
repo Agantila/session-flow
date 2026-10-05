@@ -102,6 +102,10 @@ const inlineMetaRow = id =>
 const fxRow = (id, label, withShine) =>
   `<div class="sf-tab" id="${id}" data-done-fx="true"><span class="sf-tab-lead"></span><div class="sf-tab-main"><div class="sf-tab-title">${label}</div></div>${withShine ? '<span class="sf-done-shine"></span>' : ''}</div>`
 
+// Detailreich-Info-Zeile (Aktivitäts-Ticker) für die Style-Checks.
+const activityRow = id =>
+  `<div class="sf-tab" id="${id}" data-density="detailed"><span class="sf-tab-lead"></span><div class="sf-tab-main"><div class="sf-tab-title">Info-Zeile</div><div class="sf-tab-details">zuletzt aktiv 11m</div><div class="sf-tab-activity" data-tone="accent"><span class="sf-activity-tick"><span class="sf-activity-info sf-activity-out">Denkt nach…</span><span class="sf-activity-info sf-activity-in">Tool läuft: browser_exec</span></span></div></div></div>`
+
 const html = `<!doctype html>
 <html lang="de"
   data-sf-rowgrad="on" data-sf-rowshadow="medium" data-sf-titlegrad="on"
@@ -125,6 +129,7 @@ const html = `<!doctype html>
         ${row('l5', 'Liste aktiv+ausgewählt', ' data-active="true" data-live="busy"')}
         ${fxRow('l6', 'Fertig FX')}
         ${fxRow('l7', 'Fertig Shine', true)}
+        ${activityRow('l8')}
       </div>
     </div>
     <div class="sf-section">
@@ -569,6 +574,40 @@ try {
   )
   check('Fertig-Effekt: Stärke medium → --sf-done-amp: 6deg', FX.amp === '6deg', FX.amp)
   check('Fertig-Effekt: shine animiert sf-done-sweep am Glanzstreifen', FX.shineAnim.includes('sf-done-sweep'), FX.shineAnim)
+
+  // ── 17) Detailreich-Info-Zeile: Slide-up-Wechsel ──────────────────────────
+  const AN = await page.evaluate(() => {
+    const row = document.getElementById('l8')
+    const act = row.querySelector('.sf-tab-activity')
+    const tick = row.querySelector('.sf-activity-tick')
+    const inEl = row.querySelector('.sf-activity-in')
+    const outEl = row.querySelector('.sf-activity-out')
+    const cs = window.getComputedStyle
+    return {
+      actDisplay: cs(act).display,
+      tickOverflow: cs(tick).overflow,
+      tickHeight: cs(tick).height,
+      inAnim: cs(inEl).animationName,
+      outAnim: cs(outEl).animationName,
+      outPos: cs(outEl).position
+    }
+  })
+  check('Info-Zeile: Aktivitäts-Zeile ist eine Flex-Zeile', AN.actDisplay === 'flex', JSON.stringify(AN))
+  check(
+    'Info-Zeile: neue Info schiebt hoch (sf-info-in)',
+    AN.inAnim.includes('sf-info-in'),
+    AN.inAnim
+  )
+  check(
+    'Info-Zeile: vorherige Info schiebt nach oben raus (sf-info-out, absolut)',
+    AN.outAnim.includes('sf-info-out') && AN.outPos === 'absolute',
+    `${AN.outAnim} / ${AN.outPos}`
+  )
+  check(
+    'Info-Zeile: Ticker klippt den Wechsel (overflow hidden, 14 px)',
+    AN.tickOverflow === 'hidden' && AN.tickHeight === '14px',
+    `${AN.tickOverflow} / ${AN.tickHeight}`
+  )
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
 }

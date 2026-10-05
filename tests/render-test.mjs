@@ -348,7 +348,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, refreshSessions }\n'
+    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, refreshSessions }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -1461,6 +1461,82 @@ try {
   mod.$liveMap.set({})
 } catch (error) {
   check('Fertig-Effekt-Tests durchgelaufen', false, error && error.message)
+}
+
+// 26) Detailreich-Info-Zeile: Aktivität (Tool Call / Gedanke) + Wechsel-Animation
+try {
+  mod.patchSettings('tabs', { maxVisible: 0, view: 'list', infoDensity: 'detailed' })
+  mod.patchSettings('groups', { enabled: false, autoMode: 'off', showUngrouped: true })
+  mod.$projectsList.set([])
+  mod.$sessions.set([
+    { id: 'act-1', title: 'Aktiv Zeile', preview: 'vorschau', cwd: '', branch: 'main', model: 'm', toolCount: 0, pinned: false, source: 'desktop', startedAt: Date.now(), messageCount: 2, live: 0 }
+  ])
+  const nowTs = Date.now()
+  mod.$activity.set({ 'act-1': { kind: 'tool', name: 'browser_exec', at: nowTs, from: 'event' } })
+  mod.$activityPrev.set({ 'act-1': { kind: 'thinking', name: '', at: nowTs } })
+
+  const rawKids = p => {
+    const c = p ? p.children : null
+    if (Array.isArray(c)) return c.filter(x => x !== null && x !== undefined && x !== false)
+    return c === null || c === undefined || c === false ? [] : [c]
+  }
+  const rawHas = (n, cls) =>
+    Boolean(n && n.p && typeof n.p.className === 'string' && n.p.className.split(/\s+/).includes(cls))
+  const rawText = n => rawKids(n && n.p).map(x => (typeof x === 'string' ? x : rawKids(x && x.p).join(''))).join('')
+  const renderRaw = () => {
+    stub.__resetSlots()
+    const out = { el: [], text: [] }
+    walk(pane.render(), out)
+    return out
+  }
+  const out1 = renderRaw()
+  const rowEl1 = out1.el.find(e => e.cls.includes('sf-tab'))
+  const actEl = out1.el.find(e => e.cls.includes('sf-tab-activity'))
+  check('Info-Zeile: Aktivitäts-Zeile in Detailreich vorhanden (eigene Zeile)', Boolean(actEl), '')
+
+  if (actEl) {
+    const inEl = out1.el.find(e => e.cls.includes('sf-activity-in'))
+    const outEl = out1.el.find(e => e.cls.includes('sf-activity-out'))
+    check(
+      'Info-Zeile: aktuelle Info = Tool-Call (stTool: browser_exec)',
+      Boolean(inEl) && inEl.props.children === 'stTool: browser_exec',
+      inEl ? String(inEl.props.children) : 'kein in-Knoten'
+    )
+    check(
+      'Info-Zeile: vorherige Info schiebt nach oben raus (sf-activity-out)',
+      Boolean(outEl) && outEl.props.children === 'stThinking',
+      outEl ? String(outEl.props.children) : 'kein out-Knoten'
+    )
+    const mainRawEl = rawKids(rowEl1 && rowEl1.props).find(n => rawHas(n, 'sf-tab-main'))
+    const mainKids = rawKids(mainRawEl && mainRawEl.p)
+    const detailsIdx = mainKids.findIndex(n => rawHas(n, 'sf-tab-details'))
+    const tickerIdx = mainKids.findIndex(n => n && n.p && n.p.detail && 'previous' in n.p)
+    check(
+      'Info-Zeile: Position nach der Detail-/„zuletzt aktiv"-Zeile',
+      detailsIdx >= 0 && tickerIdx === detailsIdx + 1,
+      `details=${detailsIdx} ticker=${tickerIdx}`
+    )
+  }
+
+  mod.patchSettings('tabs', { infoDensity: 'comfortable' })
+  const out2 = renderRaw()
+  check('Info-Zeile: in Komfortabel NICHT vorhanden', !out2.el.some(e => e.cls.includes('sf-tab-activity')), '')
+
+  mod.patchSettings('tabs', { infoDensity: 'detailed' })
+  mod.$activity.set({})
+  mod.$activityPrev.set({})
+  const out3 = renderRaw()
+  check(
+    'Info-Zeile: ohne Aktivität keine Zeile (keine Phantom-Info)',
+    !out3.el.some(e => e.cls.includes('sf-tab-activity')),
+    ''
+  )
+  mod.patchSettings('tabs', { infoDensity: 'auto' })
+  mod.$sessions.set([])
+  mod.$activity.set({})
+  mod.$activityPrev.set({})
+} catch (error) {
+  check('Info-Zeile-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

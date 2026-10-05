@@ -14,6 +14,14 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   frischen Live-Poll an (Transition beschäftigt→ruhig im Poll); der Poll
   bereinigt die Aktivität fertig gewordener Sessions zugleich sofort
   (statt TTL-Latenz), sodass Statuspunkt und Effekt zusammen kommen.
+- **Detailreich-Info-Zeile**: Die Info-Dichte `detailed` zeigt unter der
+  „zuletzt aktiv"-Info eine eigene, animierte Aktivitäts-Zeile — den
+  aktuellen Tool Call (mit Namen) oder den Status („Denkt nach…",
+  „Schreibt…", „Wartet auf Antwort"). Beim Wechsel schiebt die neue Info
+  von unten hoch ein, die vorherige nach oben heraus (nur CSS). Tool-Namen
+  und Status kommen jetzt in Echtzeit aus den Gateway-Events
+  (`tool.generating`/`tool.start`/`tool.complete`/`reasoning.delta`/
+  `message.delta`/`error`) — bisher war davon nichts verdrahtet.
 - **„Aktiv"-Subtab als flache Liste**: zeigt nur noch laufende Sessions
   (oben) plus Sessions mit HEUTIGER Aktivität — ohne Gruppen-Kopfzeilen und
   ohne Sektionen. Alles andere wird ausgeblendet; Zähler („x von y") und
@@ -23,11 +31,13 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 - **Live-Kennzeichnung neu verteilt — Schiene auf die aktive Auswahl**:
   „Aktiv ohne Auswahl" zeigt jetzt NUR den Rahmen (Inset-Ring) und lässt
   den Hintergrund komplett unangetastet (der Verlauf aus v1.17.2 entfällt).
-  Die linke Live-Schiene wandert auf die **aktive Auswahl** (aktiv +
-  selektiert) — als `::before`-Element, dadurch unabhängig vom
-  Auswahl-Hintergrund-Layering (stabil bei allen Tönungs-/Hover-Varianten).
-  Wartend entsprechend in Bernstein. Puls und Live-Frame unverändert;
-  Liste & Grid.
+- **Glass: Modell-/Thinking-Pillen nur noch Text + Icon**. Hintergrund,
+  Gradient, Ring und der umlaufende Glow (`sf-arc-turn`) auf den
+  Pills (`[data-tour='model-pill']`, `[data-testid='reasoning-pill']`)
+  sind per Default aus. Werksstandard `glass.scopes.chips = false`; für
+  bestehende Installationen wird der Wert beim nächsten Start einmalig
+  zurückgesetzt. Wer den Frosted-Look wieder möchte, schaltet die Option
+  in den Glass-Einstellungen manuell wieder ein.
 
 ### Intern
 - Style-Test: Fixture-Zeile „Liste aktiv+ausgewählt" (`l5`) ergänzt; Sektion
@@ -37,6 +47,9 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   umgestellt (nur beschäftigt + heute, keine Sektionen), Sektion 25 prüft die
   Poll-Transition (working→idle → doneFx; kein Fehl-Feuern bei Weiterlaufen).
   Style-Test Sektion 16: Glow/Wobble-Achsen/Stärke/Shine (Fixtures l6/l7).
+- Tests (Info-Zeile): Render-Sektion 26 (Zeile nur in Detailreich, Tool-Label,
+  Ausblend-Knoten, Position nach der Detail-Zeile, keine Phantom-Zeile ohne
+  Aktivität); Style-Test Sektion 17 (Flex-Zeile, sf-info-in/-out, Klipp-Höhe).
 
 ## [1.17.2] — 2026-10-05
 

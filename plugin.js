@@ -1120,6 +1120,9 @@ const $sessions = atom([])
 const $sessionsError = atom(null)
 const $liveMap = atom({}) // runtimeId -> { storedId, status, at }
 const $activity = atom({}) // storedId -> { kind, name, at }
+// Vorherige Aktivität (kurz): speist die Ausblend-Animation der
+// Detailreich-Info-Zeile (storedId -> { kind, name, at }).
+const $activityPrev = atom({})
 const $appDensity = atom('compact') // App-Einstellung "Dichte der Session-Liste" (sessionListDensity)
 const $projectsList = atom([]) // [{ id, label, color, icon, isAuto, isNoProject, path, sessionIds:Set<string> }]
 
@@ -1709,7 +1712,8 @@ async function pollLiveSessions() {
     $liveMap.set(next)
 
     // Live-Status in Aktivitäts-Details spiegeln (Events haben Vorrang).
-    const activity = { ...$activity.get() }
+    const activityPrevSnapshot = $activity.get()
+    const activity = { ...activityPrevSnapshot }
 
     for (const [runtimeId, info] of Object.entries(next)) {
       const mapped =
@@ -1739,7 +1743,9 @@ async function pollLiveSessions() {
     const doneBusyStatus = status => ['waiting', 'streaming', 'working', 'starting', 'resuming'].includes(String(status))
     const busyNowIds = new Set()
 
-    for (const info of Object.values(next)) {
+    for (const [runtimeId, info] of Object.entries(next)) {
+      runtimeStoredSeen.set(runtimeId, info.storedId)
+
       if (doneBusyStatus(info.status)) {
         busyNowIds.add(info.storedId)
       }
@@ -1749,6 +1755,15 @@ async function pollLiveSessions() {
       if (doneBusyStatus(info.status) && !busyNowIds.has(info.storedId)) {
         delete activity[info.storedId]
         noteSessionDone(info.storedId)
+      }
+    }
+
+    // Aktivitäts-Wechsel für die Info-Zeile stempeln (Ticker-Ausblendung).
+    for (const [storedId, nextDetail] of Object.entries(activity)) {
+      const previous = activityPrevSnapshot[storedId]
+
+      if (previous && (previous.kind !== nextDetail.kind || (previous.name || '') !== (nextDetail.name || ''))) {
+        stampActivityPrev(storedId, previous)
       }
     }
 
@@ -1778,7 +1793,25 @@ function expireActivity() {
   if (changed) {
     $activity.set(next)
   }
+
+  // Ticker-Vorwerte nur kurz halten (Ausblend-Animation ~0,3 s).
+  const prevs = $activityPrev.get()
+  const fresh = {}
+
+  for (const [storedId, info] of Object.entries(prevs)) {
+    if (info && now - info.at < 30_000) {
+      fresh[storedId] = info
+    }
+  }
+
+  if (Object.keys(prevs).length !== Object.keys(fresh).length) {
+    $activityPrev.set(fresh)
+  }
 }
+
+// Zuletzt gesehene Runtime→Stored-Zuordnung: Events können eintreffen,
+// kurz bevor/ nachdem der Live-Poll die Runtime führt.
+const runtimeStoredSeen = new Map()
 
 /** Event-Session (runtime) auf die gespeicherte Session id auflösen. */
 function resolveStoredId(runtimeId) {
@@ -1789,7 +1822,12 @@ function resolveStoredId(runtimeId) {
   const live = $liveMap.get()[runtimeId]
 
   if (live?.storedId) {
+    runtimeStoredSeen.set(runtimeId, live.storedId)
     return live.storedId
+  }
+
+  if (runtimeStoredSeen.has(runtimeId)) {
+    return runtimeStoredSeen.get(runtimeId)
   }
 
   // Manche Events tragen bereits die gespeicherte id.
@@ -1804,8 +1842,44 @@ function noteEvent(runtimeId, kind, name) {
   }
 
   const activity = { ...$activity.get() }
+  const previous = activity[storedId]
+
+  if (previous && (previous.kind !== kind || (previous.name || '') !== (name || ''))) {
+    stampActivityPrev(storedId, previous)
+  }
+
   activity[storedId] = { kind, name: name || '', at: Date.now(), from: 'event' }
   $activity.set(activity)
+}
+
+/** Vorherige Aktivität für die Ticker-Ausblendung merken. */
+function stampActivityPrev(storedId, detail) {
+  if (!storedId || !detail || !detail.kind) {
+    return
+  }
+
+  $activityPrev.set({
+    ...$activityPrev.get(),
+    [storedId]: { kind: detail.kind, name: detail.name || '', at: Date.now() }
+  })
+}
+
+/** Event-Aktivität nur bei echter Änderung setzen — Delta-Events
+ *  (reasoning.delta, message.delta, …) würden sonst pro Frame schreiben. */
+function noteEventKind(runtimeId, kind, name) {
+  const storedId = resolveStoredId(runtimeId)
+
+  if (!storedId) {
+    return
+  }
+
+  const current = $activity.get()[storedId]
+
+  if (current && current.kind === kind && (current.name || '') === (name || '')) {
+    return
+  }
+
+  noteEvent(runtimeId, kind, name)
 }
 
 /** Einmaligen „Fertig"-Effekt auslösen. Dedupe ~4 s je Session; der
@@ -2635,7 +2709,7 @@ const DE = {
   cycleNext: 'Nächste Session',
   cyclePrev: 'Vorherige Session',
 
-  stThinking: 'Denkt…',
+  stThinking: 'Denkt nach…',
   stStreaming: 'Schreibt…',
   stTool: 'Tool läuft',
   stWorking: 'Arbeitet…',
@@ -3603,6 +3677,20 @@ html[data-sf-donefx=pop] .sf-tab[data-done-fx=true]{animation:sf-done-pop .55s e
 @media (prefers-reduced-motion:reduce){html[data-sf-donefx] .sf-tab[data-done-fx=true]{animation:none}html[data-sf-donefx=shine] .sf-tab[data-done-fx=true] .sf-done-shine{display:none}}
 html[data-renderer-animations-paused] .sf-tab[data-done-fx=true]{animation-play-state:paused}
 html[data-renderer-animations-paused] .sf-done-shine::before{animation-play-state:paused}
+/* Info-Zeile (Detailreich): aktuelle Aktivität (Tool Call / Gedanke) als
+   eigene Zeile unter der „zuletzt aktiv"-Info; beim Wechsel schiebt die
+   neue Info von unten hoch, die vorherige nach oben heraus. */
+.sf-tab-activity{display:flex;align-items:center;gap:4px;margin-top:2px;font-size:10px;line-height:14px;color:var(--ui-text-tertiary);overflow:hidden}
+.sf-tab-activity[data-tone=waiting]{color:#f59e0b}
+.sf-tab-activity[data-tone=error]{color:var(--destructive,#ef4444)}
+.sf-activity-tick{position:relative;display:block;flex:1;min-width:0;height:14px;overflow:hidden}
+.sf-activity-info{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.sf-activity-in{animation:sf-info-in .3s cubic-bezier(.22,.8,.3,1) 1}
+.sf-activity-out{position:absolute;left:0;right:0;top:0;animation:sf-info-out .3s ease-in 1 forwards}
+@keyframes sf-info-in{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes sf-info-out{from{transform:translateY(0);opacity:1}to{transform:translateY(-100%);opacity:0}}
+@media (prefers-reduced-motion:reduce){.sf-activity-in,.sf-activity-out{animation:none}.sf-activity-out{display:none}}
+html[data-renderer-animations-paused] .sf-activity-in,html[data-renderer-animations-paused] .sf-activity-out{animation-play-state:paused}
 
 /* Drehung für Status-Icons (Arbeits-Indikator). Die App-Komponente dreht über
    den Prop spinning (codicon-modifier-spin); diese Klasse ist der Fallback für
@@ -4800,10 +4888,48 @@ function rowDetailsLine(row, t, liveEntry) {
   return parts.join(' · ')
 }
 
+/** Aktivitäts-Zeile (Detailreich): aktueller Tool Call / Gedanke als
+ *  eigene Info. Beim Wechsel schiebt die neue Info von unten hoch, die
+ *  vorherige nach oben heraus (rein per CSS; der Vorwert kommt aus
+ *  $activityPrev, damit kein Komponenten-State nötig ist). */
+function ActivityTicker({ detail, previous, t }) {
+  const glyph = ACTIVITY_GLYPHS[detail.kind] || ACTIVITY_GLYPHS.idle
+  const label = activityLabel(t, detail)
+  const fresh = Boolean(previous && previous.kind && Date.now() - (previous.at || 0) < 500)
+
+  return jsxs('div', {
+    className: 'sf-tab-activity',
+    'data-kind': detail.kind,
+    'data-tone': detail.kind === 'waiting' ? 'waiting' : detail.kind === 'error' ? 'error' : 'accent',
+    children: [
+      jsx(SfIcon, { key: 'ico', name: glyph.icon, size: '0.7rem' }),
+      jsx('span', {
+        key: 'tick',
+        className: 'sf-activity-tick',
+        children: [
+          fresh
+            ? jsx('span', {
+                key: `out-${previous.at}`,
+                className: 'sf-activity-info sf-activity-out',
+                children: activityLabel(t, previous)
+              })
+            : null,
+          jsx('span', {
+            key: `in-${fresh ? previous.at : 'x'}-${detail.kind}-${detail.name || ''}`,
+            className: 'sf-activity-info sf-activity-in',
+            children: label
+          })
+        ]
+      })
+    ]
+  })
+}
+
 function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign, dragging, setDragging, justMoved }) {
   const settings = useValue($settings)
   const appDensity = useValue($appDensity)
   const activity = useValue($activity)
+  const activityPrev = useValue($activityPrev)
   const live = useValue($liveMap)
   const ctxInfo = useValue($ctxInfo)
   const doneFx = useValue($doneFx)
@@ -4811,6 +4937,10 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   const cozy = tabsCfg.density === 'cozy'
   const liveEntry = Object.values(live).find(entry => entry && entry.storedId === row.id) || null
   const justDone = Boolean(doneFx && doneFx[row.id])
+  const activityDetail =
+    activity[row.id] && activity[row.id].kind && activity[row.id].kind !== 'idle' && ACTIVITY_GLYPHS[activity[row.id].kind]
+      ? activity[row.id]
+      : null
   const group = section.kind === 'manual' ? groupsState.groups.find(entry => entry.id === section.groupId) : null
 
   const menuItems = []
@@ -5096,6 +5226,14 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         children: [
           jsx('div', { className: 'sf-tab-title', children: row.title || t('untitled') }),
           detailsLine ? jsx('div', { className: 'sf-tab-details', children: detailsLine }) : null,
+          infoDensity === 'detailed' && activityDetail
+            ? jsx(ActivityTicker, {
+                key: 'activity',
+                detail: activityDetail,
+                previous: activityPrev[row.id] || null,
+                t
+              })
+            : null,
           (((cozy && tabsCfg.showPreview) || (tabsCfg.view === 'grid' && tabsCfg.gridPreview) || infoDensity === 'detailed') &&
           row.preview)
             ? jsx('div', { className: 'sf-tab-preview', children: row.preview })
@@ -7862,6 +8000,31 @@ export default {
       scheduleSessionsRefresh(2500)
       void pollLiveSessions()
     })
+
+    // Gateway-Events in Echtzeit in die Aktivitäts-Engine spiegeln:
+    // Tool-Namen für die Detailreich-Info-Zeile und Status ohne
+    // Poll-Verzögerung (Delta-Events setzen nur bei echter Änderung).
+    const wireActivityEvent = (type, kind, nameOf) => {
+      try {
+        ctx.onEvent(type, event => {
+          try {
+            noteEventKind(String(event?.session_id || ''), kind, nameOf ? nameOf(event?.payload) : '')
+          } catch {
+            /* einzelne kaputte Events ignorieren */
+          }
+        })
+      } catch {
+        /* Event-Typ von dieser Runtime nicht unterstützt */
+      }
+    }
+
+    wireActivityEvent('reasoning.delta', 'thinking')
+    wireActivityEvent('thinking.delta', 'thinking')
+    wireActivityEvent('message.delta', 'streaming')
+    wireActivityEvent('tool.generating', 'tool', payload => (payload && typeof payload.name === 'string' ? payload.name : ''))
+    wireActivityEvent('tool.start', 'tool', payload => (payload && typeof payload.name === 'string' ? payload.name : ''))
+    wireActivityEvent('tool.complete', 'thinking')
+    wireActivityEvent('error', 'error')
 
     ctx.setInterval(() => {
       void pollLiveSessions()

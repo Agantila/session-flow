@@ -15,6 +15,9 @@ zugesagt.
   der Liste, clientseitig, eigener Leerzustand bei 0 Treffern; `Aktiv` zeigt
   seit dem Aktiv-Flat-Umbau nur laufende + heutige Sessions als flache Liste
   (keine Kopfzeilen), `Alle` bleibt die Startzeit-Reihenfolge mit Gruppen.
+- **Detailreich-Info-Zeile** (2026-10-05): aktuelle Aktivität (Tool Call /
+  Gedanke) als animierte dritte Zeile mit Slide-up-Wechsel; Status/Events
+  jetzt in Echtzeit verdrahtet (Gateway-Events statt Poll-Latenz).
 - **Tab-Selektor-Modus** (v1.14.0): `tabs.asTabSelector` blendet die native
   Content-Tab-Leiste für Session-Tabs aus (`:has()`-Selektor), wenn
   Liste/Grid dieselbe Navigation schon abdecken.
