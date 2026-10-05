@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed }\n'
+    '\nexport { patchSettings, applyPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -2296,6 +2296,147 @@ try {
   hostStub.openSession = prevOpen
 } catch (error) {
   check('v1.19.1-Tests durchgelaufen', false, error && error.message)
+}
+
+// 31) v1.19.2: Pinned-Drop-Area als Placeholder-Sektion während Drag.
+try {
+  // Setup: Pin-Store leer, keine Pinned-Zeile in rows → Pinned-Section
+  // würde normalerweise GAR NICHT gerendert. $dragActive=true muss sie
+  // trotzdem als Drop-Placeholder einfügen.
+  const renderRaw = () => {
+    globalThis.__SF__.tCalls.length = 0
+    stub.__resetSlots()
+    const out = { el: [], text: [] }
+    walk(pane.render(), out)
+    return out
+  }
+
+  mod.$pinnedRows.set([])
+  mod.$sessions.set([
+    { id: 'ses-nopin', title: 'NoPin', pinned: false, startedAt: Date.now(), lastActiveAt: Date.now() }
+  ])
+  mod.$dragActive.set(false)
+
+  // Vor Drag: KEINE Pinned-Sektion.
+  let out = renderRaw()
+  const pinnedBeforeDrag = out.el.filter(e => e.cls.includes('sf-section') && e.props?.['data-pinned-placeholder'] === 'true')
+  check(
+    'v1.19.2: ohne Drag keine Pinned-Placeholder-Sektion',
+    pinnedBeforeDrag.length === 0,
+    `placeholders=${pinnedBeforeDrag.length}`
+  )
+
+  // Drag startet → Pinned-Placeholder-Sektion erscheint.
+  mod.$dragActive.set(true)
+  out = renderRaw()
+  const pinnedDuringDrag = out.el.filter(e => e.cls.includes('sf-section') && e.props?.['data-pinned-placeholder'] === 'true')
+  check(
+    'v1.19.2: während Drag erscheint Pinned-Placeholder-Sektion',
+    pinnedDuringDrag.length === 1,
+    `placeholders=${pinnedDuringDrag.length}`
+  )
+
+  // Drop-Ready-Attribut sitzt auf der Section (CSS pulsiert daran).
+  const dropReady = out.el.filter(e => e.cls.includes('sf-section') && e.props?.['data-drop-ready'] === 'true')
+  check(
+    'v1.19.2: während Drag mindestens eine Section mit data-drop-ready',
+    dropReady.length >= 1,
+    `drop-ready=${dropReady.length}`
+  )
+
+  // Placeholder-Zeile enthält den pinnedDropHint-i18n-Key.
+  const placeholderText = globalThis.__SF__.tCalls.some(([k]) => k === 'pinnedDropHint')
+  check(
+    'v1.19.2: Pinned-Placeholder nutzt pinnedDropHint-Key',
+    placeholderText,
+    `tCalls has pinnedDropHint=${placeholderText}`
+  )
+
+  // Drag endet → Placeholder verschwindet wieder.
+  mod.$dragActive.set(false)
+  out = renderRaw()
+  const pinnedAfterDrag = out.el.filter(e => e.cls.includes('sf-section') && e.props?.['data-pinned-placeholder'] === 'true')
+  check(
+    'v1.19.2: nach Drag-End verschwindet Pinned-Placeholder',
+    pinnedAfterDrag.length === 0,
+    `placeholders=${pinnedAfterDrag.length}`
+  )
+} catch (error) {
+  check('v1.19.2 Pinned-Drop-Area-Tests durchgelaufen', false, error && error.message)
+}
+
+// 32) v1.19.2: Startup Settle-In zieht leere Caches nach dem Bootstrap nach.
+try {
+  // Alles leer räumen, damit Settle-In Nachläufe trigger.
+  mod.$sessions.set([])
+  mod.$projectsList.set([])
+  mod.$pinnedRows.set([])
+  mod.$liveMap.set({})
+
+  const calls = []
+  const prev = hostStub.request
+  hostStub.request = async (method, params) => {
+    calls.push(method)
+    if (method === 'session.list') return { sessions: [] }
+    if (method === 'projects.tree') return { projects: [] }
+    if (method === 'session.active_list') return { sessions: [] }
+    if (method === 'projects.list') return { projects: [], active_id: '' }
+    return {}
+  }
+
+  // Settle-In manuell triggern mit kurzen Delays (statt zu warten).
+  const ctxStub = {
+    setTimeout: (fn, _ms) => setTimeout(fn, 1),
+    onDispose: () => {},
+    clearInterval: () => {}
+  }
+  mod.scheduleSettleIn(ctxStub)
+  // Delays sind ins ctxStub umgebogen (1ms) — warten bis beide gelaufen sind.
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  // Mindestens 1 refreshSessions-Lauf (via session.list) UND projects.tree.
+  const sessionListCount = calls.filter(m => m === 'session.list').length
+  const projectsTreeCount = calls.filter(m => m === 'projects.tree').length
+  check(
+    'v1.19.2: Settle-In zieht leeren Session-Cache nach',
+    sessionListCount >= 1,
+    `session.list=${sessionListCount}`
+  )
+  check(
+    'v1.19.2: Settle-In zieht leeren Projekt-Baum nach',
+    projectsTreeCount >= 1,
+    `projects.tree=${projectsTreeCount}`
+  )
+
+  hostStub.request = prev
+} catch (error) {
+  check('v1.19.2 Settle-In-Tests durchgelaufen', false, error && error.message)
+}
+
+// 33) v1.19.2: reconnectRefresh zieht die veralteten Datensätze nach.
+try {
+  const calls = []
+  const prev = hostStub.request
+  hostStub.request = async (method, params) => {
+    calls.push(method)
+    if (method === 'session.list') return { sessions: [] }
+    if (method === 'projects.tree') return { projects: [] }
+    if (method === 'session.active_list') return { sessions: [] }
+    return {}
+  }
+
+  mod.reconnectRefresh()
+  await new Promise(resolve => setTimeout(resolve, 600))
+
+  check(
+    'v1.19.2: reconnectRefresh ruft session.active_list direkt',
+    calls.includes('session.active_list'),
+    `calls=${calls.join(',')}`
+  )
+
+  hostStub.request = prev
+} catch (error) {
+  check('v1.19.2 reconnectRefresh-Tests durchgelaufen', false, error && error.message)
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

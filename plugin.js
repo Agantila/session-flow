@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.19.1'
+const VERSION = '1.19.2'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1190,6 +1190,12 @@ const $sessions = atom([])
 const $sessionsError = atom(null)
 const $liveMap = atom({}) // runtimeId -> { storedId, status, at }
 const $activity = atom({}) // storedId -> { kind, name, at }
+// „Gerade zieht der User eine Session"-Signal, damit die Pinned-Sektion
+// AUCH leer als Drop-Area sichtbar wird — sonst verschwindet sie, wenn
+// noch nichts angepinnt ist, und man kann nirgendwo droppen. Set beim
+// TabRow-onDragStart, Reset beim onDragEnd (und als Fallback via
+// window.dragend, falls die Zeile zwischendurch unmountet).
+const $dragActive = atom(false)
 // Lade-Phase der Pane: 'gate' (Gateway-Socket noch nicht offen) →
 // 'loading' (Requests laufen) → 'ready' (erster Datensatz da) bzw. 'error'.
 // Treibt den Ladebalken + Gateway-Hinweis statt eines toten Leerraums.
@@ -1615,10 +1621,35 @@ function watchSidebarSync(ctx) {
     }
   }
 
+  // Tab-Visibility (Browser-Shell / zweites Fenster): visibilitychange feuert
+  // auch, wenn das Hermes-Fenster nicht den OS-Fokus hat, aber der sichtbare
+  // Tab wieder im Vordergrund steht. Ohne diesen Listener bleibt die Pane
+  // „alt", bis der User das Fenster wirklich auf den Fokus zieht — reicht
+  // in der Praxis nicht, weil er die Pane oft nur anklickt.
+  const onVisible = () => {
+    try {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+    } catch {
+      return
+    }
+
+    if (Date.now() - lastRun > 2_000) {
+      schedule()
+    }
+  }
+
   try {
     window.addEventListener('focus', onFocus)
   } catch {
     /* Tests ohne echtes window */
+  }
+
+  try {
+    document.addEventListener('visibilitychange', onVisible)
+  } catch {
+    /* Tests ohne echtes document */
   }
 
   return () => {
@@ -1632,6 +1663,12 @@ function watchSidebarSync(ctx) {
 
     try {
       window.removeEventListener('focus', onFocus)
+    } catch {
+      /* ditto */
+    }
+
+    try {
+      document.removeEventListener('visibilitychange', onVisible)
     } catch {
       /* ditto */
     }
@@ -2130,6 +2167,16 @@ function scheduleSessionsRefresh(delay = 1500) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GATEWAY_BOOTSTRAP_FALLBACK_MS = 20_000
+// Settle-In-Nachläufe nach dem Bootstrap: der erste `projects.tree`- und
+// `pinned`-Refresh läuft parallel zu `session.list`, aber ihre Serverseite
+// cached intern — die ERSTE Antwort nach einem kalten Gateway-Start ist
+// gelegentlich noch nicht vollständig (Projekt-Baum leer, Pins fehlen,
+// Live-Status zählt 0 Sessions). Zwei getimte Follow-ups ziehen jedes
+// noch nicht gefüllte Fach einmal nach, ohne Spam: Inflight-Guard + TTL-
+// Checks in jedem Refresh verhindern Doppel-Requests. Ziel: nach spätestens
+// 5 s stehen Sessions, Projekte, Pins und Live-Status vollständig — der
+// User muss „Aktualisieren" nicht mehr klicken.
+const SETTLE_IN_DELAYS_MS = [1800, 4500]
 
 /** Erster Daten-Satz: Sessions + Pins + Live-Status + Projekt-Baum. */
 function bootstrapSessionData() {
@@ -2143,6 +2190,57 @@ function bootstrapSessionData() {
     pruneSessionProjectSeeds()
   } catch (error) {
     console.warn(`[${ID}] Session-Bootstrap fehlgeschlagen`, error)
+  }
+}
+
+/** Zieht beim Reconnect/Resume genau das nach, was potentiell veraltet ist. */
+function reconnectRefresh() {
+  // Debounced Session-Liste (REST liefert pinned/unread/costs → der am
+  // schnellsten „alt" wirkende Datensatz).
+  scheduleSessionsRefresh(400)
+  // Live-Status direkt — kein Debounce, es ist ein billiger In-Memory-Enum
+  // vom Gateway und steuert Icons/Badges.
+  void pollLiveSessions()
+  // Projekt-Baum nur, wenn der Cache abgelaufen aussieht; ebenso Pin-Spiegel.
+  if (Date.now() - projectsListSucceededAt > 10_000) {
+    void refreshProjectsList()
+  }
+  if (Date.now() - pinnedSucceededAt > 10_000) {
+    void refreshPinnedIds()
+  }
+}
+
+/**
+ * Nach dem Bootstrap zwei zusätzliche Nachläufe anstoßen: der erste
+ * `projects.tree`/`pinned`-Refresh kann nach einem Kaltstart noch mit
+ * teilweise aufgewärmtem Server-Cache zurückkommen (Projekt-Baum leer,
+ * Pins fehlen). Nach 1,8 s und 4,5 s ziehen wir jeden Teil-Satz nach, der
+ * noch nicht gefüllt aussieht — Session-Liste nur bei leerem Store,
+ * Projekt-Baum/Pins analog. Guards + TTL-Checks in jedem Refresh fangen
+ * Spam ab.
+ */
+function scheduleSettleIn(ctx) {
+  const setTimer = typeof ctx?.setTimeout === 'function' ? ctx.setTimeout : (fn, ms) => window.setTimeout(fn, ms)
+
+  for (const delay of SETTLE_IN_DELAYS_MS) {
+    setTimer(() => {
+      try {
+        if (!$sessions.get().length) {
+          void refreshSessions()
+        }
+        if (!$projectsList.get().length) {
+          void refreshProjectsList()
+        }
+        if (!$pinnedRows.get().length && Date.now() - pinnedSucceededAt > 2_000) {
+          void refreshPinnedIds()
+        }
+        if (!Object.keys($liveMap.get()).length) {
+          void pollLiveSessions()
+        }
+      } catch (error) {
+        console.warn(`[${ID}] Settle-In-Nachlauf fehlgeschlagen`, error)
+      }
+    }, delay)
   }
 }
 
@@ -2187,6 +2285,7 @@ function scheduleGatewayBootstrap(ctx) {
 
     fired = true
     bootstrapSessionData()
+    scheduleSettleIn(ctx)
   }
 
   const stopListen = gatewayAtom.listen(() => {
@@ -2199,9 +2298,12 @@ function scheduleGatewayBootstrap(ctx) {
       } else {
         // Reconnect (Standby/Backend-Neustart): Daten sind potentiell
         // veraltet — sofort nachziehen (Debounce + Inflight-Guards
-        // verhindern Spam; der Projekt-Baum nur bei abgelaufenem Cache).
-        scheduleSessionsRefresh(400)
-        void pollLiveSessions()
+        // verhindern Spam; der Projekt-Baum/Pinned-Spiegel nur bei
+        // abgelaufenem Cache). Nach dem Reconnect auch Settle-In laufen
+        // lassen, denn das Backend wärmt seinen Projekt-Baum-Cache nach
+        // einem Standby-Resume ebenfalls neu auf.
+        reconnectRefresh()
+        scheduleSettleIn(ctx)
       }
     }
 
@@ -2936,6 +3038,21 @@ function buildSections() {
       collapsed: Boolean(groupsState.collapsed['pinned']),
       items: sortRows(pinnedItems)
     })
+  } else if ($dragActive.get()) {
+    // Drop-Area-Modus: der User zieht gerade eine Zeile. Pinned-Sektion
+    // leer rendern, damit sie als sichtbares Pin-Ziel verfügbar ist (sonst
+    // kann man bei leerem Pin-Store nirgendwo hin droppen). Nach dem
+    // Drag-End verschwindet die Sektion wieder, weil $dragActive=false.
+    sections.push({
+      key: 'pinned',
+      kind: 'pinned',
+      title: null,
+      titleKey: 'pinnedSection',
+      color: null,
+      collapsed: false,
+      items: [],
+      isDropPlaceholder: true
+    })
   }
 
   if (groupsCfg.enabled) {
@@ -3416,6 +3533,7 @@ const EN = {
   dropHereHint: label => `→ Move to "${label}"`,
   pinnedSection: 'Pinned',
   pinnedSectionTip: 'Pinned sessions — drop here to pin',
+  pinnedDropHint: 'Drop here to pin',
   dropPinHint: () => '→ Pin',
   unpinAll: 'Unpin all',
 
@@ -3970,6 +4088,7 @@ const DE = {
   dropHereHint: label => `→ Nach „${label}" verschieben`,
   pinnedSection: 'Angepinnt',
   pinnedSectionTip: 'Angepinnte Sessions — hier ablegen zum Anpinnen',
+  pinnedDropHint: 'Hier ablegen zum Anpinnen',
   dropPinHint: () => '→ Anpinnen',
   unpinAll: 'Alle lösen',
 
@@ -4321,6 +4440,20 @@ html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 /* Section-Rahmen beim Drag-over — klarer Hinweis, was ein Loslassen bewirkt. */
 .sf-section{margin-bottom:6px;border-radius:8px;transition:background-color .12s ease}
 .sf-section[data-drop=true]{background:color-mix(in srgb,var(--ui-accent) 6%,transparent)}
+/* „Drop-Ready": Sektion ist akzeptierendes Ziel, aber noch nicht gehovert.
+   Sanfter Rand + leichte Pulse-Animation — Drop-Area wird VISIBLE statt
+   im Scroll unterzugehen (vor allem die Pinned-Placeholder-Sektion). */
+.sf-section[data-drop-ready=true]{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 32%,transparent);animation:sf-drop-ready-pulse 2.1s ease-in-out infinite}
+.sf-section[data-drop-ready=true][data-drop=true]{animation:none}
+@keyframes sf-drop-ready-pulse{0%,100%{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 24%,transparent)}50%{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 55%,transparent)}}
+/* Pinned-Placeholder: dedizierte Zeile mit Pin-Icon + Hinweis-Text in
+   akzentuierter Umrandung — zeigt, dass die Sektion AUFNEHMEN kann, auch
+   wenn sie gerade leer ist. */
+.sf-section[data-pinned-placeholder=true]{background:color-mix(in srgb,var(--ui-accent) 4%,transparent)}
+.sf-pin-placeholder{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 10px;margin:2px 4px 4px;min-height:40px;border-radius:6px;border:1px dashed color-mix(in srgb,var(--ui-accent) 40%,transparent);color:color-mix(in srgb,var(--foreground) 70%,transparent);font-size:11px;font-weight:500;text-align:center;background:color-mix(in srgb,var(--ui-accent) 5%,transparent)}
+.sf-section[data-drop=true] .sf-pin-placeholder{border-color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 14%,transparent);color:var(--foreground)}
+.sf-pin-placeholder-text{line-height:1.2}
+@media (prefers-reduced-motion:reduce){.sf-section[data-drop-ready=true]{animation:none}}
 .sf-stack{position:relative;height:12px;margin:0 4px 3px}
 .sf-stack i{position:absolute;left:0;right:0;height:7px;border-radius:5px;border:1px solid color-mix(in srgb,var(--sf-accent,var(--ui-accent)) 22%,transparent);background:color-mix(in srgb,var(--sf-accent,var(--ui-accent)) 10%,transparent)}
 .sf-stack[data-style=spine] i:nth-child(1){left:0;right:0;top:0;opacity:.85}
@@ -6450,6 +6583,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     onClick: () => onOpen(row, null),
     onDragStart: event => {
       setDragging(row.id)
+      $dragActive.set(true)
 
       try {
         event.dataTransfer.setData('text/session-flow-session', row.id)
@@ -6459,7 +6593,10 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
         // ignore
       }
     },
-    onDragEnd: () => setDragging(null),
+    onDragEnd: () => {
+      setDragging(null)
+      $dragActive.set(false)
+    },
     children: [
       lead,
       jsxs('div', {
@@ -7278,12 +7415,15 @@ function SessionsPane() {
   const [projConfirmDelete, setProjConfirmDelete] = useState(null)
   const loadPhase = useValue($loadPhase)
   const projectsList = useValue($projectsList)
+  // $dragActive muss in den Dependencies stehen, sonst re-rendert buildSections
+  // beim Drag-Start nicht und die leere Pinned-Drop-Area taucht nicht auf.
+  const dragActive = useValue($dragActive)
 
   // buildSections liest außer rows/groups/settings auch den Projekt-Baum
   // ($projectsList) und den Live-/Aktivitäts-Status (Status-Buckets) — beides
   // muss in den Dependencies stehen, sonst reagiert die Gruppierung nicht auf
   // Baum- oder Live-Updates.
-  const sections = useMemo(() => buildSections(), [rows, groupsState, settings, projectsList, liveForSort])
+  const sections = useMemo(() => buildSections(), [rows, groupsState, settings, projectsList, liveForSort, dragActive])
   const totalCount = sections.reduce((sum, section) => sum + section.items.length, 0)
   const maxVisible = Math.floor(clampNumber(settings.tabs.maxVisible, 0, 200, 0))
 
@@ -7321,7 +7461,10 @@ function SessionsPane() {
 
         return { ...section, items: ordered }
       })
-      .filter(section => section.items.length > 0)
+      // Platzhalter-Sektionen (Pinned-Drop-Area während eines Drags) dürfen
+      // auch ohne Items durchrutschen — sonst verschwindet die Drop-Area,
+      // bevor der User sie überhaupt sehen konnte.
+      .filter(section => section.items.length > 0 || section.isDropPlaceholder)
   }, [sections, needle, filterMode, liveForSort])
 
   const activeMode = filterMode === 'active'
@@ -7629,11 +7772,23 @@ function SessionsPane() {
       const overLimit = maxVisible > 0 && section.items.length > maxVisible
       const showingAll = overLimit && showAllSections.has(section.key)
       const visibleItems = overLimit && !showingAll ? section.items.slice(0, maxVisible) : section.items
+      // „Scharfe" Drop-Area während eines Drags: Sektionen, die Drop
+      // akzeptieren, bekommen einen zusätzlichen Zustand, der im CSS die
+      // pulsierende Ziel-Umrandung anschaltet — besonders wichtig für die
+      // leere Pinned-Placeholder-Sektion, die sonst visuell untergeht.
+      const dropReady = dragActive && (
+        section.kind === 'pinned' ||
+        section.kind === 'manual' ||
+        section.kind === 'ungrouped' ||
+        (section.kind === 'project' && section.cwd)
+      )
 
       return jsxs('div', {
         className: 'sf-section',
         key: section.key,
         'data-drop': dragOverKey === section.key ? 'true' : undefined,
+        'data-drop-ready': dropReady ? 'true' : undefined,
+        'data-pinned-placeholder': section.isDropPlaceholder ? 'true' : undefined,
         ...sectionHandlers(section),
         children: [
           jsx(SectionHeader, {
@@ -7651,7 +7806,7 @@ function SessionsPane() {
             onEdit: () => editGroup(section),
             onNewHere: section.kind === 'project' ? newSessionHere : undefined,
             onPinToggle:
-              section.kind === 'pinned'
+              section.kind === 'pinned' && section.items.length > 0
                 ? () => {
                     for (const row of section.items) {
                       try {
@@ -7689,6 +7844,20 @@ function SessionsPane() {
                       justMoved: row.id === justMovedId
                     })
                   ),
+                  // Pinned-Drop-Placeholder (nur während Drag + wenn der
+                  // Pin-Store leer ist): zeigt eine freundliche Hinweis-Zeile
+                  // mit Pin-Icon, damit auch bei leerer Pin-Sektion ein
+                  // sichtbares Ablege-Ziel existiert.
+                  section.isDropPlaceholder && section.items.length === 0
+                    ? jsx('div', {
+                        key: 'sf-pin-placeholder',
+                        className: 'sf-pin-placeholder',
+                        children: [
+                          jsx(Codicon, { name: 'pin', size: '0.875rem' }),
+                          jsx('span', { className: 'sf-pin-placeholder-text', children: t('pinnedDropHint') || 'Hier ablegen zum Anpinnen' })
+                        ]
+                      })
+                    : null,
                   overLimit
                     ? jsx(ShowMoreRow, {
                         key: 'sf-showmore',
@@ -9813,6 +9982,25 @@ export default {
     //     läuft im onDispose-Block unten.
     const stopSidebarSync = watchSidebarSync(ctx)
 
+    // 3d) Window-globale Drag-End-/Drop-Fallbacks: wenn eine Zeile während
+    //     eines Drags unmountet (Rerender wegen refresh), feuert ihr lokaler
+    //     onDragEnd nicht mehr — $dragActive wäre stuck auf true und die
+    //     Pinned-Placeholder-Sektion bliebe für immer sichtbar. Window-Hook
+    //     resettet den Zustand defensiv auf jedem dragend/drop.
+    const resetDragActive = () => {
+      try {
+        $dragActive.set(false)
+      } catch {
+        /* Atom weg — egal */
+      }
+    }
+    try {
+      window.addEventListener('dragend', resetDragActive)
+      window.addEventListener('drop', resetDragActive)
+    } catch {
+      /* Tests ohne echtes window */
+    }
+
     // 4) UI-Beiträge: Pane, Einstellungs-Seite, Sidebar-Nav, Palette, Keybinds.
     ctx.register({
       id: 'pane',
@@ -9963,6 +10151,12 @@ export default {
         stopCtxInfoWatch()
         window.clearTimeout(ctxRefreshTimer)
         if (typeof stopSidebarSync === 'function') stopSidebarSync()
+        try {
+          window.removeEventListener('dragend', resetDragActive)
+          window.removeEventListener('drop', resetDragActive)
+        } catch {
+          /* kein echtes window — ignorieren */
+        }
         removeCss()
         disposeAnimation()
         wheelController.dispose()

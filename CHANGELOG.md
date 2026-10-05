@@ -3,6 +3,51 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.19.2] — 2026-10-05
+
+### Added
+- **Pinned-Section als persistente Drop-Area** (`$dragActive`-Atom +
+  `isDropPlaceholder`-Section-Flag): Sobald der User eine Session zieht,
+  erscheint die „Angepinnt"-Sektion zuverlässig — auch wenn sie gerade
+  leer ist. Vorher verschwand sie bei leerem Pin-Store komplett, man
+  konnte nirgendwohin droppen. Jetzt zeigt die leere Sektion eine
+  gestrichelte Platzhalter-Zeile mit Pin-Icon + `pinnedDropHint`-i18n-Key
+  („Hier ablegen zum Anpinnen" / „Drop here to pin"). Window-globale
+  `dragend`/`drop`-Fallbacks resetten `$dragActive` sicher, falls die
+  Quell-Zeile zwischendurch unmountet (Rerender durch Refresh).
+- **Drop-Ready-Hervorhebung während Drag** (`data-drop-ready`-Attribut
+  + `sf-drop-ready-pulse` CSS-Keyframe): Alle Sektionen, die Drop
+  akzeptieren (Pinned, Projekt, Gruppe, Ungrouped), bekommen während
+  eines aktiven Drags einen sanft pulsierenden Akzent-Rahmen —
+  Drop-Area wird visuell SICHTBAR statt im Scroll unterzugehen. Beim
+  Hover schaltet das Pulsieren auf die bestehende, stärkere Hover-
+  Hervorhebung um. `prefers-reduced-motion` deaktiviert die Animation.
+
+### Fixed
+- **Startup lädt alles ohne manuelles Aktualisieren** (`scheduleSettleIn`
+  + Reconnect-Hook): Der erste Bootstrap läuft weiterhin an der Gateway-
+  Socket-Öffnung. NEU: zwei getimte Nachläufe nach 1,8 s und 4,5 s
+  ziehen jeden Teil-Satz (Sessions, Projekt-Baum, Pins, Live-Status)
+  gezielt NUR dann nach, wenn er noch leer wirkt — kalte Server-Caches
+  liefern beim ersten Hit gelegentlich unvollständige Antworten, der
+  User musste danach manuell auf „Aktualisieren" klicken. Jetzt
+  stehen alle vier Datensätze nach spätestens 5 s vollständig. Nach
+  einem Reconnect (Standby-Resume, Gateway-Neustart) läuft derselbe
+  Settle-In zusätzlich zu `reconnectRefresh()`.
+- **`visibilitychange`-Listener für Tab-Wechsel** (zusätzlich zum
+  bestehenden `window.focus`): Wird das Hermes-Fenster via Tab-Wechsel
+  wieder sichtbar (ohne OS-Fokuswechsel), zieht die Pane die Listen
+  gedrosselt nach — Pane bleibt nicht mehr „alt", wenn der User sie
+  anklickt, ohne vorher das Fenster zu fokussieren.
+- **Lifecycle-Cleanup erweitert**: Die neuen Window-Listener
+  (`dragend`, `drop`, `visibilitychange`) werden im `onDispose`-Pfad
+  sauber abgehängt.
+
+### Tests
+- 8 neue Checks (`v1.19.2: …`): Pinned-Placeholder (vor/während/nach
+  Drag), `data-drop-ready`-Attribut, `pinnedDropHint`-i18n-Key,
+  Settle-In-Refetch (Sessions + Projekt-Baum), `reconnectRefresh`.
+
 ## [1.19.1] — 2026-10-05
 
 ### Fixed
