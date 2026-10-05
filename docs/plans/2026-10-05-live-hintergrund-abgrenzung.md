@@ -60,3 +60,22 @@ erklärender Kommentar; Version 1.17.2.
 
 - Falls die Schiene im Alltag zu präsent wirkt: Breite/Deckkraft als
   Feintuning-Kandidat (kein Setting geplant, erst Feedback abwarten).
+
+## Nachtrag — Schiene auf die aktive Auswahl, Rahmen-only für Aktive (2026-10-05)
+
+> Gib dem Aktiv Selektierten Session die Schiene und die nicht selektierten
+> aber aktiven sollen nur den Rahmen ohne Hintergrund Farben änderung haben.
+
+Verteilung nach Nutzer-Feedback angepasst:
+
+- Aktive OHNE Auswahl: ausschließlich Inset-Ring (28 %), KEIN
+  Hintergrund-Eingriff mehr (Verlauf + Schiene aus v1.17.2 entfernt).
+- Aktive Auswahl (aktiv + selektiert): linke Live-Schiene als `::before`
+  (3 px, `left:1px`, `color-mix(akzent 85 %)`; wartend Bernstein) — liegt
+  über dem Auswahl-Hintergrund und ist dadurch robust gegen alle Tönungs-
+  und Hover-Varianten.
+- Ring, Puls und Live-Frame unverändert.
+
+Tests: Fixture-Zeile `l5` (aktiv+ausgewählt); Style-Test Sektion 15 neu
+(Rahmen-only + Hintergrund-Gleichheit mit Normalzeile + Schiene nur an der
+aktiven Auswahl), Sektion 4 auf „nur Rahmen" angepasst.

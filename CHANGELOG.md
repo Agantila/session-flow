@@ -5,6 +5,21 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 
 ## [Unreleased]
 
+### Changed
+- **Live-Kennzeichnung neu verteilt — Schiene auf die aktive Auswahl**:
+  „Aktiv ohne Auswahl" zeigt jetzt NUR den Rahmen (Inset-Ring) und lässt
+  den Hintergrund komplett unangetastet (der Verlauf aus v1.17.2 entfällt).
+  Die linke Live-Schiene wandert auf die **aktive Auswahl** (aktiv +
+  selektiert) — als `::before`-Element, dadurch unabhängig vom
+  Auswahl-Hintergrund-Layering (stabil bei allen Tönungs-/Hover-Varianten).
+  Wartend entsprechend in Bernstein. Puls und Live-Frame unverändert;
+  Liste & Grid.
+
+### Intern
+- Style-Test: Fixture-Zeile „Liste aktiv+ausgewählt" (`l5`) ergänzt; Sektion
+  15 prüft Rahmen-only (Hintergrund identisch zur normalen Zeile; Schiene
+  nur an der aktiven Auswahl als `::before`), Sektion 4 auf „nur Rahmen".
+
 ## [1.17.2] — 2026-10-05
 
 ### Changed

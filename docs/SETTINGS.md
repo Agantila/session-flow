@@ -61,7 +61,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.selBorder` | `false` | Kontur um die ausgewählte Zeile/Karte (in der Tönungsfarbe). |
 | `tabs.selShadow` | `off` | Schattenstufe für den Auswahl-Zustand: `off`/`subtle`/`medium`/`strong`. |
 | `tabs.selHover` | `soft` | Hover-Verhalten des ausgewählten Eintrags (Liste & Grid): `soft` (Tönung vertiefen), `strong` (stärker), `off` (unverändert). |
-| `tabs.rowLive` | `false` | Aktiv & Wartend hervorheben: Richtungs-Verlauf mit linker Live-Schiene (seit v1.17.2 — bewusst klar von der flachen Auswahl-Tönung unterscheidbar) + pulsierendes Status-Icon + Live-Rahmen (Bildsprache wie im Tab-Design). |
+| `tabs.rowLive` | `false` | Aktiv & Wartend hervorheben: Inset-Ring um aktive Zeilen (kein Hintergrund-Eingriff) + pulsierendes Status-Icon + Live-Rahmen; die aktive AUSWAHL (aktiv + selektiert) trägt zusätzlich die linke Live-Schiene (Bildsprache wie im Tab-Design). |
 | `tabs.liveFrame` | `glow` | Rahmen für arbeitende/wartende Einträge: `off`/`ring` (statisch)/`glow` (glühender, umlaufender Ring — App-Technik). Nur sichtbar mit `rowLive`. |
 | `tabs.showContext` | `false` | Kontextfenster (kompakt): Prozent-Label je Zeile/Karte für **Live-Sessions** (read-only `session.context_breakdown`, kein Provider-Call). Ab 70 % bernstein, ab 90 % rot; Tooltip zeigt used/max. |
 | `tabs.ctxPie` | `true` | Kontextfenster als **Donut**: Außenring = Füllstand, Innenkreis ausgespart (die Zeilenfläche scheint durch). Der Wert steht im Loch — weiß mit mehrlagigem Text-Schatten (Kontur + Glow); Farbstufen ab 70 %/90 %. Aus = reines Prozent-Label. **Listen-Ansicht:** Donut ganz rechts am Ende (nach der Zeit); **Grid:** vor der Zeit. |

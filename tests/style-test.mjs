@@ -118,6 +118,7 @@ const html = `<!doctype html>
         ${row('l1', 'Liste normal')}
         ${row('l2', 'Liste aktiv', ' data-active="true"')}
         ${row('l3', 'Liste busy', ' data-live="busy"')}
+        ${row('l5', 'Liste aktiv+ausgewählt', ' data-active="true" data-live="busy"')}
       </div>
     </div>
     <div class="sf-section">
@@ -292,11 +293,11 @@ try {
   check('Auswahl: Schatten medium aktiv (nicht Row-Schatten)', has(P.g2.shadow, '0.35'), P.g2.shadow)
   check('Parität: Auswahl Liste==Grid (Schatten+Kontur)', P.l2.shadow === P.g2.shadow && P.l2.outline === P.g2.outline, '')
 
-  // ── 4) Live-Status im Grid (Richtungs-Verlauf + Live-Schiene, v1.17.2) ────
+  // ── 4) Live-Status im Grid (nur Rahmen, kein Hintergrund-Eingriff) ────────
   check(
-    'Live busy Grid: Richtungs-Verlauf + Live-Schiene (2× 90deg)',
-    has(P.g3.bgImage, '90deg') && (P.g3.bgImage.match(/90deg/g) || []).length === 2,
-    P.g3.bgImage.slice(0, 120)
+    'Live busy Grid: nur Rahmen (Hintergrund unverändert)',
+    !has(P.g3.bgImage, '90deg') && has(P.g3.shadow, 'inset'),
+    `${P.g3.bgImage.slice(0, 80)} | ${P.g3.shadow.slice(0, 70)}`
   )
   check('Parität: Live Liste==Grid', P.l3.bgImage === P.g3.bgImage, '')
 
@@ -479,7 +480,7 @@ try {
   check('Dichte einspaltig: Meta-Zeile als Flex-Zeile unter dem Text', IM.display === 'flex' && IM.below, JSON.stringify(IM))
   check('Dichte einspaltig: 3 px Abstand, alignTop-Padding ausgesetzt', IM.marginTop === '3px' && IM.paddingTop === '0px', JSON.stringify(IM))
 
-  // ── 15) v1.17.2: Live-Hintergrund klar von der Auswahl abgesetzt ──────────
+  // ── 15) v1.17.3: Live-Kennzeichnung — Rahmen (Aktive) vs. Schiene (Aktive Auswahl)
   // Frühere Sektionen entfernen die data-sf-*-Attribute des Fixtures — für
   // die Live-/Auswahl-Regeln die nötigen Flags hier explizit setzen.
   await page.evaluate(() => {
@@ -488,24 +489,48 @@ try {
     r.setAttribute('data-sf-seltint', 'custom')
     r.setAttribute('data-sf-rowlive', 'on')
   })
+  // Kurz warten: .sf-tab transitioniert box-shadow/background (130 ms) — der
+  // Attribut-Wechsel oben würde sonst einen Zwischenzustand messen.
+  await page.waitForTimeout(320)
   const LV = await page.evaluate(() => {
-    const read = id => window.getComputedStyle(document.getElementById(id)).backgroundImage
-    return { busyList: read('l3'), busyGrid: read('g3'), selected: read('l2') }
+    const read = id => {
+      const el = document.getElementById(id)
+      const cs = window.getComputedStyle(el)
+      const before = window.getComputedStyle(el, '::before')
+      return {
+        bg: cs.backgroundImage,
+        shadow: cs.boxShadow,
+        beforeContent: before.content,
+        beforeWidth: before.width
+      }
+    }
+    return { busy: read('l3'), busyGrid: read('g3'), selected: read('l2'), selBusy: read('l5'), normal: read('l1') }
   })
+  const hasRail = v => v.beforeContent !== 'none' && v.beforeContent !== 'normal' && v.beforeContent !== ''
   check(
-    'v1.17.2: Aktiv-Zeile nutzt Richtungs-Verlauf + Live-Schiene (2× 90deg)',
-    LV.busyList.startsWith('linear-gradient(90deg') && (LV.busyList.match(/90deg/g) || []).length === 2,
-    LV.busyList.slice(0, 150)
+    'v1.17.3: Aktiv ohne Auswahl — nur Rahmen, Hintergrund wie normale Zeile',
+    LV.busy.bg === LV.normal.bg && !LV.busy.bg.includes('90deg') && LV.busy.shadow.includes('inset'),
+    `bg=${LV.busy.bg.slice(0, 80)} | shadow=${LV.busy.shadow.slice(0, 70)}`
   )
   check(
-    'v1.17.2: Auswahl-Zeile bleibt flach (kein 90deg-Verlauf)',
-    LV.selected.startsWith('linear-gradient(') && !LV.selected.includes('90deg'),
-    LV.selected.slice(0, 150)
+    'v1.17.3: Aktiv ohne Auswahl — keine Live-Schiene (Liste + Grid)',
+    !hasRail(LV.busy) && !hasRail(LV.busyGrid),
+    `busy=${LV.busy.beforeContent} grid=${LV.busyGrid.beforeContent}`
   )
   check(
-    'v1.17.2: Grid-Karte (aktiv) ebenfalls mit Richtungs-Verlauf',
-    LV.busyGrid.startsWith('linear-gradient(90deg') && (LV.busyGrid.match(/90deg/g) || []).length === 2,
-    LV.busyGrid.slice(0, 150)
+    'v1.17.3: Aktive Auswahl — Live-Schiene links (::before, 3 px), Hintergrund unverändert',
+    hasRail(LV.selBusy) && LV.selBusy.beforeWidth === '3px' && LV.selBusy.bg === LV.selected.bg,
+    `content=${LV.selBusy.beforeContent} width=${LV.selBusy.beforeWidth}`
+  )
+  check(
+    'v1.17.3: Auswahl ohne Aktiv — keine Live-Schiene',
+    !hasRail(LV.selected),
+    `content=${LV.selected.beforeContent}`
+  )
+  check(
+    'v1.17.3: Grid-Parität — Aktiv ohne Auswahl ebenfalls nur Rahmen',
+    LV.busyGrid.bg === LV.normal.bg && LV.busyGrid.shadow.includes('inset'),
+    `bg=${LV.busyGrid.bg.slice(0, 80)}`
   )
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
