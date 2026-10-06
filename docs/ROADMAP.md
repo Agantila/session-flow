@@ -1,10 +1,21 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.23.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.24.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **`tabs.openIntent` zwingt bei aktivem `tabs.asTabSelector` „Ersetzen"**
+  (v1.24.0): drei `host.openSession`-Aufrufer (`openFreshSession`,
+  `wheelController.cycleNext`, `TabRow.onClick` → Wrapper `open(row,
+  intent)`) lesen den Intent jetzt über den zentralen Helper
+  `effectiveOpenIntent()`. Ist `tabs.asTabSelector = true`, erzwingt der
+  Helper `in-place` (vorher öffnete die App den Klick scheinbar „daneben"
+  und der User las das als „Ersetzen ignoriert"). Die UI rendert
+  passend einen erklärenden Hinweis-Block und no-oppt das Segment, damit
+  der ausgewählte Punkt nicht versehentlich auf `stack`/`tab` hängen
+  bleibt. Whitelist-Fallback für unbekannte/korrupte persistierte
+  Werte. Plan: `docs/plans/2026-10-06-openintent-tabs-as-selector.md`.
 - **„Neue Session" ohne Owner-Fehler + Composer-Chip auf dem nativen Sendeweg**
   (v1.23.0): frische Plugin-Sessions werden über `openFreshSession()` mit
   Owner-Hinweis geöffnet (SDK `openSession` mit `profile`), der Chip spiegelt
@@ -195,7 +206,7 @@ und docs/plans/2026-10-04-info-dichte-abstufung.md.
 | Pane-Anker | `[data-pane-host]` tragen nur Keep-Alive-Panes (u. a. Plugin-Panes). Chat/Arbeitsbereich hängen an `[data-chat-surface]` bzw. `[data-tree-group]` — pane-weite Regeln dort verankern. |
 | Kontext-Donut | Der Wert sitzt im Loch; bei drei Stellen (100 %) berührt er den Ring (Text-Schatten hält ihn lesbar). |
 | Projekt-Label | Kommt aus `projects.list` (60-s-Cache) — ein frisch angelegtes Projekt kann bis zu 60 s als Ordnername statt Projektname erscheinen. |
-| Tab-Selektor-Modus | `tabs.asTabSelector` blendet **jeden** Streifen mit Session-Tabs aus — auch gestapelte Tabs im Content-Bereich (`tabs.openIntent: 'stack'`/`'tab'`) verlieren damit ihre eigene Leiste; bewusster Trade-off laut Anforderung. |
+| Tab-Selektor-Modus | `tabs.asTabSelector` blendet **jeden** Streifen mit Session-Tabs aus — auch gestapelte Tabs im Content-Bereich verlieren damit ihre eigene Leiste; bewusster Trade-off laut Anforderung. `tabs.openIntent` wird unter aktivem `tabs.asTabSelector` zentral auf `in-place` gezwungen (`effectiveOpenIntent()`, v1.24.0), die UI zeigt einen Hinweis und no-oppt das Segment. |
 | Filter-Leiste | Rein clientseitig, nicht persistiert; wirkt nur auf die bereits geladenen Sessions (`tabs.maxItems`), kein Server-Side-Search. „Aktiv" sortiert clientseitig nach letzter Aktivität (Bestand ohne Live-Signal: Startzeit). |
 | `session.list`-Payload | Liefert dem Plugin nur `id/title/preview/started_at/message_count/source` — Branch/`tool_call_count` fehlen (Modell + „zuletzt aktiv“ werden für Live-Sessions aus `session.active_list` nachgereicht). |
 

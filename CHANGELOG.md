@@ -3,6 +3,24 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.24.0] — 2026-10-06
+
+### Fixed
+- **`tabs.openIntent` „Ersetzen" stapelte unter aktivem `tabs.asTabSelector`**:
+  die `:has()`-Regel blendet die native Content-Tab-Leiste nur VISUELL aus,
+  das `host.openSession`-Verhalten der App bleibt davon unberührt — bei
+  `intent: 'stack'/'tab'` legte die App den Klick scheinbar „daneben" an,
+  der User las das als „Ersetzen ignoriert". Neuer Helper
+  `effectiveOpenIntent()` ist jetzt die einzige Quelle für den Intent
+  aller drei `host.openSession`-Aufrufer (`openFreshSession`,
+  `wheelController.cycleNext`, `TabRow.onClick` → Wrapper `open(row,
+  intent)`). Ist `tabs.asTabSelector = true`, erzwingt der Helper
+  `in-place` — und die UI blendet einen erklärenden Hinweis ein, sobald
+  der Segment no-oppt. Unabhängig davon whitelistet der Helper unbekannte
+  persistierte Werte und fällt auf `in-place` zurück (Schutz gegen
+  korrupte/alte Storage-Stände). Plan:
+  `docs/plans/2026-10-06-openintent-tabs-as-selector.md`.
+
 ## [1.23.0] — 2026-10-06
 
 ### Fixed

@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -3136,6 +3136,102 @@ try {
   hostStub.notify = prevNotify
 } catch (error) {
   check('v1.23.0-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// v1.24.0: `tabs.openIntent` wird bei aktivem `tabs.asTabSelector` zuverlässig
+// „Ersetzen" — `effectiveOpenIntent()` als zentrale Quelle, UI rendert den
+// Hinweis-Block nur im erzwungenen Modus.
+try {
+  // Helper ist als interner Export verfügbar (siehe Export-Concat oben).
+  const helper = mod.effectiveOpenIntent
+
+  check('v1.24.0: effectiveOpenIntent ist exportiert', typeof helper === 'function')
+
+  // Default (asTabSelector=false, openIntent=in-place) → in-place.
+  mod.patchSettings('tabs', { asTabSelector: false, openIntent: 'in-place' })
+  check(
+    'v1.24.0: effectiveOpenIntent respektiert in-place ohne asTabSelector',
+    helper() === 'in-place'
+  )
+
+  // User wählt explizit „stapeln" — soll ankommen, wenn asTabSelector aus.
+  mod.patchSettings('tabs', { asTabSelector: false, openIntent: 'stack' })
+  check(
+    'v1.24.0: effectiveOpenIntent respektiert stack ohne asTabSelector',
+    helper() === 'stack'
+  )
+
+  mod.patchSettings('tabs', { asTabSelector: false, openIntent: 'tab' })
+  check(
+    'v1.24.0: effectiveOpenIntent respektiert tab ohne asTabSelector',
+    helper() === 'tab'
+  )
+
+  // ERZWINGEN: asTabSelector=true überschreibt jede UI-Wahl mit in-place.
+  mod.patchSettings('tabs', { asTabSelector: true, openIntent: 'stack' })
+  check(
+    'v1.24.0: effectiveOpenIntent erzwingt in-place bei asTabSelector (auch bei stack-UI)',
+    helper() === 'in-place'
+  )
+
+  mod.patchSettings('tabs', { asTabSelector: true, openIntent: 'tab' })
+  check(
+    'v1.24.0: effectiveOpenIntent erzwingt in-place bei asTabSelector (auch bei tab-UI)',
+    helper() === 'in-place'
+  )
+
+  // Whitelist-Schutz: unbekannte/korrupte persistierte Werte fallen zurück.
+  mod.patchSettings('tabs', { asTabSelector: false, openIntent: 'some-bogus-value' })
+  check(
+    'v1.24.0: effectiveOpenIntent whitelistet unbekannte Werte (Fallback in-place)',
+    helper() === 'in-place'
+  )
+
+  mod.patchSettings('tabs', { asTabSelector: false, openIntent: '' })
+  check(
+    'v1.24.0: effectiveOpenIntent fällt bei leerem String auf in-place zurück',
+    helper() === 'in-place'
+  )
+
+  // UI: Hinweis-Block nur bei aktivem asTabSelector rendern.
+  // Settings-Seite ist `settingsPage.render()`; tCalls loggt jeden t()-Aufruf,
+  // und der Hinweis-Block nutzt `t('tabsOpenIntentForcedNote')` als Title.
+  mod.patchSettings('tabs', { asTabSelector: false, openIntent: 'in-place' })
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  walk(settingsPage.render(), { el: [], text: [] })
+  const tCallsNoSelector = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  check(
+    'v1.24.0: Hinweis-Block ohne asTabSelector NICHT gerendert',
+    !tCallsNoSelector.has('tabsOpenIntentForcedNote')
+  )
+
+  mod.patchSettings('tabs', { asTabSelector: true, openIntent: 'in-place' })
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  walk(settingsPage.render(), { el: [], text: [] })
+  const tCallsSelector = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  check(
+    'v1.24.0: Hinweis-Block bei asTabSelector gerendert (tCall vorhanden)',
+    tCallsSelector.has('tabsOpenIntentForcedNote')
+  )
+  // i18n-Key ist im registrierten Bundle (EN/DE-Trennung prüft `npm run
+  // check` separat — ein positives Bundle-Check hier reicht für die
+  // Render-Suite, weil der Stub das Default-Bundle einspeist).
+  const registeredBundle = globalThis.__SF__.bundles
+  const registeredKeys = registeredBundle
+    ? (registeredBundle.en ? new Set(Object.keys(registeredBundle.en)) : new Set(Object.keys(registeredBundle)))
+    : null
+  check(
+    'v1.24.0: tabsOpenIntentForcedNote im registrierten Bundle vorhanden',
+    registeredKeys ? registeredKeys.has('tabsOpenIntentForcedNote') : false
+  )
+
+  // Endzustand sauber zurücklassen, damit Folgesuites nicht überrascht
+  // werden.
+  mod.patchSettings('tabs', { asTabSelector: false, openIntent: 'in-place' })
+} catch (error) {
+  check('v1.24.0-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

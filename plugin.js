@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.23.0'
+const VERSION = '1.24.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -2050,6 +2050,10 @@ function adoptComposerPickForNewSession() {
   }
 
   if (!pick || pick.id === '__no_project__') {
+    // Auch hier verbrauchen: ohne Clear bliebe der alte Pick im Atom und der
+    // Chip würde beim nächsten Draft weiter das ALT-Label zeigen (v1.24.0).
+    $composerPick.set({ id: '', label: '', color: null, at: 0 })
+
     return
   }
 
@@ -2057,14 +2061,14 @@ function adoptComposerPickForNewSession() {
     return
   }
 
+  $composerPick.set({ id: '', label: '', color: null, at: 0 })
+
   const node = $projectsList.get().find(entry => entry.id === pick.id && !entry.isNoProject)
   const path = String(node?.path || '').trim()
 
   if (!node || !path) {
     return
   }
-
-  $composerPick.set({ id: '', label: '', color: null, at: 0 })
 
   let cwd = ''
 
@@ -3042,13 +3046,51 @@ function ambientOwnerProfile() {
  * (Profil-Scope); der Default `true` würde die Seitenleiste ungefragt auf
  * „Alle Profile" umschalten. Gilt für ALLE Create-Pfade (+, Projekt-Header,
  * Composer-Chip, Branch) — einmal hier statt pro Aufrufer.
+ *
+ * Der Intent geht durch `effectiveOpenIntent()` (v1.24.0) — bei aktivem
+ * `tabs.asTabSelector` wird IMMER `in-place` erzwungen, sonst öffnet die
+ * App den Klick scheinbar „daneben" (siehe Plan
+ * `2026-10-06-openintent-tabs-as-selector.md`).
  */
 async function openFreshSession(storedId) {
   await host.openSession(storedId, {
-    intent: readSetting('tabs', 'openIntent') || 'in-place',
+    intent: effectiveOpenIntent(),
     profile: ambientOwnerProfile(),
     keepAllProfilesScope: false
   })
+}
+
+/**
+ * Effektiver Intent für `host.openSession` (v1.24.0).
+ *
+ * Drei Plugin-Aufrufer (`openFreshSession`, `wheelController.cycleNext`,
+ * `TabRow.onClick → on(row, null)`) brauchen denselben Intent — und der
+ * ist NICHT immer die rohe `tabs.openIntent`-Einstellung:
+ *
+ * - **Bei `tabs.asTabSelector = true`** erzwingen wir `in-place`. Die
+ *   `:has()`-Regel blendet die native Content-Tab-Leiste nur VISUELL aus;
+ *   die App selbst bekommt vom Klick mit und entscheidet bei
+ *   `intent: 'stack'`/'tab' weiter, daneben/neu zu öffnen — der User
+ *   sieht das als „Ersetzen stapelt trotzdem". Mit Tab-Selektor-Modus
+ *   ist daneben öffnen sinnlos (es gibt keinen sichtbaren Tab, der es
+ *   aufnimmt), also in-place ist die einzig sinnvolle Wahl.
+ * - **Sonst** die UI-Wahl, mit Whitelist-Schutz gegen korrupte/alte
+ *   persistierte Werte (jeder unbekannte String fällt auf `in-place`).
+ * - **Default**: `in-place` (konsistent mit `DEFAULT_SETTINGS.tabs.openIntent`).
+ *
+ * Eine Quelle, drei Aufrufer — falls die App-Semantik je driftet, ist
+ * dies die einzige Stelle, an der ein Remap sitzen muss.
+ */
+function effectiveOpenIntent() {
+  const forced = !!readSetting('tabs', 'asTabSelector')
+
+  if (forced) {
+    return 'in-place'
+  }
+
+  const chosen = readSetting('tabs', 'openIntent')
+
+  return chosen === 'stack' || chosen === 'tab' ? chosen : 'in-place'
 }
 
 /** Neue Session explizit in `cwd` starten — Projekt-Header-"+"-Button. */
@@ -4670,6 +4712,7 @@ const EN = {
   tabsOpenIntentInPlace: 'Replace',
   tabsOpenIntentStack: 'Stack',
   tabsOpenIntentTab: 'Tab',
+  tabsOpenIntentForcedNote: 'Tab selector is on — clicks always replace the current chat.',
   tabsAsTabSelector: 'Use list/grid as the tab selector',
   tabsAsTabSelectorDesc: 'Hides the native session tab strip in the content area — the list/grid already covers switching between open sessions. Affects every pane that carries session tabs.',
   tabsMaxItems: 'Max sessions',
@@ -5278,6 +5321,7 @@ const DE = {
   tabsOpenIntentInPlace: 'Ersetzen',
   tabsOpenIntentStack: 'Stapeln',
   tabsOpenIntentTab: 'Tab',
+  tabsOpenIntentForcedNote: 'Tab-Selektor ist aktiv — Klicks ersetzen immer den aktuellen Chat.',
   tabsAsTabSelector: 'Liste/Grid als Tab-Selektor nutzen',
   tabsAsTabSelectorDesc: 'Blendet die native Session-Tab-Leiste im Content-Bereich aus — die Liste/das Grid deckt das Umschalten zwischen offenen Sessions schon ab. Betrifft jede Pane, die Session-Tabs trägt.',
   tabsMaxItems: 'Max. Sessions',
@@ -6976,7 +7020,7 @@ function createWheelController(ctx) {
     showHud(row, next, rows.length)
 
     try {
-      await host.openSession(row.id, { intent: readSetting('tabs', 'openIntent') || 'in-place' })
+      await host.openSession(row.id, { intent: effectiveOpenIntent() })
     } catch (error) {
       host.notifyError(error, CTX?.i18n?.t('errOpen') || 'Session konnte nicht geöffnet werden')
     }
@@ -9190,7 +9234,7 @@ function SessionsPane() {
 
     try {
       void host
-        .openSession(row.id, { intent: intent || readSetting('tabs', 'openIntent') || 'in-place' })
+        .openSession(row.id, { intent: intent || effectiveOpenIntent() })
         .catch(err => host.notifyError(err, t('errOpen')))
     } catch (err) {
       host.notifyError(err, t('errOpen'))
@@ -10886,9 +10930,21 @@ function SettingsPage() {
                 { id: 'tab', label: t('tabsOpenIntentTab') }
               ],
               value: tabs.openIntent,
-              onChange: value => patch('tabs', 'openIntent', value)
+              // v1.24.0: Tab-Selektor-Modus erzwingt `in-place` (siehe
+              // `effectiveOpenIntent`). Wir no-oppen onChange hier, damit
+              // der UI-Punkt nicht versehentlich auf "Stapeln/Tab" hängen
+              // bleibt, wenn der User ihn klickt — der Hinweis-Block
+              // darunter macht das Verhalten sichtbar.
+              onChange: tabs.asTabSelector ? () => {} : value => patch('tabs', 'openIntent', value)
             })
           }),
+          tabs.asTabSelector
+            ? jsx(Row, {
+                title: t('tabsOpenIntentForcedNote'),
+                description: null,
+                action: null
+              })
+            : null,
           jsx(ToggleRow, {
             label: t('tabsAsTabSelector'),
             description: t('tabsAsTabSelectorDesc'),
