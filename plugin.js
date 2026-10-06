@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.22.1'
+const VERSION = '1.22.2'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -7139,6 +7139,18 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
   const liveMap = useValue($liveMap)
   const ctxInfo = useValue($ctxInfo)
 
+  // Ordner-Größe für Projekt-Gruppen lazy nachladen (renderer-seitiger Cache,
+  // 60 s TTL). Der Hook läuft IMMER — die Bedingung steckt IM Effekt. Läge der
+  // Hook im `density === 'detailed'`-Zweig, änderte ein Dichte-Wechsel die
+  // Hook-Anzahl und React wirft #300/#310 → die Pane landet in der
+  // Error-Boundary ("failed to render"). Der Render-Smoketest sieht das nicht
+  // (dort ist useEffect ein No-op); `npm run check` prüft es statisch.
+  useEffect(() => {
+    if (density === 'detailed' && section.kind === 'project' && section.cwd && section.items.length > 0) {
+      void ensureFolderSize(section.cwd)
+    }
+  }, [density, section.kind, section.cwd, section.items.length])
+
   // Subzeile: bei Projekt-Gruppen der (gekürzte) Ordnerpfad, sonst — nur in
   // der Detailreich-Stufe — eine kurze Kennzahl (angepinnt/aktiv), wenn sie
   // etwas Echtes zu sagen hat. Nie erfunden: ohne Treffer bleibt die Zeile weg.
@@ -7204,16 +7216,8 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
       )
     }
 
-    // Folder-Size nur bei Projekt-Gruppen abrufen — und nur wenn der
-    // Cache-Eintrag älter als TTL ist (ensureFolderSize macht das selbst).
-    // useEffect: nach First-Paint, damit der Header sofort rendert und
-    // die Größe „nachlädt". Bei Komponenten-Unmount brechen wir nicht ab
-    // (Promise läuft, Cache-Update ist harmlos).
-    if (isProject && section.cwd) {
-      useEffect(() => {
-        void ensureFolderSize(section.cwd)
-      }, [section.cwd])
-    }
+    // Folder-Size wird weiter oben (Hook-Block, IMMER ausgeführt) lazy
+    // nachgeladen — siehe useEffect am Komponentenanfang.
   }
 
   // Projekt-Identität aus Hermes Desktop übernehmen (projects.list → Farbe/

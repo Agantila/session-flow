@@ -3,6 +3,26 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.22.2] — 2026-10-06
+
+### Fixed
+- **Pane-Crash beim Umschalten der Kopfzeilen-Dichte auf „Detailreich"**: die
+  Detailreich-Stufe lädt die Projekt-Ordnergröße per `useEffect` nach — dieser
+  Hook lag aber **innerhalb** des `density === 'detailed'`-Zweigs von
+  `SectionHeader`. Damit hing die Hook-Anzahl vom Render-Input ab: React wirft
+  beim Wechsel #310 („Rendered more hooks") bzw. #300 („Rendered fewer hooks"),
+  die Pane landete in der Error-Boundary und blieb auf „session-flow:pane
+  failed to render" mit Retry-Button stehen. Der Effekt steht jetzt am
+  Komponentenanfang (Hooks immer in gleicher Reihenfolge), die Bedingung liegt
+  IM Effekt — sonst unverändert. Betraf v1.18.0–v1.22.1.
+- **`npm run check` prüft jetzt die Hook-Reihenfolge**: neuer statischer Audit,
+  der Hook-Aufrufe in bedingten Blöcken/Zeilen (`if`/`for`/`while`/`switch`/
+  `else`/`&&`/`||`/Ternary) findet und mit Exit-Code 1 abbricht (inkl.
+  Selbsttest des Scanners). Der Render-Smoketest kann diese Fehlerklasse nicht
+  sehen — dort sind `useEffect`/`useState` Stubs, es gibt keinen echten
+  React-Reconciler und damit keine Hook-Zählung.
+  Plan: `docs/plans/2026-10-06-fix-kopfzeilen-dichte-crash.md`.
+
 ## [1.22.1] — 2026-10-06
 
 ### Fixed

@@ -1,10 +1,20 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.22.1 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.22.2 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Pane-Crash beim Umschalten auf Kopfzeilen-Dichte „Detailreich" behoben**
+  (v1.22.2): der `useEffect` für die Projekt-Ordnergröße lag innerhalb des
+  `density === 'detailed'`-Zweigs von `SectionHeader`, damit hing die
+  Hook-Anzahl vom Render-Input ab → React #300/#310 → Pane in der
+  Error-Boundary. Hook steht jetzt am Komponentenanfang, Bedingung IM Effekt.
+  Zusätzlich prüft `npm run check` die Hook-Reihenfolge statisch (findet Hooks
+  in bedingten Blöcken und bricht mit Exit-Code 1 ab) — der Render-Smoketest
+  kann diese Fehlerklasse prinzipiell nicht sehen, weil dort `useEffect`
+  ein No-op ist. Plan:
+  `docs/plans/2026-10-06-fix-kopfzeilen-dichte-crash.md`.
 - **Titel-Stil + per-Theme-Shadows + robuste Theme-Erkennung** (v1.22.1):
   Titel hat jetzt einen Stil `none`/`solid`/`gradient` mit EINER Einzelfarbe
   (`titleColor`) für den Nicht-Verlauf-Fall, je Theme; die Schlagschatten
