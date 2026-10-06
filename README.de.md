@@ -2,6 +2,10 @@
 
 [English](README.md) · **Deutsch**
 
+<p align="center">
+  <img src="docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg" alt="Session Flow in Hermes Desktop — Sidebar mit Projekt-Gruppen, Kanban-Pane und Datei-Explorer" width="100%">
+</p>
+
 Weiche Zeile-für-Zeile-Animation im Chat, Strg+Scroll durch die Sessions,
 Firefox-artige Session-Gruppen, Glass-Lesbarkeit für den Composer und
 Sidebar-Style-Tabs im Content-Bereich und volle Individualisierung — **sechs
@@ -16,14 +20,21 @@ Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
 
 ## Showcase
 
-![Session-Pane mit Projekt-Gruppen, Anpinn-Sektion und Suchleiste](docs/marketing/heroes/sf-hero-a1-sessionpane-liste-16x9.png)
-
 | | |
 |---|---|
-| ![Chat, Zeile-für-Zeile-Kaskade](docs/marketing/heroes/sf-hero-a3-chat-kaskade-16x9.png) | ![Composer im Glass-Look mit Projekt-Chip](docs/marketing/heroes/sf-hero-a4-composer-glass-16x9.png) |
-| ![Strg+Scroll-HUD](docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png) | ![Einstellungen — alles konfigurierbar](docs/marketing/heroes/sf-hero-a7-settings-16x9.png) |
-| ![Grid-Sessions mit geöffnetem ⋯-Menü](docs/marketing/heroes/sf-hero-a2-sessionpane-grid-16x9.png) | ![Sidebar-Style-Tabs mit Glow auf arbeitender Session](docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png) |
-| ![Personalisierter Workspace — eigener Chat-Hintergrund, Akzent im Fokus](docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png) | |
+| ![Session-Pane mit Projekt-Gruppen, Anpinn-Sektion und Suchleiste](docs/marketing/heroes/sf-hero-a1-sessionpane-liste-16x9.png) | ![Composer im Glass-Look mit Projekt-Chip](docs/marketing/heroes/sf-hero-a4-composer-glass-16x9.png) |
+| ![Chat, Zeile-für-Zeile-Kaskade](docs/marketing/heroes/sf-hero-a3-chat-kaskade-16x9.png) | ![Strg+Scroll-HUD](docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png) |
+| ![Sidebar-Style-Tabs mit Glow auf arbeitender Session](docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png) | ![Einstellungen — alles konfigurierbar](docs/marketing/heroes/sf-hero-a7-settings-16x9.png) |
+| ![Grid-Sessions mit geöffnetem ⋯-Menü](docs/marketing/heroes/sf-hero-a2-sessionpane-grid-16x9.png) | ![Personalisierter Workspace — eigener Chat-Hintergrund, Akzent im Fokus](docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png) |
+| ![Sidebar Grid-View (echter Hermes-Desktop-Screenshot)](docs/marketing/heroes/sf-hero-a10-sidebar-grid-9x16.png) | |
+
+### Echte App-Screenshots
+
+Zwei zusätzliche Screenshots wurden aus einer laufenden Hermes-Desktop-Session
+aufgenommen (`sf-hero-a9-sidebar-kanban-files-16x9.jpg`,
+`sf-hero-a10-sidebar-grid-9x16.png`), um das Plugin im realen App-Kontext zu
+zeigen — die Showcase-Aufnahmen oben sind aus HTML-Quellen reproduzierte,
+pixelgenaue Kompositionen für die Marketplace-Galerie.
 
 ▶ **In Bewegung:** die 5-Sekunden-Hyperframes-Animation
 ([MP4](docs/marketing/animation/sf-hyperframes-1920x1080-5s.mp4) ·

@@ -6,7 +6,7 @@
   "tagline": "Six UX features for the Hermes Desktop session sidebar in one plain-ESM plugin",
   "summary": "Smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style session groups, glass readability for the composer, sidebar-style content tabs, and full personalization — six features in one plugin, all live-configurable from a built-in settings page.",
   "description": "Session Flow turns Hermes Desktop's session sidebar into something that *feels* like a real app:\n\n1. **Line-by-line chat animation** — assistant answers cascade in instead of popping. Duration, stagger, easing, code/list options — all configurable.\n2. **Ctrl+Scroll = session cycling** — hold a modifier and wheel through your active sessions; a HUD shows position and title. Zoom surfaces keep their own behaviour.\n3. **Session pane with Firefox-style groups** — list or grid, groups collapse into a stack (spine/fanned/pill), optional auto-grouping by date/source/project folder. Drop a tab on a project header to move it. Live status icons (thinking / writing / tool / waiting / done / error). Search + quick filter bar. App quick-start row above the toolbar.\n4. **Glass & readability** — optional frost for the input field and UI chips, with a soft accent-tinted gradient overlay that fades to transparent. Blur, saturation, opacity, gradient angle/strength, scopes, and a travelling glow ring — all configurable.\n5. **Sidebar-style UI tabs** — content-area tabs become rounded chips like the sidebar session rows. Live session info from the sidebar: working sessions get the travelling glow ring on their tab.\n6. **Personalization** — pick your own accent color, set a chat background (image or video, fit/dim/blur/scope), and choose the pane surface (native sidebar / chat / none).",
-  "version": "1.21.0",
+  "version": "1.21.1",
   "author": {
     "name": "AGANTILA — Deniz Yilmaz",
     "url": "https://agantila.com",
@@ -29,7 +29,9 @@
       "docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png",
       "docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png",
       "docs/marketing/heroes/sf-hero-a7-settings-16x9.png",
-      "docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png"
+      "docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png",
+      "docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg",
+      "docs/marketing/heroes/sf-hero-a10-sidebar-grid-9x16.png"
     ],
     "social_crops_4x5": [
       "docs/marketing/crops/sf-hero-a1-sessionpane-liste-4x5.png",

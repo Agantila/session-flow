@@ -3,6 +3,23 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.21.1] — 2026-10-06
+
+### Fixed
+- **Composer-Chip: neue Sessions landen jetzt im gewählten Projekt** (Bug
+  v1.21.0). Vorher erzeugte der Draft-Pick im Composer-Chip sofort eine
+  leere Session über `startNewSessionInCwd` (eager Create) — das war UX-mäßig
+  falsch (User landet in einer leeren Session, bevor er tippt) und griff am
+  App-Sendepfad vorbei, sobald der User den Draft einfach weiter benutzte.
+  Fix: der Pick setzt nur noch den Anker in `$composerPick` (TTL 5 min) und
+  schreibt `hermes.desktop.projectScope` im localStorage;
+  `resolveNewProjectSessionCwd()` liest den Pick als **erste Quelle** vor
+  App-Scope/active_id, sodass der App-Sendepfad (`startNewProjectSession` →
+  `session.create {cwd, cwd_explicit:true}`) beim tatsächlichen Enter die
+  Session garantiert im gewählten Projekt anlegt. Draft bleibt bis dahin
+  offen. Re-Home bestehender Sessions via `session.workspace.move`
+  unverändert.
+
 ## [1.21.0] — 2026-10-06
 
 ### Added

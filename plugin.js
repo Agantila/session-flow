@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.21.0'
+const VERSION = '1.21.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1452,6 +1452,21 @@ function composerPillEnabled() {
   return readSetting('composer', 'projectPill') !== false
 }
 
+/** TTL des Composer-Chip-Picks (Draft-Anker). 5 Min — lang genug zum Tippen,
+ *  kurz genug, dass ein "früheres" Pick nicht versehentlich eine neue Session
+ *  in ein anderes Projekt verankert. Wird in `composerDraftLabel` UND in
+ *  `resolveNewProjectSessionCwd` ausgewertet. */
+const COMPOSER_PICK_TTL_MS = 5 * 60_000
+
+/** Aktuell gültiger Pick (oder null), gleiche Logik wie die Anzeige. */
+function activeComposerPick() {
+  const pick = $composerPick.get()
+  if (!pick || !pick.id || Date.now() - Number(pick.at || 0) >= COMPOSER_PICK_TTL_MS) {
+    return null
+  }
+  return pick
+}
+
 /**
  * Projekt-Node für eine Stored-Session: Overlay-Seed hat Vorrang (0-Turn-
  * Sessions fehlen im Baum), sonst projects.tree (sessionIds-Autorität).
@@ -1478,9 +1493,16 @@ function composerDraftAnchor() {
 }
 
 /**
- * Draft: verankerte Session SOFORT erzeugen (vor der ersten Eingabe) — derselbe
- * Pfad wie der Pane-„+" (startNewSessionInCwd). Session: re-home via
- * session.workspace.move (Fallback cwd.set), Seed + Tree-Refresh sofort.
+ * Draft-Pick: nur den Anker in `$composerPick` merken (und den App-Scope im
+ * localStorage anpassen, damit das App-`use-session-actions` beim Senden den
+ * `cwd` auflösen kann). KEIN eager `startNewSessionInCwd` mehr — der erzeugte
+ * sofort eine leere Session, noch bevor der User tippt, und der Bug-Report
+ * 2026-10-06 (Pill zeigt Projekt, aber neue Sessions landen trotzdem unter
+ * "Kein Projekt") lag genau daran: der App-Sendepfad resolve-te seinen CWD
+ * unabhängig vom Anker. Mit dem App-Scope-Override greift `startNewProjectSession`
+ * jetzt beim tatsächlichen Enter, der Draft bleibt bis dahin offen.
+ *
+ * Session-Pick: re-home via session.workspace.move (Fallback cwd.set).
  */
 async function applyComposerPick(node) {
   const focusedStored = (() => {
@@ -1491,23 +1513,40 @@ async function applyComposerPick(node) {
     }
   })()
 
+  // 1) Anker-Atom setzen (immer) — auch in `startNewProjectSession` lesbar als
+  //    erste Quelle vor App-Scope/active_id (siehe resolveNewProjectSessionCwd).
   $composerPick.set({ id: node.id, label: node.label, color: node.color, at: Date.now() })
 
+  // 2) App-Scope im localStorage anpassen — der App-Atom `$projectScope` liest
+  //    beim Modul-Init aus diesem Key. Wenn die App ihren Atom zur Laufzeit
+  //    erneut liest (z. B. via window-Event), fällt sie auf den neuen Wert
+  //    zurück. Wir setzen den Scope explizit — `__no_project__` für Home,
+  //    sonst die Projekt-ID.
   try {
-    if (focusedStored) {
-      await rehomeFocusedSession(focusedStored, node)
-    } else if (node.path) {
-      await startNewSessionInCwd(node.path, node.label)
-    } else {
-      host.notify({
-        kind: 'info',
-        message: CTX?.i18n?.t('composerProjectNoneHint')
-          || 'Home hat keinen Arbeitsordner — für einen Draft bitte ein Projekt wählen.'
-      })
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const scopeValue = node.id && !node.isNoProject ? node.id : '__no_project__'
+      window.localStorage.setItem('hermes.desktop.projectScope', scopeValue)
     }
-  } catch (error) {
-    host.notifyError(error, CTX?.i18n?.t('composerProject') || 'Projekt')
+  } catch {
+    // localStorage kann in Edge-Cases (Sandbox, Privacy-Mode) werfen — kein Blocker.
   }
+
+  if (focusedStored) {
+    try {
+      await rehomeFocusedSession(focusedStored, node)
+    } catch (error) {
+      host.notifyError(error, CTX?.i18n?.t('composerProject') || 'Projekt')
+    }
+  } else if (!node.path) {
+    // Draft + Home-Pick: kein Anker, nur Hinweis.
+    host.notify({
+      kind: 'info',
+      message: CTX?.i18n?.t('composerProjectNoneHint')
+        || 'Home hat keinen Arbeitsordner — für einen Draft bitte ein Projekt wählen.'
+    })
+  }
+  // Draft + Projekt-Pick: nichts weiter — der Anker reicht; der App-Sendepfad
+  // liest `$composerPick` als erste Quelle.
 
   // Best-effort: dauerhafter Aktiv-Zeiger (Ziel zukünftiger App-Scopes/CLI).
   try {
@@ -1571,14 +1610,19 @@ async function rehomeFocusedSession(storedId, node) {
 }
 
 /**
- * Draft-Anzeige: gelernter Anker (App-Logik gespiegelt — Scope/active_id/
- * letzte Session-CWD), sobald ein Projekt daraus ablesbar ist.
+ * Draft-Anzeige: aktueller Pick (Composer-Chip) gewinnt — sonst gelernter
+ * Anker (App-Logik gespiegelt — Scope/active_id/letzte Session-CWD), sobald
+ * ein Projekt daraus ablesbar ist.
  */
 function composerDraftLabel() {
-  const picked = $composerPick.get()
-
-  if (picked.id && Date.now() - Number(picked.at || 0) < 30 * 60_000) {
-    return picked
+  const pick = activeComposerPick()
+  if (pick) {
+    // Pick-Label aus dem Tree (Live-Update: Umbenennung schlägt durch).
+    const node = $projectsList.get().find(entry => entry.id === pick.id)
+    if (node) {
+      return { id: node.id, label: node.label, color: node.color }
+    }
+    return { id: pick.id, label: pick.label, color: pick.color }
   }
 
   const anchor = composerDraftAnchor()
@@ -2383,12 +2427,27 @@ function lastSessionCwd() {
 }
 
 /**
- * Ziel-CWD für eine neue Session: zuerst das zuletzt gewählte Projekt
- * (projectScope im App-localStorage; '__no_project__' = Home bleibt bewusst
- * abgekoppelt), dann das aktive Projekt (projects.db `active_id`), zuletzt die
- * zuletzt bekannte Session-CWD. Leer = das Backend löst selbst auf.
+ * Ziel-CWD für eine neue Session — Auflösungsreihenfolge (jede Quelle gewinnt
+ * nur, wenn sie einen echten CWD liefert):
+ *   1) Composer-Chip-Pick (`$composerPick`, TTL 5 min) — überschreibt den
+ *      App-Scope, damit ein vor dem Tippen gewählter Anker wirklich greift.
+ *   2) App-projectScope (localStorage `hermes.desktop.projectScope`).
+ *   3) projects.db `active_id` (Fallback, wenn Scope = `__all_projects__`).
+ *   4) letzte bekannte Session-CWD.
+ * Leer = Backend löst selbst auf.
  */
 async function resolveNewProjectSessionCwd() {
+  // 1) Composer-Chip-Pick (höchste Priorität — überschreibt App-Scope, damit
+  //    der User-sichtbare Pill-State mit dem Create-Anker übereinstimmt).
+  const pick = $composerPick.get()
+  if (pick && pick.id && pick.id !== '__no_project__' && Date.now() - Number(pick.at || 0) < COMPOSER_PICK_TTL_MS) {
+    const node = $projectsList.get().find(entry => entry.id === pick.id)
+    const cwd = String(node?.path || '').trim()
+    if (cwd) {
+      return { cwd, label: String(node?.label || pick.label || '') }
+    }
+  }
+
   let scopeId = ''
   let activeId = ''
   let projects = []
