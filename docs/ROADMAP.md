@@ -1,21 +1,38 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.21.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.22.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Liste-&-Grid-Farben je Theme + Auto-Ableitung** (v1.22.0): die
+  Designfarben (Zeilen-Verlauf, Titel-Verlauf, Auswahlfarbe) haben jetzt
+  getrennte Sätze fürs Dark- und Light-Theme. Einstellungen → „Design —
+  Liste & Grid": `tabs.themeSplit` (eigener Light-Satz), Subtab Dunkel/Hell
+  (`tabs.themeTab`), `tabs.themeAutoDerive` (beim Setzen einer Farbe wird die
+  Gegenfarbe in HSL abgeleitet — Farbton bleibt, Flächen in ein lesbares
+  Helligkeitsband, Text/Titel invertiert). Theme-Erkennung mehrstufig
+  (Marker-Klasse/-Attribut an `<html>`/`<body>` → Flächen-Helligkeit →
+  `prefers-color-scheme`), Live-Umschaltung per MutationObserver +
+  `matchMedia`; `data-sf-theme` markiert das erkannte Theme. Nur plugin-eigene
+  Custom Properties werden geschrieben (kein Eingriff in App-Markup).
+- **Composer-Chip sendet im richtigen Projekt** (v1.21.1): der Draft-Pick im
+  Composer-Chip setzt nur noch den Anker (`$composerPick`, TTL 5 min) +
+  `hermes.desktop.projectScope`; der App-Sendepfad liest den Chip als erste
+  Quelle — kein eager Create mehr, die neue Session landet beim Enter im
+  gewählten Projekt.
 - **Projekt-Kontext-Chip vor dem Composer-„+“** (v1.21.0): Chip
   (Farb-Dot + Name + Caret) in der Eingabezeile des Composers, direkt vor dem
   „+“-Add-IconButton — Projekt-Kontext immer sichtbar vor der ersten Eingabe.
-  Draft-Pick = sofortiger verankerter Create (Pane-„+“-Pfad), Session-Pick =
-  Re-Home per `session.workspace.move` (Fallback `session.cwd.set`), plus
-  best-effort `projects.set_active`. Injektion per Sync-Loop am
-  `.codicon-add`-Anker des fokussierten/sichtbaren Composer-Roots.
-  Plan: `docs/plans/2026-10-06-composer-projekt-kontext-pill.md`.
+  Session-Pick = Re-Home per `session.workspace.move` (Fallback
+  `session.cwd.set`), plus best-effort `projects.set_active`. Injektion per
+  Sync-Loop am `.codicon-add`-Anker des fokussierten/sichtbaren
+  Composer-Roots. Plan:
+  `docs/plans/2026-10-06-composer-projekt-kontext-pill.md`.
   **Bekannte Grenze (bewusst)**: die App löst den CWD eines App-Drafts erst
-  beim Senden aus `$projectScope`/`$currentCwd` — ein echter Draft-CWD-Hebel
-  (Chip stellt den offenen App-Draft um, statt Ersatz-Create) braucht eine
+  beim Senden aus `$projectScope`/`$currentCwd` — der Chip setzt seit v1.21.1
+  `projectScope` und den Anker, den der App-Sendepfad zuerst liest; ein
+  echtes „Draft-CWD vor-Umstellen“ direkt im App-Atom bräuchte weiterhin eine
   Plugin-Tür in der App (Idee, siehe unten).
 - **App-Schnellstart-Zeile + Pane-Fläche** (v1.20.0): Icon-Button-Zeile über
   der Toolbar (Neue Session, Fähigkeiten, Messaging, Artefakte, Geplante

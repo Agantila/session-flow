@@ -3,6 +3,32 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.22.0] — 2026-10-06
+
+### Added
+- **Liste-&-Grid-Farben je Theme (Dark/Light)**: die Designfarben der
+  Session-Zeilen und -Karten lassen sich jetzt getrennt fürs Dark- und
+  Light-Theme einstellen. In den Einstellungen (Sektion „Sessions" →
+  „Design — Liste & Grid") gibt es dafür:
+  - **„Eigene Farben fürs Light-Theme"** (`tabs.themeSplit`) — aktiviert den
+    getrennten Farb-Satz; aus = eine Farbmenge für beide Themes (bisheriges
+    Verhalten, voll abwärtskompatibel).
+  - **Subtab Dunkel/Hell** (`tabs.themeTab`) — die Farb-Controls unten
+    editieren den jeweils gewählten Satz (Dark = flache `tabs`-Keys,
+    Light = `tabs.lightTheme`).
+  - **„Gegenfarbe automatisch ableiten"** (`tabs.themeAutoDerive`) — beim
+    Setzen einer Farbe wird die passende Farbe fürs andere Theme in HSL
+    abgeleitet (Farbton bleibt; Flächen in ein lesbares Helligkeitsband,
+    Text/Titel invertiert) und dort vorbelegt. Frei änderbar.
+  Betroffen: Zeilen-Verlauf (Start/Ende/Winkel), Titel-Verlauf (Start/Ende/
+  Winkel), Auswahlfarbe.
+- **Theme-Erkennung**: das Plugin erkennt das aktive App-Theme (Dark/Light)
+  mehrstufig (Marker-Klasse/-Attribut an `<html>`/`<body>`, sonst Flächen-
+  Helligkeit, zuletzt `prefers-color-scheme`) und schaltet die
+  Zeilen-/Grid-Farben bei einem Theme-Wechsel automatisch um (MutationObserver
+  + `matchMedia`). Read-only auf App-Markern; es werden nur plugin-eigene
+  Custom Properties geschrieben. `data-sf-theme` markiert das erkannte Theme.
+
 ## [1.21.1] — 2026-10-06
 
 ### Fixed

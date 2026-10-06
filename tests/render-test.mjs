@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -629,6 +629,19 @@ try {
   )
 } catch (error) {
   check('Einstellungs-Seite (v1.12) rendert', false, error.message)
+}
+
+// 11b) Einstellungs-Seite: Theme-Farben-Steuerung (Dark/Light Subtabs)
+try {
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  walk(settingsPage.render(), { el: [], text: [] })
+  const seen = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  for (const key of ['tabsThemeSplit', 'tabsThemeAutoDerive', 'tabsThemeEditing', 'tabsThemeDark', 'tabsThemeLight']) {
+    check(`Einstellungs-Seite enthält Theme-Key ${key}`, seen.has(key))
+  }
+} catch (error) {
+  check('Einstellungs-Seite (Theme-Farben) rendert', false, error.message)
 }
 
 // 12) v1.13: App-Optik-Attribute (Text oben, Hover-Anhebung, Kontext-Pie, Live-Rahmen)
@@ -2840,6 +2853,86 @@ try {
   mod.$navStatus.set({ kanban: null, cron: null })
 } catch (error) {
   check('v1.20 Pips-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── Theme-Farben (Dark/Light): Ableitung + Umschaltung ──────────────────────
+try {
+  const rootEl = globalThis.__SF__.rootEl
+  const hexLum = hex => {
+    const h = String(hex).replace('#', '')
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+    const lin = c => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+  }
+  const isHex = v => /^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(v || ''))
+
+  // 1) Ableitung: gültige Hex-Werte.
+  const fillToLight = mod.deriveForTheme('#7c3aed', 'light', 'fill')
+  const fillToDark = mod.deriveForTheme('#6d28d9', 'dark', 'fill')
+  check('Theme-Ableitung: fill → light ist gültige Hex', isHex(fillToLight), fillToLight)
+  check('Theme-Ableitung: fill → dark ist gültige Hex', isHex(fillToDark), fillToDark)
+
+  // 2) Text-Ableitung invertiert die Helligkeit (dunkler Titel auf hell).
+  const titleToLight = mod.deriveForTheme('#e4e4e7', 'light', 'text')
+  const titleToDark = mod.deriveForTheme('#18181b', 'dark', 'text')
+  check('Theme-Ableitung: heller Titel → light wird dunkel', hexLum(titleToLight) < 0.2, `${titleToLight} lum=${hexLum(titleToLight).toFixed(3)}`)
+  check('Theme-Ableitung: dunkler Titel → dark wird hell', hexLum(titleToDark) > 0.6, `${titleToDark} lum=${hexLum(titleToDark).toFixed(3)}`)
+
+  // 3) Fill-Ableitung hält die HSL-Helligkeit im lesbaren Band.
+  const hslLightness = hex => {
+    const h = String(hex).replace('#', '')
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+    return (Math.max(r, g, b) + Math.min(r, g, b)) / 2
+  }
+  const lumFillLight = hslLightness(fillToLight)
+  check('Theme-Ableitung: fill → light landet im HSL-Helligkeitsband (0.34–0.60)', lumFillLight > 0.34 && lumFillLight < 0.60, `L=${lumFillLight.toFixed(3)}`)
+
+  // 4) Ungültige Eingabe bleibt unverändert (kein Crash).
+  check('Theme-Ableitung: ungültige Farbe bleibt unverändert', mod.deriveForTheme('nope', 'light', 'fill') === 'nope')
+
+  // 5) Theme-Erkennung über Marker-Attribut.
+  rootEl.setAttribute('data-theme', 'light')
+  check('Theme-Erkennung: data-theme=light → light', mod.detectAppTheme() === 'light', mod.detectAppTheme())
+  rootEl.setAttribute('data-theme', 'dark')
+  check('Theme-Erkennung: data-theme=dark → dark', mod.detectAppTheme() === 'dark', mod.detectAppTheme())
+
+  // 6) applyRows schaltet die Farben je Theme um (themeSplit an).
+  mod.patchSettings('tabs', {
+    themeSplit: true,
+    rowGradOn: true,
+    rowGradFrom: '#111111',
+    rowGradTo: '#222222',
+    lightTheme: { rowGradOn: true, rowGradFrom: '#eeeeee', rowGradTo: '#dddddd', rowGradAngle: 135 }
+  })
+
+  rootEl.setAttribute('data-theme', 'dark')
+  mod.applyRows()
+  const darkFrom = rootEl.props['--sf-row-from']
+  check('Theme-Umschaltung: dark nutzt den flachen Satz', darkFrom === '#111111', darkFrom)
+  check('Theme-Marker: data-sf-theme=dark gesetzt', rootEl.getAttribute('data-sf-theme') === 'dark', rootEl.getAttribute('data-sf-theme'))
+
+  rootEl.setAttribute('data-theme', 'light')
+  mod.applyRows()
+  const lightFrom = rootEl.props['--sf-row-from']
+  check('Theme-Umschaltung: light nutzt den lightTheme-Satz', lightFrom === '#eeeeee', lightFrom)
+  check('Theme-Marker: data-sf-theme=light gesetzt', rootEl.getAttribute('data-sf-theme') === 'light', rootEl.getAttribute('data-sf-theme'))
+
+  // 7) themeSplit aus → beide Themes nutzen denselben (flachen) Satz.
+  mod.patchSettings('tabs', { themeSplit: false })
+  rootEl.setAttribute('data-theme', 'light')
+  mod.applyRows()
+  check('Theme-Umschaltung: ohne Split gilt der flache Satz auch für light', rootEl.props['--sf-row-from'] === '#111111', rootEl.props['--sf-row-from'])
+
+  // 8) activeRowColors direkt.
+  const set = mod.activeRowColors({ themeSplit: true, rowGradFrom: 'A', lightTheme: { rowGradFrom: 'B' } }, 'light')
+  check('activeRowColors: light setzt den lightTheme-Wert', set.rowGradFrom === 'B', set.rowGradFrom)
+
+  // Aufräumen: Defaults zurück, Marker weg.
+  mod.patchSettings('tabs', { themeSplit: false, rowGradOn: false })
+  rootEl.removeAttribute('data-theme')
+  mod.applyRows()
+} catch (error) {
+  check('Theme-Farben-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.21.1'
+const VERSION = '1.22.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -206,7 +206,26 @@ const DEFAULT_SETTINGS = {
     doneFxStrength: 'subtle',
     maxVisible: 0,
     asTabSelector: false,
-    appNav: true
+    appNav: true,
+    // ── Liste/Grid-Farben je Theme (Dark/Light) ──────────────────────────
+    // Dark nutzt die flachen Keys oben (abwärtskompatibel). Light nutzt den
+    // eigenen Satz `lightTheme` — nur aktiv, wenn `themeSplit` an ist.
+    // `themeTab` ist reiner UI-Zustand (welcher Subtab in den Einstellungen
+    // gerade editiert wird), kein Theme-Schalter.
+    themeSplit: false,
+    themeAutoDerive: true,
+    themeTab: 'dark',
+    lightTheme: {
+      rowGradOn: false,
+      rowGradFrom: '#6d28d9',
+      rowGradTo: '#0e7490',
+      rowGradAngle: 135,
+      titleGradOn: false,
+      titleGradFrom: '#18181b',
+      titleGradTo: '#52525b',
+      titleGradAngle: 90,
+      selColor: '#6d28d9'
+    }
   },
   groups: {
     enabled: true,
@@ -378,6 +397,18 @@ function patchSettings(section, patch) {
   if (section === 'tabs' && patch && 'infoDensity' in patch) {
     scheduleContextRefresh(600)
   }
+}
+
+/** Patcht ein verschachteltes Sub-Objekt einer Sektion (z.B. tabs.lightTheme) und persistiert. */
+function patchSubSettings(section, sub, patch) {
+  const current = $settings.get()
+  const sectionValue = current[section] && typeof current[section] === 'object' ? current[section] : {}
+  const subValue = sectionValue[sub] && typeof sectionValue[sub] === 'object' ? sectionValue[sub] : {}
+  $settings.set({
+    ...current,
+    [section]: { ...sectionValue, [sub]: { ...subValue, ...patch } }
+  })
+  scheduleSettingsSave()
 }
 
 function resetSettings() {
@@ -576,6 +607,238 @@ function applyPersonal() {
 // Variablen auf <html> — das Stylesheet reagiert rein deklarativ.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Theme-Erkennung (Dark/Light) + Farb-Ableitung
+// ─────────────────────────────────────────────────────────────────────────────
+// Erkennt das aktive App-Theme mehrstufig — Marker-Klasse/-Attribut zuerst,
+// sonst die Helligkeit der Fläche, zuletzt prefers-color-scheme. Damit bleibt
+// es unabhängig von der genauen Theme-Implementierung der App. Die Gegenfarbe
+// fürs jeweils andere Theme wird in HSL abgeleitet (Hue bleibt): Flächen in ein
+// lesbares Helligkeitsband, Text/Titel invertiert ins passende Band.
+
+/** Relatives Luminanz-Verhältnis (WCAG) 0..1 aus [r,g,b] (0..255). */
+function relLuminance([r, g, b]) {
+  const lin = c => {
+    const v = c / 255
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  }
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+/** 'rgb(a,b,c)' / '#rgb' / '#rrggbb' → [r,g,b] (0..255); null wenn nicht parsebar. */
+function parseCssColor(value) {
+  const s = String(value || '').trim()
+  const m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i.exec(s)
+  if (m) return [Number(m[1]), Number(m[2]), Number(m[3])]
+  const h = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s)
+  if (h) {
+    let x = h[1]
+    if (x.length === 3) x = x.split('').map(c => c + c).join('')
+    return [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2, 4), 16), parseInt(x.slice(4, 6), 16)]
+  }
+  return null
+}
+
+/** Aktives App-Theme: 'dark' | 'light'. */
+function detectAppTheme() {
+  try {
+    const html = document.documentElement
+    const body = document.body
+    const cls = `${html?.className || ''} ${body?.className || ''}`.toLowerCase()
+    if (/(^|\s)dark(\s|$)/.test(cls)) return 'dark'
+    if (/(^|\s)light(\s|$)/.test(cls)) return 'light'
+
+    for (const el of [html, body]) {
+      if (!el || typeof el.getAttribute !== 'function') continue
+      const mark = String(
+        el.getAttribute('data-theme') || el.getAttribute('data-color-scheme')
+        || el.getAttribute('data-appearance') || el.getAttribute('data-mode') || ''
+      ).toLowerCase()
+      if (mark.includes('dark')) return 'dark'
+      if (mark.includes('light')) return 'light'
+    }
+
+    // Helligkeit der Fläche — robusteste Quelle, wenn kein Marker existiert.
+    const probeEl = html || body
+    if (probeEl && typeof getComputedStyle === 'function') {
+      const rgb = parseCssColor(getComputedStyle(probeEl).backgroundColor)
+      if (rgb) return relLuminance(rgb) < 0.5 ? 'dark' : 'light'
+      if (body) {
+        const bodyRgb = parseCssColor(getComputedStyle(body).backgroundColor)
+        if (bodyRgb) return relLuminance(bodyRgb) < 0.5 ? 'dark' : 'light'
+      }
+    }
+  } catch {
+    /* Tests ohne echtes DOM */
+  }
+
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light'
+  } catch {
+    /* egal */
+  }
+
+  return 'dark'
+}
+
+const clamp01 = v => Math.min(1, Math.max(0, v))
+
+function hexToRgb255(hex) {
+  const h = String(hex || '').replace('#', '')
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+
+function rgb255ToHex(r, g, b) {
+  const to = c => Math.max(0, Math.min(255, Math.round(c))).toString(16).padStart(2, '0')
+  return `#${to(r)}${to(g)}${to(b)}`
+}
+
+/** [r,g,b] (0..255) → {h (0..360), s (0..1), l (0..1)}. */
+function rgbToHsl(r, g, b) {
+  const rn = r / 255
+  const gn = g / 255
+  const bn = b / 255
+  const max = Math.max(rn, gn, bn)
+  const min = Math.min(rn, gn, bn)
+  const l = (max + min) / 2
+  let h = 0
+  let s = 0
+
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    if (max === rn) h = (gn - bn) / d + (gn < bn ? 6 : 0)
+    else if (max === gn) h = (bn - rn) / d + 2
+    else h = (rn - gn) / d + 4
+    h *= 60
+  }
+
+  return { h, s, l }
+}
+
+/** {h (0..360), s (0..1), l (0..1)} → [r,g,b] (0..255). */
+function hslToRgb(h, s, l) {
+  const hue = ((h % 360) + 360) % 360
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const m = l - c / 2
+  let rgb
+
+  if (hue < 60) rgb = [c, x, 0]
+  else if (hue < 120) rgb = [x, c, 0]
+  else if (hue < 180) rgb = [0, c, x]
+  else if (hue < 240) rgb = [0, x, c]
+  else if (hue < 300) rgb = [x, 0, c]
+  else rgb = [c, 0, x]
+
+  return [(rgb[0] + m) * 255, (rgb[1] + m) * 255, (rgb[2] + m) * 255]
+}
+
+/**
+ * Leitet aus einer Farbe die passende Gegenfarbe fürs andere Theme ab.
+ * `kind` = 'fill' (Flächen/Verläufe) | 'text' (Titel/Text).
+ *   fill → light: Helligkeit in ein lesbares Band (0.36–0.58), Sättigung leicht hoch.
+ *   fill → dark : Helligkeit (0.46–0.72).
+ *   text → light: invertiert ins dunkle Band (0.08–0.32) — dunkler Text auf hell.
+ *   text → dark : invertiert ins helle Band (0.72–0.96) — heller Text auf dunkel.
+ * Hue und Alpha bleiben erhalten.
+ */
+function deriveForTheme(value, toTheme, kind = 'fill') {
+  const parsed = parseColorValue(value)
+
+  if (!parsed) return value
+
+  const [r, g, b] = hexToRgb255(parsed.base)
+  const { h, s, l } = rgbToHsl(r, g, b)
+  let nl
+  let ns = s
+
+  if (kind === 'text') {
+    const [lo, hi] = toTheme === 'light' ? [0.08, 0.32] : [0.72, 0.96]
+    nl = lo + (1 - l) * (hi - lo)
+  } else {
+    const [lo, hi] = toTheme === 'light' ? [0.36, 0.58] : [0.46, 0.72]
+    nl = l < lo ? lo : l > hi ? hi : l
+    ns = clamp01(s * (toTheme === 'light' ? 1.08 : 1.0))
+  }
+
+  const out = hslToRgb(h, ns, clamp01(nl))
+  const hex = rgb255ToHex(out[0], out[1], out[2])
+
+  return parsed.alpha < 100 ? withAlpha(hex, parsed.alpha) : hex
+}
+
+/** Farb-Set fürs aktive Theme: Light nur mit themeSplit aus `lightTheme`. */
+function activeRowColors(tabs, theme) {
+  if (tabs.themeSplit && theme === 'light' && tabs.lightTheme && typeof tabs.lightTheme === 'object') {
+    return { ...tabs, ...tabs.lightTheme }
+  }
+
+  return tabs
+}
+
+/**
+ * Beobachtet Theme-Wechsel der App (Marker-Attribute an <html>/<body> und
+ * prefers-color-scheme) und ruft `onChange` — damit die plugin-eigenen
+ * <html>-Variablen (Zeilen-/Grid-Farben) sofort aufs neue Theme umschalten.
+ * Read-only auf App-Markern; schreibt nur plugin-eigene Custom Properties.
+ * @returns {() => void} Disposer.
+ */
+function watchAppTheme(onChange) {
+  const fire = () => {
+    try {
+      onChange()
+    } catch {
+      /* egal */
+    }
+  }
+
+  let observer = null
+
+  try {
+    if (typeof MutationObserver === 'function' && document.documentElement) {
+      observer = new MutationObserver(fire)
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme', 'data-color-scheme', 'data-appearance', 'data-mode']
+      })
+      if (document.body) {
+        observer.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'data-appearance', 'data-mode']
+        })
+      }
+    }
+  } catch {
+    /* egal */
+  }
+
+  let mql = null
+  const onMql = () => fire()
+
+  try {
+    if (window.matchMedia) {
+      mql = window.matchMedia('(prefers-color-scheme: dark)')
+      mql.addEventListener?.('change', onMql)
+    }
+  } catch {
+    /* egal */
+  }
+
+  return () => {
+    try {
+      observer?.disconnect()
+    } catch {
+      /* egal */
+    }
+    try {
+      mql?.removeEventListener?.('change', onMql)
+    } catch {
+      /* egal */
+    }
+  }
+}
+
 const SF_ROW_VARS = [
   '--sf-row-from',
   '--sf-row-to',
@@ -607,7 +870,8 @@ function clearRows() {
     'data-sf-rowlive',
     'data-sf-donefx',
     'data-sf-donefx-axis',
-    'data-sf-donefx-strength'
+    'data-sf-donefx-strength',
+    'data-sf-theme'
   ]) {
     root.removeAttribute(attr)
   }
@@ -617,18 +881,22 @@ function clearRows() {
 
 function applyRows() {
   const tabs = $settings.get().tabs || {}
+  // Aktives App-Theme + passendes Farb-Set (Light nur mit themeSplit aktiv).
+  const theme = detectAppTheme()
+  const c = activeRowColors(tabs, theme)
 
   try {
     const root = document.documentElement
+    root.setAttribute('data-sf-theme', theme)
     // Hex-Farben: #RGB, #RRGGBB oder #RRGGBBAA (Alpha → Verläufe mit Transparenz).
     const safeColor = (value, fallback) => (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(value || '').trim()) ? String(value).trim() : fallback)
 
     // 1) Hintergrund-Verlauf der Zeilen (Liste) und Karten (Grid).
-    if (tabs.rowGradOn) {
+    if (c.rowGradOn) {
       root.setAttribute('data-sf-rowgrad', 'on')
-      root.style.setProperty('--sf-row-from', safeColor(tabs.rowGradFrom, '#7c3aed'))
-      root.style.setProperty('--sf-row-to', safeColor(tabs.rowGradTo, '#00dbda'))
-      root.style.setProperty('--sf-row-angle', `${clampNumber(tabs.rowGradAngle, 0, 360, 135)}deg`)
+      root.style.setProperty('--sf-row-from', safeColor(c.rowGradFrom, '#7c3aed'))
+      root.style.setProperty('--sf-row-to', safeColor(c.rowGradTo, '#00dbda'))
+      root.style.setProperty('--sf-row-angle', `${clampNumber(c.rowGradAngle, 0, 360, 135)}deg`)
     } else {
       root.removeAttribute('data-sf-rowgrad')
       root.style.removeProperty('--sf-row-from')
@@ -640,11 +908,11 @@ function applyRows() {
     root.setAttribute('data-sf-rowshadow', SF_ROW_SHADOWS.includes(tabs.rowShadow) ? tabs.rowShadow : 'off')
 
     // 3) Titel als Verlauf.
-    if (tabs.titleGradOn) {
+    if (c.titleGradOn) {
       root.setAttribute('data-sf-titlegrad', 'on')
-      root.style.setProperty('--sf-title-from', safeColor(tabs.titleGradFrom, '#e4e4e7'))
-      root.style.setProperty('--sf-title-to', safeColor(tabs.titleGradTo, '#8b8b93'))
-      root.style.setProperty('--sf-title-angle', `${clampNumber(tabs.titleGradAngle, 0, 360, 90)}deg`)
+      root.style.setProperty('--sf-title-from', safeColor(c.titleGradFrom, theme === 'light' ? '#18181b' : '#e4e4e7'))
+      root.style.setProperty('--sf-title-to', safeColor(c.titleGradTo, theme === 'light' ? '#52525b' : '#8b8b93'))
+      root.style.setProperty('--sf-title-angle', `${clampNumber(c.titleGradAngle, 0, 360, 90)}deg`)
     } else {
       root.removeAttribute('data-sf-titlegrad')
       root.style.removeProperty('--sf-title-from')
@@ -654,7 +922,7 @@ function applyRows() {
 
     // 4) Auswahl-Zustand (Tönung, Kontur, Schatten, Hover-Stärke).
     root.setAttribute('data-sf-seltint', ['standard', 'accent', 'custom'].includes(tabs.selTint) ? tabs.selTint : 'standard')
-    root.style.setProperty('--sf-sel-color', safeColor(tabs.selColor, '#7c3aed'))
+    root.style.setProperty('--sf-sel-color', safeColor(c.selColor, '#7c3aed'))
     root.setAttribute('data-sf-selborder', tabs.selBorder ? 'on' : 'off')
     root.setAttribute('data-sf-selshadow', SF_ROW_SHADOWS.includes(tabs.selShadow) ? tabs.selShadow : 'off')
     root.setAttribute('data-sf-selhover', ['off', 'soft', 'strong'].includes(tabs.selHover) ? tabs.selHover : 'soft')
@@ -4014,6 +4282,15 @@ const EN = {
   tabsStatusDot: 'Dot',
   tabsStatusBoth: 'Icon + dot',
   tabsDesignHead: 'Design — List & Grid',
+  tabsThemeSplit: 'Separate colours for the light theme',
+  tabsThemeSplitDesc: 'On: the list & grid colours below get their own set for the light theme and switch automatically with the app theme. Off: one colour set applies to both themes.',
+  tabsThemeAutoDerive: 'Derive the matching colour automatically',
+  tabsThemeAutoDeriveDesc: 'When you set a colour in one theme, the matching colour for the other theme is derived (hue kept, brightness and saturation adapted) and preset — you can still adjust it freely.',
+  tabsThemeEditing: 'Editing theme colours',
+  tabsThemeEditingDark: 'These controls edit the DARK theme colours.',
+  tabsThemeEditingLight: 'These controls edit the LIGHT theme colours.',
+  tabsThemeDark: 'Dark',
+  tabsThemeLight: 'Light',
   tabsRowGrad: 'Row background gradient',
   tabsRowGradDesc: 'Paints session rows (list) and cards (grid) with a two-color gradient.',
   tabsRowGradFrom: 'Gradient start color',
@@ -4603,6 +4880,15 @@ const DE = {
   tabsStatusDot: 'Punkt',
   tabsStatusBoth: 'Icon + Punkt',
   tabsDesignHead: 'Design — Liste & Grid',
+  tabsThemeSplit: 'Eigene Farben fürs Light-Theme',
+  tabsThemeSplitDesc: 'An: die Liste-&-Grid-Farben unten haben fürs Light-Theme einen eigenen Satz und schalten mit dem App-Theme automatisch um. Aus: ein Satz gilt für beide Themes.',
+  tabsThemeAutoDerive: 'Gegenfarbe automatisch ableiten',
+  tabsThemeAutoDeriveDesc: 'Beim Setzen einer Farbe im einen Theme wird die passende Farbe fürs andere Theme abgeleitet (Farbton bleibt, Helligkeit und Sättigung angepasst) und vorbelegt — weiterhin frei änderbar.',
+  tabsThemeEditing: 'Farben bearbeiten für Theme',
+  tabsThemeEditingDark: 'Diese Controls bearbeiten die DARK-Theme-Farben.',
+  tabsThemeEditingLight: 'Diese Controls bearbeiten die LIGHT-Theme-Farben.',
+  tabsThemeDark: 'Dunkel',
+  tabsThemeLight: 'Hell',
   tabsRowGrad: 'Zeilen-Hintergrund als Verlauf',
   tabsRowGradDesc: 'Färbt Session-Zeilen (Liste) und Karten (Grid) mit einem Zwei-Farben-Verlauf.',
   tabsRowGradFrom: 'Verlauf Startfarbe',
@@ -9600,6 +9886,30 @@ function SettingsPage() {
 
   const patch = (section, key, value) => patchSettings(section, { [key]: value })
 
+  // ── Liste/Grid-Farben je Theme (Dark/Light) ──────────────────────────────
+  // Dark = die flachen `tabs`-Keys, Light = `tabs.lightTheme`. Der Subtab
+  // (`tabs.themeTab`) bestimmt, welches Set die Farb-Controls unten editieren.
+  // Auto-Ableitung: eine geänderte Farbe setzt die Gegenfarbe im anderen Theme.
+  const themeTab = tabs.themeTab === 'light' ? 'light' : 'dark'
+  const isLightTab = themeTab === 'light'
+  const lightTheme = tabs.lightTheme || {}
+  const colorFor = key => (isLightTab ? (lightTheme[key] !== undefined ? lightTheme[key] : tabs[key]) : tabs[key])
+
+  const setThemeFlag = (key, value) => {
+    if (isLightTab) patchSubSettings('tabs', 'lightTheme', { [key]: value })
+    else patch('tabs', key, value)
+  }
+
+  const setThemeColor = (key, value, kind = 'fill') => {
+    if (isLightTab) {
+      patchSubSettings('tabs', 'lightTheme', { [key]: value })
+      if (tabs.themeAutoDerive) patch('tabs', key, deriveForTheme(value, 'dark', kind))
+    } else {
+      patch('tabs', key, value)
+      if (tabs.themeAutoDerive) patchSubSettings('tabs', 'lightTheme', { [key]: deriveForTheme(value, 'light', kind) })
+    }
+  }
+
   return jsxs('div', {
     className: 'sf-settings',
     children: [
@@ -9971,20 +10281,45 @@ function SettingsPage() {
           }),
           jsx('p', { className: 'sf-subhead', children: t('tabsDesignHead') }),
           jsx(ToggleRow, {
+            label: t('tabsThemeSplit'),
+            description: t('tabsThemeSplitDesc'),
+            checked: tabs.themeSplit,
+            onChange: value => patch('tabs', 'themeSplit', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('tabsThemeAutoDerive'),
+            description: t('tabsThemeAutoDeriveDesc'),
+            checked: tabs.themeAutoDerive,
+            disabled: !tabs.themeSplit,
+            onChange: value => patch('tabs', 'themeAutoDerive', value)
+          }),
+          jsx(Row, {
+            title: t('tabsThemeEditing'),
+            description: isLightTab ? t('tabsThemeEditingLight') : t('tabsThemeEditingDark'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'dark', label: t('tabsThemeDark') },
+                { id: 'light', label: t('tabsThemeLight') }
+              ],
+              value: themeTab,
+              onChange: value => patch('tabs', 'themeTab', value === 'light' ? 'light' : 'dark')
+            })
+          }),
+          jsx(ToggleRow, {
             label: t('tabsRowGrad'),
             description: t('tabsRowGradDesc'),
-            checked: tabs.rowGradOn,
-            onChange: value => patch('tabs', 'rowGradOn', value)
+            checked: colorFor('rowGradOn'),
+            onChange: value => setThemeFlag('rowGradOn', value)
           }),
           jsx(Row, {
             title: t('tabsRowGradFrom'),
             description: t('tabsRowGradFromDesc'),
-            action: colorRowControl(tabs.rowGradFrom, value => patch('tabs', 'rowGradFrom', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+            action: colorRowControl(colorFor('rowGradFrom'), value => setThemeColor('rowGradFrom', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(Row, {
             title: t('tabsRowGradTo'),
             description: t('tabsRowGradToDesc'),
-            action: colorRowControl(tabs.rowGradTo, value => patch('tabs', 'rowGradTo', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+            action: colorRowControl(colorFor('rowGradTo'), value => setThemeColor('rowGradTo', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(Row, {
             title: t('tabsRowGradAngle'),
@@ -9993,8 +10328,8 @@ function SettingsPage() {
               min: 0,
               max: 360,
               step: 15,
-              value: tabs.rowGradAngle,
-              onChange: value => patch('tabs', 'rowGradAngle', value)
+              value: colorFor('rowGradAngle'),
+              onChange: value => setThemeFlag('rowGradAngle', value)
             })
           }),
           jsx(Row, {
@@ -10026,18 +10361,18 @@ function SettingsPage() {
           jsx(ToggleRow, {
             label: t('tabsTitleGrad'),
             description: t('tabsTitleGradDesc'),
-            checked: tabs.titleGradOn,
-            onChange: value => patch('tabs', 'titleGradOn', value)
+            checked: colorFor('titleGradOn'),
+            onChange: value => setThemeFlag('titleGradOn', value)
           }),
           jsx(Row, {
             title: t('tabsTitleGradFrom'),
             description: t('tabsTitleGradFromDesc'),
-            action: colorRowControl(tabs.titleGradFrom, value => patch('tabs', 'titleGradFrom', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+            action: colorRowControl(colorFor('titleGradFrom'), value => setThemeColor('titleGradFrom', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(Row, {
             title: t('tabsTitleGradTo'),
             description: t('tabsTitleGradToDesc'),
-            action: colorRowControl(tabs.titleGradTo, value => patch('tabs', 'titleGradTo', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+            action: colorRowControl(colorFor('titleGradTo'), value => setThemeColor('titleGradTo', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(Row, {
             title: t('tabsTitleGradAngle'),
@@ -10046,8 +10381,8 @@ function SettingsPage() {
               min: 0,
               max: 360,
               step: 15,
-              value: tabs.titleGradAngle,
-              onChange: value => patch('tabs', 'titleGradAngle', value)
+              value: colorFor('titleGradAngle'),
+              onChange: value => setThemeFlag('titleGradAngle', value)
             })
           }),
           jsx('p', { className: 'sf-subhead', children: t('tabsSelHead') }),
@@ -10067,7 +10402,7 @@ function SettingsPage() {
           jsx(Row, {
             title: t('tabsSelColor'),
             description: t('tabsSelColorDesc'),
-            action: colorRowControl(tabs.selColor, value => patch('tabs', 'selColor', value), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+            action: colorRowControl(colorFor('selColor'), value => setThemeColor('selColor', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
           }),
           jsx(ToggleRow, {
             label: t('tabsSelBorder'),
@@ -10901,6 +11236,8 @@ export default {
     // 2b-4b) Row-Design: Verlauf, Schatten, Titel-Verlauf, Auswahl, Live-Status.
     applyRows()
     const stopRowsWatch = $settings.listen(() => applyRows())
+    // Theme-Wechsel der App (Dark↔Light) → Zeilen-/Grid-Farben sofort umschalten.
+    const stopThemeWatch = watchAppTheme(() => applyRows())
     // 2b-5) Info-Dichte „Wie Hermes": folgt der App-Einstellung live.
     const stopAppDensityWatch = watchAppDensity()
 
@@ -11236,6 +11573,7 @@ export default {
         clearPersonal()
         stopGridWatch()
         stopRowsWatch()
+        stopThemeWatch()
         clearRows()
         stopAppDensityWatch()
         stopCtxInfoWatch()
