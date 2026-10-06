@@ -38,6 +38,12 @@ A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    chosen project**. The pane renders as a **list or a grid** (card options in
    the settings), and can optionally **replace the native tab strip**
    (`tabs.asTabSelector`) once it already covers switching between sessions.
+   Above the toolbar sits the **app quick-start row**: icon buttons for New
+   session, Skills, Messaging, Artifacts, Scheduled jobs and Kanban (the same
+   order and icons as the app sidebar's first section), wrapping into more
+   rows when the pane is narrow — with **live status pips** on Kanban and
+   Scheduled jobs (running / blocked / review / error, fed by the app's own
+   endpoints; Kanban only appears while the Kanban plugin is active).
 4. **Glass & readability** — An optional frost effect for the **input field**
    and **UI chips**: a soft blur with a subtle **accent-tinted gradient overlay
    fading to transparent**, so labels stay readable even without their own
@@ -52,8 +58,11 @@ A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    from the sidebar engine**: sessions that are working (thinking / writing /
    tools) get the travelling glow ring on their tab.
 6. **Personalization** — pick your own **accent color** for core UI elements
-   (buttons, active states, hovers, focus rings) and set a **chat background**
-   (your own image or video file, with fit / dimming / blur and scope).
+   (buttons, active states, hovers, focus rings), set a **chat background**
+   (your own image or video file, with fit / dimming / blur and scope), and
+   choose the **pane surface** of the Session Flow pane itself: the native
+   sidebar color (Hermes default), the chat color (previous look), or no own
+   fill at all.
 
 Everything is adjustable on the **plugin settings page** — `Session Flow` in
 the sidebar, ⌘K/Ctrl+K → “Session Flow: Einstellungen”, or the gear icon in the

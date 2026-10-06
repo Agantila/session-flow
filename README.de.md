@@ -41,7 +41,14 @@ Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
    Toolbar-＋ startet eine **neue Session im zuletzt gewählten Projekt**. Die
    Pane rendert als **Liste oder Grid** (Karten-Optionen in den Einstellungen)
    und kann optional die **native Tab-Leiste ersetzen** (`tabs.asTabSelector`),
-   sobald sie das Umschalten zwischen Sessions schon abdeckt.
+   sobald sie das Umschalten zwischen Sessions schon abdeckt. Über der Toolbar
+   sitzt die **App-Schnellstart-Zeile**: Icon-Buttons für Neue Session,
+   Fähigkeiten, Messaging, Artefakte, Geplante Jobs und Kanban (gleiche
+   Reihenfolge und Icons wie die erste Sektion der App-Sidebar), die bei
+   schmaler Pane-Breite dynamisch in weitere Zeilen umbricht — mit
+   **Status-Pips** auf Kanban und Geplanten Jobs (läuft / blockiert / Review /
+   Fehler, gespeist aus den eigenen App-Endpunkten; Kanban erscheint nur, solange
+   das Kanban-Plugin aktiv ist).
 4. **Glass & Lesbarkeit** — Optionaler Frost-Effekt für **Eingabefeld** und
    **UI-Chips**: eine weiche Blur-Fläche mit dezentem, aus der Hermes-Akzent-
    farbe gefärbtem **Verlaufs-Overlay** (transparent auslaufend), damit Texte
@@ -60,7 +67,9 @@ Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
 6. **Individualisierung** — eigene **Akzentfarbe** für elementare UI-Elemente
    (Buttons, aktive Zustände, Hover, Fokusringe), eigener **Chat-Hintergrund**
    (eigene Bild- oder Videodatei, mit Darstellung / Abdunkeln / Weichzeichnen
-   und Geltungsbereich) und der **Content-Bereich der Tabs** wird mit runden
+   und Geltungsbereich), wählbarer **Pane-Fläche** für das Session-Flow-Pane
+   selbst (Native Sidebar = Hermes-Default, Chat = bisheriger Look, Ohne =
+   kein eigener Fill) und der **Content-Bereich der Tabs** wird mit runden
    Ecken, feiner Kontur, Abstand zum Layout-Rand und dezentem Schlagschatten
    abgesetzt (Radius, Abstand, Schattenstärke, Geltungsbereich).
 
