@@ -657,6 +657,9 @@ check('v1.13: ungültiger liveFrame → Fallback glow', rootHtml.attrs['data-sf-
 mod.patchSettings('tabs', { alignTop: true, hoverLift: true, ctxPie: true, liveFrame: 'glow' })
 
 // 13) Einstellungs-Seite (v1.13): neue Zeilen, Farb-Picker, Übernehmen-Button
+// Titel-Stil auf „Verlauf" stellen, damit alle Farb-Picker sichtbar sind
+// (bei „Kein" sind die Titel-Farbfelder bewusst ausgeblendet).
+mod.patchSettings('tabs', { titleStyle: 'gradient' })
 stub.__resetSlots()
 globalThis.__SF__.tCalls.length = 0
 const out13 = { el: [], text: [] }
@@ -666,8 +669,17 @@ check('Einstellungs-Seite: Text-oben-Zeile', keys13.has('tabsAlignTop') && keys1
 check('Einstellungs-Seite: Kontext-Pie-Zeile', keys13.has('tabsCtxPie') && keys13.has('tabsCtxPieDesc'))
 check('Einstellungs-Seite: Live-Rahmen-Zeile', keys13.has('tabsLiveFrame') && keys13.has('liveFrameGlow') && keys13.has('liveFrameOff'))
 check('Einstellungs-Seite: Übernehmen-Button (sticky Nav)', keys13.has('applyNow') && keys13.has('applyNowHint'))
+check('Einstellungs-Seite: Theme-Mode-Zeile (v1.22.1)', keys13.has('tabsThemeMode') && keys13.has('tabsThemeModeAuto') && keys13.has('tabsThemeModeLight'))
+check('Einstellungs-Seite: Titel-Stil-Zeile (v1.22.1)', keys13.has('tabsTitleStyle') && keys13.has('tabsTitleStyleSolid') && keys13.has('tabsTitleStyleGradient'))
+check('Einstellungs-Seite: Titelfarbe-Zeile erst bei Verlauf', keys13.has('tabsTitleGradFrom'))
 const pickerCount = out13.el.filter(e => e.tag === 'input' && e.props && e.props.type === 'color').length
 check('Einstellungs-Seite: Farb-Picker vorhanden (≥6)', pickerCount >= 6, `pickers=${pickerCount}`)
+// Bei Stil „Kein" werden die Titel-Farbfelder ausgeblendet → weniger Picker.
+mod.patchSettings('tabs', { titleStyle: 'none' })
+const out13none = { el: [], text: [] }
+walk(settingsPage.render(), out13none)
+const pickerNone = out13none.el.filter(e => e.tag === 'input' && e.props && e.props.type === 'color').length
+check('Einstellungs-Seite: ohne Titel-Stil weniger Picker', pickerNone < pickerCount, `none=${pickerNone} grad=${pickerCount}`)
 const saveButtons = out13.el.filter(e => e.cls.includes('sf-savebtn'))
 check('Einstellungs-Seite: genau ein Save-Button im Nav', saveButtons.length === 1, `btns=${saveButtons.length}`)
 try {
@@ -2927,8 +2939,62 @@ try {
   const set = mod.activeRowColors({ themeSplit: true, rowGradFrom: 'A', lightTheme: { rowGradFrom: 'B' } }, 'light')
   check('activeRowColors: light setzt den lightTheme-Wert', set.rowGradFrom === 'B', set.rowGradFrom)
 
+  // 9) Titel-Stil solid → data-sf-titlecolor + --sf-title-color (hell + dunkel).
+  mod.patchSettings('tabs', { themeSplit: true, themeMode: 'auto', titleStyle: 'solid', titleColor: '#123456', lightTheme: { titleStyle: 'solid', titleColor: '#abcdef', rowGradOn: true, rowGradFrom: '#eeeeee', rowShadow: 'subtle' } })
+  rootEl.setAttribute('data-theme', 'dark')
+  mod.applyRows()
+  check('Titel solid (dark): data-sf-titlecolor=on', rootEl.getAttribute('data-sf-titlecolor') === 'on', rootEl.getAttribute('data-sf-titlecolor'))
+  check('Titel solid (dark): --sf-title-color aus dem flachen Key', rootEl.props['--sf-title-color'] === '#123456', rootEl.props['--sf-title-color'])
+  check('Titel solid (dark): kein Verlauf-Attribut', rootEl.getAttribute('data-sf-titlegrad') === null, String(rootEl.getAttribute('data-sf-titlegrad')))
+  rootEl.setAttribute('data-theme', 'light')
+  mod.applyRows()
+  check('Titel solid (light): --sf-title-color aus lightTheme', rootEl.props['--sf-title-color'] === '#abcdef', rootEl.props['--sf-title-color'])
+
+  // 10) Titel-Stil gradient → Verlauf, kein solid-Attribut (dark-Satz erzwungen).
+  mod.patchSettings('tabs', { themeMode: 'dark', titleStyle: 'gradient' })
+  mod.applyRows()
+  check('Titel gradient: data-sf-titlegrad=on', rootEl.getAttribute('data-sf-titlegrad') === 'on', rootEl.getAttribute('data-sf-titlegrad'))
+  check('Titel gradient: kein solid-Attribut mehr', rootEl.getAttribute('data-sf-titlecolor') === null, String(rootEl.getAttribute('data-sf-titlecolor')))
+  mod.patchSettings('tabs', { titleStyle: 'none' })
+  mod.applyRows()
+  check('Titel none: weder Verlauf noch solid', rootEl.getAttribute('data-sf-titlegrad') === null && rootEl.getAttribute('data-sf-titlecolor') === null)
+
+  // 11) Schlagschatten je Theme.
+  mod.patchSettings('tabs', { themeMode: 'auto', themeSplit: true, rowShadow: 'strong', selShadow: 'medium', lightTheme: { rowShadow: 'subtle', selShadow: 'off' } })
+  rootEl.setAttribute('data-theme', 'dark')
+  mod.applyRows()
+  check('Shadows (dark): rowShadow=strong, selShadow=medium', rootEl.getAttribute('data-sf-rowshadow') === 'strong' && rootEl.getAttribute('data-sf-selshadow') === 'medium', `${rootEl.getAttribute('data-sf-rowshadow')}/${rootEl.getAttribute('data-sf-selshadow')}`)
+  rootEl.setAttribute('data-theme', 'light')
+  mod.applyRows()
+  check('Shadows (light): rowShadow=subtle, selShadow=off', rootEl.getAttribute('data-sf-rowshadow') === 'subtle' && rootEl.getAttribute('data-sf-selshadow') === 'off', `${rootEl.getAttribute('data-sf-rowshadow')}/${rootEl.getAttribute('data-sf-selshadow')}`)
+
+  // 12) themeMode erzwingt einen Satz (Override vor Erkennung).
+  mod.patchSettings('tabs', { themeMode: 'light', themeSplit: true, rowGradOn: true, rowGradFrom: '#111111', lightTheme: { rowGradOn: true, rowGradFrom: '#eeeeee' } })
+  rootEl.setAttribute('data-theme', 'dark')
+  mod.applyRows()
+  check('themeMode=light erzwingt das Light-Set trotz dark-Marker', rootEl.getAttribute('data-sf-theme') === 'light' && rootEl.props['--sf-row-from'] === '#eeeeee', `${rootEl.getAttribute('data-sf-theme')}/${rootEl.props['--sf-row-from']}`)
+  mod.patchSettings('tabs', { themeMode: 'auto' })
+
+  // 13) Transparente Fläche darf NICHT als "dark" fehlgedeutet werden —
+  //     color-scheme gewinnt vor der (hier transparenten) Flächen-Helligkeit.
+  const origGCS = globalThis.getComputedStyle
+  rootEl.removeAttribute('data-theme')
+  rootEl.attrs['data-theme'] = undefined
+  delete rootEl.attrs['data-theme']
+  globalThis.getComputedStyle = () => ({ colorScheme: 'light', backgroundColor: 'rgba(0, 0, 0, 0)', getPropertyValue: () => '' })
+  check('Theme-Erkennung: colorScheme=light gewinnt vor transparenter Fläche', mod.detectAppTheme() === 'light', mod.detectAppTheme())
+  globalThis.getComputedStyle = () => ({ colorScheme: 'dark', backgroundColor: 'rgba(0, 0, 0, 0)', getPropertyValue: () => '' })
+  check('Theme-Erkennung: colorScheme=dark → dark', mod.detectAppTheme() === 'dark', mod.detectAppTheme())
+  globalThis.getComputedStyle = () => ({ colorScheme: 'normal', backgroundColor: 'rgb(250, 250, 250)', getPropertyValue: () => '' })
+  check('Theme-Erkennung: helle Fläche → light', mod.detectAppTheme() === 'light', mod.detectAppTheme())
+  globalThis.getComputedStyle = () => ({ colorScheme: 'normal', backgroundColor: 'rgb(18, 18, 20)', getPropertyValue: () => '' })
+  check('Theme-Erkennung: dunkle Fläche → dark', mod.detectAppTheme() === 'dark', mod.detectAppTheme())
+  globalThis.getComputedStyle = () => ({ colorScheme: 'normal', backgroundColor: 'rgba(0, 0, 0, 0)', getPropertyValue: () => '' })
+  check('Theme-Erkennung: transparente Fläche ohne Marker → Fallback dark (kein Fehllicht)', mod.detectAppTheme() === 'dark', mod.detectAppTheme())
+  globalThis.getComputedStyle = origGCS
+
   // Aufräumen: Defaults zurück, Marker weg.
-  mod.patchSettings('tabs', { themeSplit: false, rowGradOn: false })
+  mod.patchSettings('tabs', { themeSplit: false, rowGradOn: false, themeMode: 'auto', titleStyle: 'none' })
   rootEl.removeAttribute('data-theme')
   mod.applyRows()
 } catch (error) {

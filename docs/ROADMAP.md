@@ -1,10 +1,19 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.22.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.22.1 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Titel-Stil + per-Theme-Shadows + robuste Theme-Erkennung** (v1.22.1):
+  Titel hat jetzt einen Stil `none`/`solid`/`gradient` mit EINER Einzelfarbe
+  (`titleColor`) für den Nicht-Verlauf-Fall, je Theme; die Schlagschatten
+  (`rowShadow`, `selShadow`) sind je Theme getrennt und werden getrennt
+  gespeichert. Die Theme-Erkennung prüft `color-scheme` → nur **undurchsichtige**
+  Flächen → `prefers-color-scheme` (transparente Flächen hatten vorher
+  fälschlich „dark" ergeben, dadurch griffen die Light-Farben nie) und lässt
+  sich per `themeMode` (auto/dark/light) übersteuern. Die Hell-Wahl schaltet
+  `themeSplit` automatisch ein (Edits im Hell-Subtab waren sonst wirkungslos).
 - **Liste-&-Grid-Farben je Theme + Auto-Ableitung** (v1.22.0): die
   Designfarben (Zeilen-Verlauf, Titel-Verlauf, Auswahlfarbe) haben jetzt
   getrennte Sätze fürs Dark- und Light-Theme. Einstellungen → „Design —

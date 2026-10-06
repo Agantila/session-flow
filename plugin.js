@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.22.0'
+const VERSION = '1.22.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -190,6 +190,8 @@ const DEFAULT_SETTINGS = {
     rowGradAngle: 135,
     rowShadow: 'off',
     hoverLift: true,
+    titleStyle: 'none',
+    titleColor: '#e4e4e7',
     titleGradOn: false,
     titleGradFrom: '#e4e4e7',
     titleGradTo: '#8b8b93',
@@ -215,16 +217,21 @@ const DEFAULT_SETTINGS = {
     themeSplit: false,
     themeAutoDerive: true,
     themeTab: 'dark',
+    themeMode: 'auto',
     lightTheme: {
       rowGradOn: false,
       rowGradFrom: '#6d28d9',
       rowGradTo: '#0e7490',
       rowGradAngle: 135,
+      rowShadow: 'off',
+      titleStyle: 'none',
+      titleColor: '#18181b',
       titleGradOn: false,
       titleGradFrom: '#18181b',
       titleGradTo: '#52525b',
       titleGradAngle: 90,
-      selColor: '#6d28d9'
+      selColor: '#6d28d9',
+      selShadow: 'off'
     }
   },
   groups: {
@@ -384,6 +391,33 @@ function loadSettings() {
     }
   } catch {
     /* Settings evtl. noch nicht initialisiert — egal */
+  }
+
+  // Migration v1.22.1: der Titel hatte nur „Verlauf an/aus". Neu ist der
+  // Titel-Stil `titleStyle` (none|solid|gradient). Wer titleGradOn=true
+  // gespeichert hatte, bekommt einmalig 'gradient' — sonst ginge seine
+  // Einstellung verloren.
+  try {
+    const current = $settings.get()
+    if (current?.tabs && !current.tabs.titleStyleSaved) {
+      const tabs = current.tabs
+      const next = { ...tabs, titleStyleSaved: true }
+      if (!next.titleStyle || next.titleStyle === DEFAULT_SETTINGS.tabs.titleStyle) {
+        if (tabs.titleGradOn === true) next.titleStyle = 'gradient'
+      }
+      const lt = tabs.lightTheme
+      if (lt && typeof lt === 'object') {
+        const ltNext = { ...lt }
+        if (!ltNext.titleStyle || ltNext.titleStyle === DEFAULT_SETTINGS.tabs.lightTheme.titleStyle) {
+          if (lt.titleGradOn === true) ltNext.titleStyle = 'gradient'
+        }
+        next.lightTheme = ltNext
+      }
+      $settings.set({ ...current, tabs: next })
+      scheduleSettingsSave()
+    }
+  } catch {
+    /* egal */
   }
 }
 
@@ -625,16 +659,23 @@ function relLuminance([r, g, b]) {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 }
 
-/** 'rgb(a,b,c)' / '#rgb' / '#rrggbb' → [r,g,b] (0..255); null wenn nicht parsebar. */
+/** 'rgb(a,b,c[,a])' / '#rgb' / '#rrggbb' → { rgb:[r,g,b], alpha:0..1 }; null wenn nicht parsebar. */
 function parseCssColor(value) {
   const s = String(value || '').trim()
-  const m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i.exec(s)
-  if (m) return [Number(m[1]), Number(m[2]), Number(m[3])]
-  const h = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s)
+  const m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?/i.exec(s)
+  if (m) {
+    let alpha = 1
+    if (m[4] !== undefined) {
+      alpha = m[4].endsWith('%') ? Number(m[4].slice(0, -1)) / 100 : Number(m[4])
+    }
+    return { rgb: [Number(m[1]), Number(m[2]), Number(m[3])], alpha: Number.isFinite(alpha) ? alpha : 1 }
+  }
+  const h = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(s)
   if (h) {
     let x = h[1]
     if (x.length === 3) x = x.split('').map(c => c + c).join('')
-    return [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2, 4), 16), parseInt(x.slice(4, 6), 16)]
+    const alpha = x.length === 8 ? parseInt(x.slice(6, 8), 16) / 255 : 1
+    return { rgb: [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2, 4), 16), parseInt(x.slice(4, 6), 16)], alpha }
   }
   return null
 }
@@ -658,14 +699,25 @@ function detectAppTheme() {
       if (mark.includes('light')) return 'light'
     }
 
-    // Helligkeit der Fläche — robusteste Quelle, wenn kein Marker existiert.
-    const probeEl = html || body
-    if (probeEl && typeof getComputedStyle === 'function') {
-      const rgb = parseCssColor(getComputedStyle(probeEl).backgroundColor)
-      if (rgb) return relLuminance(rgb) < 0.5 ? 'dark' : 'light'
-      if (body) {
-        const bodyRgb = parseCssColor(getComputedStyle(body).backgroundColor)
-        if (bodyRgb) return relLuminance(bodyRgb) < 0.5 ? 'dark' : 'light'
+    // `color-scheme` ist das standardisierte Signal (App setzt es oft auf
+    // dark/light) — vor der Flächen-Helligkeit geprüft, weil es eindeutig ist.
+    if (typeof getComputedStyle === 'function') {
+      for (const el of [html, body]) {
+        if (!el) continue
+        const scheme = String(getComputedStyle(el).colorScheme || '').toLowerCase()
+        if (scheme.includes('dark')) return 'dark'
+        if (scheme.includes('light') && !scheme.includes('dark')) return 'light'
+      }
+    }
+
+    // Flächen-Helligkeit — nur wenn die Fläche eine ECHTE, undurchsichtige Farbe
+    // hat. Transparente Flächen (rgba(0,0,0,0), App malt den Grund woanders)
+    // lieferten früher fälschlich [0,0,0] → „dark"; darum hier überspringen.
+    if (typeof getComputedStyle === 'function') {
+      for (const el of [html, body]) {
+        if (!el) continue
+        const rgb = parseCssColor(getComputedStyle(el).backgroundColor)
+        if (rgb && rgb.alpha > 0.5) return relLuminance(rgb.rgb) < 0.5 ? 'dark' : 'light'
       }
     }
   } catch {
@@ -673,12 +725,21 @@ function detectAppTheme() {
   }
 
   try {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light'
+    if (window.matchMedia) {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark'
+      if (window.matchMedia('(prefers-color-scheme: light)').matches) return 'light'
+    }
   } catch {
     /* egal */
   }
 
   return 'dark'
+}
+
+/** Effektives Theme: manueller Override (`themeMode`) vor Auto-Erkennung. */
+function effectiveTheme(themeMode) {
+  if (themeMode === 'dark' || themeMode === 'light') return themeMode
+  return detectAppTheme()
 }
 
 const clamp01 = v => Math.min(1, Math.max(0, v))
@@ -843,6 +904,7 @@ const SF_ROW_VARS = [
   '--sf-row-from',
   '--sf-row-to',
   '--sf-row-angle',
+  '--sf-title-color',
   '--sf-title-from',
   '--sf-title-to',
   '--sf-title-angle',
@@ -858,6 +920,7 @@ function clearRows() {
     'data-sf-rowgrad',
     'data-sf-rowshadow',
     'data-sf-titlegrad',
+    'data-sf-titlecolor',
     'data-sf-seltint',
     'data-sf-selborder',
     'data-sf-selshadow',
@@ -881,8 +944,9 @@ function clearRows() {
 
 function applyRows() {
   const tabs = $settings.get().tabs || {}
-  // Aktives App-Theme + passendes Farb-Set (Light nur mit themeSplit aktiv).
-  const theme = detectAppTheme()
+  // Effektives Theme (manueller Override `themeMode` vor Auto-Erkennung) +
+  // passendes Farb-Set (Light nur mit themeSplit aktiv).
+  const theme = effectiveTheme(tabs.themeMode)
   const c = activeRowColors(tabs, theme)
 
   try {
@@ -904,17 +968,32 @@ function applyRows() {
       root.style.removeProperty('--sf-row-angle')
     }
 
-    // 2) Auswählbare Schlagschatten-Stufen.
-    root.setAttribute('data-sf-rowshadow', SF_ROW_SHADOWS.includes(tabs.rowShadow) ? tabs.rowShadow : 'off')
+    // 2) Schlagschatten der Zeilen — je Theme (c.rowShadow).
+    root.setAttribute('data-sf-rowshadow', SF_ROW_SHADOWS.includes(c.rowShadow) ? c.rowShadow : 'off')
 
-    // 3) Titel als Verlauf.
-    if (c.titleGradOn) {
+    // 3) Titel: eigener Stil (none | solid | gradient), je Theme.
+    const titleStyle = ['none', 'solid', 'gradient'].includes(c.titleStyle)
+      ? c.titleStyle
+      : (c.titleGradOn ? 'gradient' : 'none')
+
+    if (titleStyle === 'gradient') {
       root.setAttribute('data-sf-titlegrad', 'on')
+      root.removeAttribute('data-sf-titlecolor')
+      root.style.removeProperty('--sf-title-color')
       root.style.setProperty('--sf-title-from', safeColor(c.titleGradFrom, theme === 'light' ? '#18181b' : '#e4e4e7'))
       root.style.setProperty('--sf-title-to', safeColor(c.titleGradTo, theme === 'light' ? '#52525b' : '#8b8b93'))
       root.style.setProperty('--sf-title-angle', `${clampNumber(c.titleGradAngle, 0, 360, 90)}deg`)
+    } else if (titleStyle === 'solid' && String(c.titleColor || '').trim()) {
+      root.setAttribute('data-sf-titlecolor', 'on')
+      root.removeAttribute('data-sf-titlegrad')
+      root.style.removeProperty('--sf-title-from')
+      root.style.removeProperty('--sf-title-to')
+      root.style.removeProperty('--sf-title-angle')
+      root.style.setProperty('--sf-title-color', safeColor(c.titleColor, theme === 'light' ? '#18181b' : '#e4e4e7'))
     } else {
       root.removeAttribute('data-sf-titlegrad')
+      root.removeAttribute('data-sf-titlecolor')
+      root.style.removeProperty('--sf-title-color')
       root.style.removeProperty('--sf-title-from')
       root.style.removeProperty('--sf-title-to')
       root.style.removeProperty('--sf-title-angle')
@@ -924,7 +1003,7 @@ function applyRows() {
     root.setAttribute('data-sf-seltint', ['standard', 'accent', 'custom'].includes(tabs.selTint) ? tabs.selTint : 'standard')
     root.style.setProperty('--sf-sel-color', safeColor(c.selColor, '#7c3aed'))
     root.setAttribute('data-sf-selborder', tabs.selBorder ? 'on' : 'off')
-    root.setAttribute('data-sf-selshadow', SF_ROW_SHADOWS.includes(tabs.selShadow) ? tabs.selShadow : 'off')
+    root.setAttribute('data-sf-selshadow', SF_ROW_SHADOWS.includes(c.selShadow) ? c.selShadow : 'off')
     root.setAttribute('data-sf-selhover', ['off', 'soft', 'strong'].includes(tabs.selHover) ? tabs.selHover : 'soft')
 
     // 5) Live-Status: Aktiv/Wartend wie im Tab-Design hervorheben.
@@ -4291,6 +4370,18 @@ const EN = {
   tabsThemeEditingLight: 'These controls edit the LIGHT theme colours.',
   tabsThemeDark: 'Dark',
   tabsThemeLight: 'Light',
+  tabsThemeMode: 'Detected theme',
+  tabsThemeModeDesc: 'Which theme the list & grid colours follow. Automatic follows the app; "Always dark" / "Always light" force a set — handy to preview the light colours while the app is dark.',
+  tabsThemeModeAuto: 'Automatic',
+  tabsThemeModeDark: 'Always dark',
+  tabsThemeModeLight: 'Always light',
+  tabsTitleStyle: 'Title',
+  tabsTitleStyleDesc: 'None = app default colour. Solid = one colour. Gradient = two-colour fade.',
+  tabsTitleStyleNone: 'None',
+  tabsTitleStyleSolid: 'Solid colour',
+  tabsTitleStyleGradient: 'Gradient',
+  tabsTitleColor: 'Title colour',
+  tabsTitleColorDesc: 'Solid title colour. Optional alpha via 8-digit hex (#RRGGBBAA).',
   tabsRowGrad: 'Row background gradient',
   tabsRowGradDesc: 'Paints session rows (list) and cards (grid) with a two-color gradient.',
   tabsRowGradFrom: 'Gradient start color',
@@ -4889,6 +4980,18 @@ const DE = {
   tabsThemeEditingLight: 'Diese Controls bearbeiten die LIGHT-Theme-Farben.',
   tabsThemeDark: 'Dunkel',
   tabsThemeLight: 'Hell',
+  tabsThemeMode: 'Erkanntes Theme',
+  tabsThemeModeDesc: 'Welchem Theme die Liste-&-Grid-Farben folgen. Automatisch folgt der App; „Immer Dunkel“/„Immer Hell“ erzwingen einen Satz — praktisch, um die Hell-Farben in einer dunklen App zu prüfen.',
+  tabsThemeModeAuto: 'Automatisch',
+  tabsThemeModeDark: 'Immer Dunkel',
+  tabsThemeModeLight: 'Immer Hell',
+  tabsTitleStyle: 'Titel',
+  tabsTitleStyleDesc: 'Kein = App-Standardfarbe. Einfarbig = eine Farbe. Verlauf = Zwei-Farben-Übergang.',
+  tabsTitleStyleNone: 'Kein',
+  tabsTitleStyleSolid: 'Einfarbig',
+  tabsTitleStyleGradient: 'Verlauf',
+  tabsTitleColor: 'Titelfarbe',
+  tabsTitleColorDesc: 'Einfarbige Titelfarbe. Optional Alpha per 8-stelligem Hex (#RRGGBBAA).',
   tabsRowGrad: 'Zeilen-Hintergrund als Verlauf',
   tabsRowGradDesc: 'Färbt Session-Zeilen (Liste) und Karten (Grid) mit einem Zwei-Farben-Verlauf.',
   tabsRowGradFrom: 'Verlauf Startfarbe',
@@ -5963,6 +6066,9 @@ html[data-sf-hoverlift~=on] .sf-tab{transition:transform .13s ease,box-shadow .1
 html[data-sf-hoverlift~=on] .sf-tab:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.42)}
 html[data-sf-hoverlift~=on] .sf-tab[data-dragging=true]:hover{transform:scale(.97);box-shadow:0 2px 10px rgba(0,0,0,.35)}
 html[data-sf-titlegrad~=on] .sf-tab-title{background-image:linear-gradient(var(--sf-title-angle,90deg),var(--sf-title-from,#e4e4e7),var(--sf-title-to,#8b8b93));-webkit-background-clip:text;background-clip:text;color:transparent}
+/* Einfarbiger Titel (Stil „solid"): überschreibt die App-Titelfarbe, wenn aktiv.
+   Steht NACH der Verlauf-Regel, damit sie bei gleicher Spezifität gewinnt. */
+html[data-sf-titlecolor~=on] .sf-tab-title{color:var(--sf-title-color,#e4e4e7)}
 /* Live-Kennzeichnung (Stand 2026-10-05): Aktive OHNE Auswahl tragen nur
    den Rahmen — der Hintergrund bleibt unangetastet. Die linke Live-Schiene
    markiert die aktive AUSWAHL (aktiv + selektiert); sie liegt als ::before
@@ -9895,6 +10001,14 @@ function SettingsPage() {
   const lightTheme = tabs.lightTheme || {}
   const colorFor = key => (isLightTab ? (lightTheme[key] !== undefined ? lightTheme[key] : tabs[key]) : tabs[key])
 
+  // Titel-Stil des aktiven Theme-Satzes (none|solid|gradient), mit Rückfall auf
+  // das alte titleGradOn (Migration).
+  const titleStyleVal = (() => {
+    const raw = colorFor('titleStyle')
+    if (['none', 'solid', 'gradient'].includes(raw)) return raw
+    return colorFor('titleGradOn') ? 'gradient' : 'none'
+  })()
+
   const setThemeFlag = (key, value) => {
     if (isLightTab) patchSubSettings('tabs', 'lightTheme', { [key]: value })
     else patch('tabs', key, value)
@@ -10294,6 +10408,19 @@ function SettingsPage() {
             onChange: value => patch('tabs', 'themeAutoDerive', value)
           }),
           jsx(Row, {
+            title: t('tabsThemeMode'),
+            description: t('tabsThemeModeDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'auto', label: t('tabsThemeModeAuto') },
+                { id: 'dark', label: t('tabsThemeModeDark') },
+                { id: 'light', label: t('tabsThemeModeLight') }
+              ],
+              value: ['auto', 'dark', 'light'].includes(tabs.themeMode) ? tabs.themeMode : 'auto',
+              onChange: value => patch('tabs', 'themeMode', ['dark', 'light'].includes(value) ? value : 'auto')
+            })
+          }),
+          jsx(Row, {
             title: t('tabsThemeEditing'),
             description: isLightTab ? t('tabsThemeEditingLight') : t('tabsThemeEditingDark'),
             action: jsx(Segment, {
@@ -10302,7 +10429,15 @@ function SettingsPage() {
                 { id: 'light', label: t('tabsThemeLight') }
               ],
               value: themeTab,
-              onChange: value => patch('tabs', 'themeTab', value === 'light' ? 'light' : 'dark')
+              // Hell wählen schaltet themeSplit automatisch ein — sonst würden
+              // Edits im Hell-Satz still nichts bewirken (das war der Bug).
+              onChange: value => {
+                if (value === 'light') {
+                  patchSettings('tabs', { themeTab: 'light', themeSplit: true })
+                } else {
+                  patch('tabs', 'themeTab', 'dark')
+                }
+              }
             })
           }),
           jsx(ToggleRow, {
@@ -10342,8 +10477,8 @@ function SettingsPage() {
                 { id: 'medium', label: t('personalShellShadowMedium') },
                 { id: 'strong', label: t('personalShellShadowStrong') }
               ],
-              value: tabs.rowShadow,
-              onChange: value => patch('tabs', 'rowShadow', value)
+              value: colorFor('rowShadow'),
+              onChange: value => setThemeFlag('rowShadow', SF_ROW_SHADOWS.includes(value) ? value : 'off')
             })
           }),
           jsx(ToggleRow, {
@@ -10358,33 +10493,53 @@ function SettingsPage() {
             checked: tabs.hoverLift,
             onChange: value => patch('tabs', 'hoverLift', value)
           }),
-          jsx(ToggleRow, {
-            label: t('tabsTitleGrad'),
-            description: t('tabsTitleGradDesc'),
-            checked: colorFor('titleGradOn'),
-            onChange: value => setThemeFlag('titleGradOn', value)
-          }),
           jsx(Row, {
-            title: t('tabsTitleGradFrom'),
-            description: t('tabsTitleGradFromDesc'),
-            action: colorRowControl(colorFor('titleGradFrom'), value => setThemeColor('titleGradFrom', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
-          }),
-          jsx(Row, {
-            title: t('tabsTitleGradTo'),
-            description: t('tabsTitleGradToDesc'),
-            action: colorRowControl(colorFor('titleGradTo'), value => setThemeColor('titleGradTo', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
-          }),
-          jsx(Row, {
-            title: t('tabsTitleGradAngle'),
-            description: t('tabsTitleGradAngleDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 360,
-              step: 15,
-              value: colorFor('titleGradAngle'),
-              onChange: value => setThemeFlag('titleGradAngle', value)
+            title: t('tabsTitleStyle'),
+            description: t('tabsTitleStyleDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'none', label: t('tabsTitleStyleNone') },
+                { id: 'solid', label: t('tabsTitleStyleSolid') },
+                { id: 'gradient', label: t('tabsTitleStyleGradient') }
+              ],
+              value: titleStyleVal,
+              onChange: value => setThemeFlag('titleStyle', ['solid', 'gradient'].includes(value) ? value : 'none')
             })
           }),
+          titleStyleVal === 'solid'
+            ? jsx(Row, {
+                title: t('tabsTitleColor'),
+                description: t('tabsTitleColorDesc'),
+                action: colorRowControl(colorFor('titleColor'), value => setThemeColor('titleColor', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+              })
+            : null,
+          titleStyleVal === 'gradient'
+            ? jsx(Row, {
+                title: t('tabsTitleGradFrom'),
+                description: t('tabsTitleGradFromDesc'),
+                action: colorRowControl(colorFor('titleGradFrom'), value => setThemeColor('titleGradFrom', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+              })
+            : null,
+          titleStyleVal === 'gradient'
+            ? jsx(Row, {
+                title: t('tabsTitleGradTo'),
+                description: t('tabsTitleGradToDesc'),
+                action: colorRowControl(colorFor('titleGradTo'), value => setThemeColor('titleGradTo', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+              })
+            : null,
+          titleStyleVal === 'gradient'
+            ? jsx(Row, {
+                title: t('tabsTitleGradAngle'),
+                description: t('tabsTitleGradAngleDesc'),
+                action: jsx(NumberInput, {
+                  min: 0,
+                  max: 360,
+                  step: 15,
+                  value: colorFor('titleGradAngle'),
+                  onChange: value => setThemeFlag('titleGradAngle', value)
+                })
+              })
+            : null,
           jsx('p', { className: 'sf-subhead', children: t('tabsSelHead') }),
           jsx(Row, {
             title: t('tabsSelTint'),
@@ -10420,8 +10575,8 @@ function SettingsPage() {
                 { id: 'medium', label: t('personalShellShadowMedium') },
                 { id: 'strong', label: t('personalShellShadowStrong') }
               ],
-              value: tabs.selShadow,
-              onChange: value => patch('tabs', 'selShadow', value)
+              value: colorFor('selShadow'),
+              onChange: value => setThemeFlag('selShadow', SF_ROW_SHADOWS.includes(value) ? value : 'off')
             })
           }),
           jsx(Row, {

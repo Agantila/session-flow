@@ -3,6 +3,36 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.22.1] — 2026-10-06
+
+### Fixed
+- **Titel im Light-Theme**: der Titel-Stil ließ sich im Hell-Subtab einstellen,
+  aber die Werte wurden nicht angewendet — Ursache war die Theme-Erkennung:
+  bei transparentem Flächen-Hintergrund (`rgba(0,0,0,0)`, malt die App
+  woanders) lieferte die Luminanz-Prüfung fälschlich `[0,0,0]` → „dark", sodass
+  der Light-Satz nie griff. Die Erkennung prüft jetzt `color-scheme`, dann nur
+  **undurchsichtige** Flächen und weicht sonst auf `prefers-color-scheme` aus.
+- **Hell-Subtab wirkungslos bei ausgeschaltetem Split**: die Subtabs waren auch
+  ohne `themeSplit` editierbar, die Werte landeten aber in einem nicht
+  angewendeten Satz. Jetzt schaltet die Wahl von „Hell" `themeSplit`
+  automatisch ein — Edits greifen sofort.
+
+### Added
+- **Titel-Stil** (`tabs.titleStyle` / `tabs.lightTheme.titleStyle`):
+  `none` (App-Standard) | `solid` (eine Farbe `titleColor`) | `gradient`
+  (Verlauf). Ersetzt den bisherigen reinen An/Aus-Schalter für den
+  Titel-Verlauf; bestehende `titleGradOn=true`-Einstellungen werden einmalig
+  auf `gradient` migriert. Die Farbfelder erscheinen nur für den gewählten Stil.
+- **Titel-Einzelfarbe** (`tabs.titleColor` / `lightTheme.titleColor`): wenn der
+  Titel **ohne Verlauf** gesetzt wird, ist genau EINE Farbe wirksam
+  (`data-sf-titlecolor` + `--sf-title-color`), je Theme.
+- **Theme-Modus** (`tabs.themeMode`): `auto` (App folgen) | `dark` | `light` —
+  erzwingt einen Farb-Satz. Damit lassen sich die Hell-Farben auch in einer
+  dunklen App prüfen; hilft, wenn die Erkennung den falschen Modus ermittelt.
+- **Schlagschatten je Theme**: `rowShadow` und `selShadow` haben jetzt einen
+  eigenen Wert im Light-Satz (`tabs.lightTheme.rowShadow` / `.selShadow`) und
+  werden getrennt gespeichert und angewendet.
+
 ## [1.22.0] — 2026-10-06
 
 ### Added

@@ -66,7 +66,7 @@ if (markerIdx < 0 || injectIdx < 0) {
   process.exit(1)
 }
 const css = src.slice(markerIdx + marker.length, src.lastIndexOf('`', injectIdx))
-if (!css.includes('data-sf-rowgrad') || css.includes('${')) {
+if (!css.includes('data-sf-rowgrad') || !css.includes('data-sf-titlecolor') || css.includes('${')) {
   console.log('✗ CSS-Extraktion unerwartet (fehlende Selektoren oder Interpolation).')
   process.exit(1)
 }
@@ -974,6 +974,28 @@ try {
   check('Projekt-Chip: Menü fixed über der Eingabezeile (z≥50)', CP.menuPos === 'fixed' && CP.menuZ >= 50, `${CP.menuPos} / z=${CP.menuZ}`)
 } catch (error) {
   check('Testlauf ohne Exception', false, error && error.message)
+}
+
+// ── Einfarbiger Titel (Stil „solid", v1.22.1): data-sf-titlecolor überschreibt
+//    die Titel-Farbe und schaltet den Verlauf ab. ─────────────────────────────
+try {
+  await page.evaluate(() => {
+    const r = document.documentElement
+    r.removeAttribute('data-sf-titlegrad')
+    r.setAttribute('data-sf-titlecolor', 'on')
+    r.style.setProperty('--sf-title-color', '#22c55e')
+  })
+  const ST = await read()
+  check('Titel solid: --sf-title-color wird auf den Titel angewendet', ST.l1.titleColor === 'rgb(34, 197, 94)', ST.l1.titleColor)
+  check('Titel solid: kein Verlauf mehr (kein background-image)', !String(ST.l1.titleImage || '').includes('linear-gradient'), String(ST.l1.titleImage))
+  // Zurücksetzen auf den Verlaufs-Zustand des Fixtures.
+  await page.evaluate(() => {
+    const r = document.documentElement
+    r.removeAttribute('data-sf-titlecolor')
+    r.setAttribute('data-sf-titlegrad', 'on')
+  })
+} catch (error) {
+  check('Titel-solid-Test ohne Exception', false, error && error.message)
 }
 
 // ── Optional: Screenshots für die Sichtprüfung ──────────────────────────────
