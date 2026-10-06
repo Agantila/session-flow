@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de" data-sf-ctxpie="on">
+<head>
+<meta charset="utf-8">
+<title>Session Flow — b13-kontext-anzeige</title>
+<link rel="stylesheet" href="assets/codicon.css">
+<link rel="stylesheet" href="sf-plugin.css">
+<link rel="stylesheet" href="showcase.css">
+</head>
+<body class="card-body">
+<div class="card" id="shot">
+  <div class="stage">
+    <div class="motif" style="--w:600px;--z:1.2;--r:12px">
+      <div style="padding:26px 28px;display:flex;flex-direction:column;gap:30px">
+        <div class="ctx-row">
+          <div class="ctx-cell"><span class="sf-tab-ctx" data-level="ok" data-style="donut" style="--sf-ctx-pct:42%">42%</span><span class="cap">Donut · 42 %</span></div>
+          <div class="ctx-cell"><span class="sf-tab-ctx" data-level="warn" data-style="donut" style="--sf-ctx-pct:78%">78%</span><span class="cap">Donut · 78 %</span></div>
+          <div class="ctx-cell"><span class="sf-tab-ctx" data-level="high" data-style="donut" style="--sf-ctx-pct:93%">93%</span><span class="cap">Donut · 93 %</span></div>
+        </div>
+        <div class="ctx-row ctx-scope-bar">
+          <div class="ctx-cell"><span class="sf-tab-ctx" data-level="ok" data-style="bar" style="--sf-ctx-pct:62%" title="Kontext 62 %"></span><span class="cap">Bar · 28 px, ohne Zahl</span></div>
+          <div class="ctx-cell"><span class="sf-tab-ctx" data-level="warn" data-style="bar" style="--sf-ctx-pct:88%" title="Kontext 88 %"></span><span class="cap">Bar · warn</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Kontext-Fenster — Donut und Bar</div>
+</div>
+</body>
+</html>

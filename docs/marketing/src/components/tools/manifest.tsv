@@ -1,0 +1,19 @@
+b1-navapps	.sf-navapps[data-wide] .sf-navapps-btn[data-nav="capabilities"]	sf-comp-b1-navapps-1x1.png
+b2-pane-toolbar	.sf-toolbar .iconbtn[data-nav="add"]	sf-comp-b2-pane-toolbar-1x1.png
+b3-tab-close	.uitab .inset-y-0 button[data-hov="1"]	sf-comp-b3-tab-close-1x1.png
+b4-session-liste	.sf-pane .sf-tab[data-active="true"]	sf-comp-b4-session-liste-1x1.png
+b5-session-grid-glow		sf-comp-b5-session-grid-glow-1x1.png
+b6-projekt-header	.sf-section:last-child .sf-group-head[data-drop="true"]	sf-comp-b6-projekt-header-1x1.png
+b7-gruppen-stack		sf-comp-b7-gruppen-stack-1x1.png
+b8-pinned-empty		sf-comp-b8-pinned-empty-1x1.png
+b9-composer-chip		sf-comp-b9-composer-chip-1x1.png
+b10-projekt-menue		sf-comp-b10-projekt-menue-1x1.png
+b11-suche-filter		sf-comp-b11-suche-filter-1x1.png
+b12-status-icons		sf-comp-b12-status-icons-1x1.png
+b13-kontext-anzeige		sf-comp-b13-kontext-anzeige-1x1.png
+b14-drop-ready		sf-comp-b14-drop-ready-1x1.png
+b15-empty-state		sf-comp-b15-empty-state-1x1.png
+b15a-ladezustand		sf-comp-b15a-ladezustand-1x1.png
+b15b-filter-empty		sf-comp-b15b-filter-empty-1x1.png
+b16-streaming		sf-comp-b16-streaming-1x1.png
+b17-glass-vergleich		sf-comp-b17-glass-vergleich-1x1.png

@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- Session Flow Hero A7 — Settings-Seite mit Kategorie-Bar (16:9) -->
+<html><head><meta charset='utf-8'><link rel='stylesheet' href='base.css'>
+<style>
+.window{width:1280px;height:720px;background:linear-gradient(180deg,#1a1c22,#16181d)}
+.settings{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.set-head{padding:26px 34px 0}
+.set-title{font-size:24px;font-weight:700}
+.set-sub{font-size:15px;color:var(--text3);margin-top:5px}
+.catbar{display:flex;gap:6px;padding:16px 34px 14px;margin-top:16px;
+  background:linear-gradient(180deg,rgba(26,28,34,.97),rgba(26,28,34,.86));
+  backdrop-filter:blur(9px);border-bottom:1px solid var(--stroke);
+  position:relative;z-index:6}
+.cat{display:flex;align-items:center;gap:9px;height:40px;padding:0 17px;border-radius:11px;
+  font-size:16px;font-weight:500;color:var(--text3)}
+.cat .ci{font-size:18px}
+.cat.on{background:var(--row-active);color:#fff}
+.cat.hv{background:var(--row-hover);color:var(--text)}
+.set-scroll{padding:10px 44px 30px;position:relative}
+.section{padding:10px 16px 16px;margin:18px -16px 0;border-radius:12px;
+  border-bottom:1px solid var(--stroke)}
+.section.hv{background:rgba(127,127,127,.05)}
+.s-hd{display:flex;align-items:center;gap:10px;font-size:19px;font-weight:700}
+.s-hd .ci{color:var(--accent);font-size:20px}
+.s-desc{font-size:14px;line-height:1.55;color:var(--text3);margin:5px 0 12px;max-width:1500px}
+.ctl{display:flex;align-items:center;gap:16px;padding:12px 0;font-size:16px;color:var(--text2)}
+.ctl .cl{flex:1}.ctl .cl small{display:block;font-size:13.5px;color:var(--text4);margin-top:3px}
+.swatches{display:flex;gap:9px;align-items:center}
+.sw{width:28px;height:28px;border-radius:9px}
+.sw.on{box-shadow:0 0 0 3px #23252c,0 0 0 5px var(--accent)}
+.pathfield{display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;width:640px;
+  border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--stroke);
+  font-size:14.5px;color:var(--text2)}
+.pathfield .ci{color:var(--text3)}
+.toggle{width:44px;height:26px;border-radius:99px;background:var(--accent);position:relative}
+.toggle::after{content:'';position:absolute;top:3.5px;right:3.5px;width:19px;height:19px;
+  border-radius:50%;background:#fff}
+</style></head>
+<body><div class='stage'><div class='canvas'>
+<div class='window'>
+  <div class='settings'>
+    <div class='set-head'>
+      <div class='set-title'>Session Flow</div>
+      <div class='set-sub'>Änderungen werden sofort wirksam und gespeichert.</div>
+    </div>
+    <div class='catbar'>
+      <span class='cat'><span class='ci'></span>Chat</span>
+      <span class='cat'><span class='ci'></span>Strg+Scroll</span>
+      <span class='cat'><span class='ci'></span>Session-Liste</span>
+      <span class='cat'><span class='ci'></span>Gruppen</span>
+      <span class='cat'><span class='ci'></span>UI-Tabs</span>
+      <span class='cat'><span class='ci'></span>Glass</span>
+      <span class='cat on'><span class='ci'></span>Individuell</span>
+      <span class='cat hv'><span class='ci'></span>Über</span>
+    </div>
+    <div class='set-scroll'>
+      <div class='section'>
+        <div class='s-hd'><span class='ci'></span>Individualisierung</div>
+        <div class='s-desc'>Akzent-Tönung für die Kern-UI, eigener Chat-Hintergrund (Bild oder Video) und ein Content-Bereich mit runden Ecken und dezentem Schlagschatten.</div>
+        <div class='ctl'>
+          <span class='cl'>Akzentfarben-Tönung<small>Wendet deine eigene Akzentfarbe auf elementare UI-Elemente an — Buttons, aktive Zustände, Hover, Fokusringe und Hervorhebungen.</small></span>
+          <span class='toggle'></span>
+        </div>
+        <div class='ctl'>
+          <span class='cl'>Akzentfarbe<small>Swatch wählen oder Hex-Wert eintippen (#rrggbb).</small></span>
+          <span class='swatches'>
+            <span class='sw on' style='background:#58a6ff'></span>
+            <span class='sw' style='background:#0ea5e9'></span>
+            <span class='sw' style='background:#22c55e'></span>
+            <span class='sw' style='background:#e3b341'></span>
+            <span class='sw' style='background:#f85149'></span>
+            <span class='sw' style='background:#db61a2'></span>
+          </span>
+        </div>
+      </div>
+      <div class='section hv'>
+        <div class='s-hd'><span class='ci'></span>Chat-Hintergrund</div>
+        <div class='s-desc'>Eigenes Bild oder Video hinter dem Chat — mit Dim und Blur für ruhige Lesbarkeit.</div>
+        <div class='ctl'>
+          <span class='cl'>Hintergrund-Bild<small>Pfad oder Datei — Skalierung „Cover“, Dim 35 %.</small></span>
+          <span class='pathfield'><span class='ci'></span>/home/deniz/Bilder/wallpaper-aurora.png</span>
+        </div>
+        <div class='ctl'>
+          <span class='cl'>Dim<small>Abdunkelung über dem Bild.</small></span>
+          <span class='toggle'></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class='capwrap'><div class='caption'><b>Settings „Session Flow“</b> — 8 Kategorien, Akzent &amp; Chat-Hintergrund konfiguriert</div></div>
+</div></div></body></html>

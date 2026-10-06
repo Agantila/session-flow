@@ -1,0 +1,139 @@
+<!doctype html>
+<!-- Session Flow Hero A8 — Personalisierter Workspace: eigenes Chat-BG, Dim+Blur,
+     Akzent in Buttons/Focus-Rings, Pane „Native Sidebar“ (16:9) -->
+<html><head><meta charset='utf-8'><link rel='stylesheet' href='base.css'>
+<style>
+.window{width:1280px;height:720px}
+.pane{width:560px} /* 'native' — eigene Pane-Fläche wie die native Sidebar */
+.phead{padding:16px 20px 12px;gap:10px}
+.ibtn{width:40px;height:40px;border-radius:11px;font-size:22px}
+.psearch{flex-direction:row;align-items:center;gap:11px;padding:4px 20px 14px}
+.searchbox{flex:1}
+.searchbox{height:42px;border-radius:11px;font-size:17px;padding:0 12px;gap:9px}
+.searchbox .ci{font-size:18px}
+.segment{border-radius:11px;padding:3px;gap:3px}
+.segment span{font-size:15px;padding:7px 10px;border-radius:8px}
+.ghd{padding:10px 18px 10px 14px;font-size:17px;gap:9px}
+.ghd .caret{font-size:18px;width:18px}
+.ghd .fic{font-size:19px}
+.ghd .gcnt{font-size:14px}
+.srow{margin:2px 12px;padding:9px 11px;border-radius:12px;gap:11px}
+.srow .act{font-size:19px;width:22px}
+.srow .stitle{font-size:17px}
+.srow .smeta{font-size:14px}
+.stack{height:26px;margin:4px 22px 12px 42px}
+.stack i{height:9px;border-radius:6px}
+.stack i:nth-child(2){top:7px}.stack i:nth-child(3){top:14px}
+/* Hauptbereich mit eigenem Hintergrundbild (prozedural, Aurora-Look),
+   Dim 35 % + Blur aktiv */
+.main{position:relative;overflow:hidden;background:linear-gradient(180deg,#15171c,#111318)}
+.bgart{position:absolute;inset:-24px;
+  background:
+    radial-gradient(58% 46% at 24% 22%,rgba(88,166,255,.5),transparent 62%),
+    radial-gradient(48% 44% at 78% 30%,rgba(14,165,233,.34),transparent 66%),
+    radial-gradient(44% 42% at 62% 84%,rgba(219,97,162,.26),transparent 64%),
+    linear-gradient(160deg,#122133 0%,#0e1a2b 48%,#101a24 100%);
+  filter:blur(10px) saturate(1.15)}
+.bgdim{position:absolute;inset:0;background:rgba(10,11,14,.35)}
+.chatlayer{position:absolute;inset:0;display:flex;flex-direction:column}
+.m-top{display:flex;align-items:center;gap:10px;padding:18px 30px;
+  border-bottom:1px solid rgba(255,255,255,.09);
+  background:rgba(19,21,25,.55);backdrop-filter:blur(10px);
+  font-size:18px;font-weight:600;color:var(--text)}
+.m-top .ci{font-size:20px;color:#b1d1f5}
+.m-top .live{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;
+  color:#c8dffa;border:1px solid rgba(88,166,255,.45);
+  background:rgba(88,166,255,.16);border-radius:99px;padding:6px 14px}
+.m-top .live i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(88,166,255,.9)}
+.chat{flex:1;padding:30px 48px 20px;gap:20px}
+.m-user{font-size:16px;padding:13px 18px;border-radius:18px 18px 6px 18px;max-width:60%;
+  background:rgba(88,166,255,.34);border:1px solid rgba(88,166,255,.42)}
+.avrow{font-size:13px;color:#aab8c9}.avrow .av{width:24px;height:24px;border-radius:8px;font-size:15px;
+  background:rgba(88,166,255,.3);color:#c8dffa}
+.line{font-size:16px;line-height:1.6;color:#d6d4e2}
+.line b{color:#f0f5fa}
+.line code{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12);color:#d5e7fb}
+/* Composer mit Fokus-Ring in Akzent + Send-Button in Akzent */
+.composer{margin:0 48px 26px}
+.comp-in{padding:14px 16px 15px;gap:12px}
+.comp-row1{display:flex;align-items:center;gap:9px}
+.pchip{height:31px;font-size:14.5px;padding:0 13px;gap:9px}
+.pchip .pdot{width:9px;height:9px}
+.plusbtn{width:31px;height:31px;border-radius:10px;font-size:18px}
+.cinputrow{display:flex;align-items:center;gap:12px}
+.cinput{flex:1;font-size:16.5px;min-height:28px;padding:7px 12px;border-radius:12px;
+  background:rgba(255,255,255,.05);border:1.5px solid rgba(88,166,255,.75);
+  box-shadow:0 0 0 4px rgba(88,166,255,.18);color:var(--text3)}
+.sendbtn{width:38px;height:38px;border-radius:12px;font-size:20px}
+</style></head>
+<body><div class='stage'><div class='canvas'>
+<div class='window'>
+  <div class='pane'>
+    <div class='phead'>
+      <span class='ibtn primary'><span class='ci'></span></span>
+      <span class='ibtn'><span class='ci'></span></span>
+      <span class='spacer'></span>
+      <span class='ibtn'><span class='ci'></span></span>
+    </div>
+    <div class='psearch'>
+      <div class='searchbox'><span class='ci'></span><span class='ph'>Sessions durchsuchen…</span></div>
+      <div class='segment'><span class='on'>Alle</span><span>Aktiv</span><span>Archiv</span></div>
+    </div>
+    <div class='ghd'>
+      <span class='caret'><span class='ci'></span></span>
+      <span class='fic'><span class='ci'></span></span>
+      <span>session-flow</span>
+      <span class='gcnt'>4 Sessions</span>
+    </div>
+    <div class='srow'>
+      <span class='act' style='color:var(--ok)'><span class='ci'></span></span>
+      <span class='stitle'>Roadmap-Review Q4</span>
+      <span class='smeta'>jetzt</span>
+    </div>
+    <div class='srow on'>
+      <span class='act' style='color:#b1d1f5'><span class='ci'></span></span>
+      <span class='stitle'>Hero-Renderings bauen</span>
+      <span class='smeta'>Schreibt…</span>
+    </div>
+    <div class='srow'>
+      <span class='act' style='color:var(--text4)'><span class='ci'></span></span>
+      <span class='stitle'>Shotlist-QA Rev. 2</span>
+      <span class='smeta'>vor 5 Min.</span>
+    </div>
+    <div class='stack'><i></i><i></i><i></i></div>
+  </div>
+  <div class='main'>
+    <div class='bgart'></div><div class='bgdim'></div>
+    <div class='chatlayer'>
+      <div class='m-top'><span class='ci'></span> Hero-Renderings bauen
+        <span class='live'><i></i>Schreibt…</span>
+      </div>
+      <div class='chat'>
+        <div class='m-user'>Gib dem Chat meinen eigenen Look.</div>
+        <div class='m-assist'>
+          <div class='avrow'><span class='av'><span class='ci'></span></span> Hermes · Agent</div>
+          <div class='line'>Erledigt — eigenes Hintergrundbild aktiv, mit <b>Dim 35 %</b> und Blur für ruhige Lesbarkeit.</div>
+          <div class='line'>Deine Akzentfarbe läuft jetzt durch Buttons, aktive Zustände und <b>Fokusringe</b> — siehst du am Composer unten.</div>
+          <div class='line'>Die Pane-Fläche bleibt auf „Native Sidebar“ und malt dieselbe Fläche wie die App-Sidebar.</div>
+        </div>
+      </div>
+      <div class='composer'>
+        <div class='comp-ring'></div>
+        <div class='comp-clip'><div class='comp-grad'></div>
+          <div class='comp-in'>
+            <div class='comp-row1'>
+              <span class='pchip'><span class='pdot'></span>session-flow<span class='ci pcar'></span></span>
+              <span class='plusbtn'><span class='ci'></span></span>
+            </div>
+            <div class='cinputrow'>
+              <span class='cinput'>Was kommt als Nächstes?</span>
+              <span class='sendbtn'><span class='ci'></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class='capwrap'><div class='caption'><b>Personalisierter Workspace</b> — eigener Chat-Hintergrund, Akzent-Fokusringe, Native Sidebar</div></div>
+</div></div></body></html>

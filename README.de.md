@@ -14,6 +14,33 @@ Plugin-SDK (`~/.hermes/desktop-plugins/`).
 
 Ein Projekt von **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
 
+## Showcase
+
+![Session-Pane mit Projekt-Gruppen, Anpinn-Sektion und Suchleiste](docs/marketing/heroes/sf-hero-a1-sessionpane-liste-16x9.png)
+
+| | |
+|---|---|
+| ![Chat, Zeile-für-Zeile-Kaskade](docs/marketing/heroes/sf-hero-a3-chat-kaskade-16x9.png) | ![Composer im Glass-Look mit Projekt-Chip](docs/marketing/heroes/sf-hero-a4-composer-glass-16x9.png) |
+| ![Strg+Scroll-HUD](docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png) | ![Einstellungen — alles konfigurierbar](docs/marketing/heroes/sf-hero-a7-settings-16x9.png) |
+| ![Grid-Sessions mit geöffnetem ⋯-Menü](docs/marketing/heroes/sf-hero-a2-sessionpane-grid-16x9.png) | ![Sidebar-Style-Tabs mit Glow auf arbeitender Session](docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png) |
+| ![Personalisierter Workspace — eigener Chat-Hintergrund, Akzent im Fokus](docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png) | |
+
+▶ **In Bewegung:** die 5-Sekunden-Hyperframes-Animation
+([MP4](docs/marketing/animation/sf-hyperframes-1920x1080-5s.mp4) ·
+[WebM](docs/marketing/animation/sf-hyperframes-1920x1080-5s.webm) ·
+[GIF](docs/marketing/animation/sf-hyperframes-1920x1080-5s.gif))
+zeigt Kaskade, Projekt-Chip, Strg+Scroll-HUD und Kontext-Donut in einem kurzen Loop.
+
+**19 Komponenten-Karten (1:1)** — jedes UI-Element, das den neuen Look prägt,
+eigene Karte, fertig für Doku, Folien oder den Marketplace-Eintrag:
+[docs/marketing/components/](docs/marketing/components/). Vollständige Inventarliste
+in [docs/marketing/INVENTORY.md](docs/marketing/INVENTORY.md).
+
+> Alle 30 Bilder sind aus den HTML-Quellen unter
+> [docs/marketing/src/](docs/marketing/src/) reproduzierbar.
+> Re-Render: `docs/marketing/src/heroes/render.sh` und
+> `docs/marketing/src/components/render.sh`.
+
 ## Features
 
 1. **Chat-Animation (Zeile für Zeile)** — Antworten werden mit Easing weich

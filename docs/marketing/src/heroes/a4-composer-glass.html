@@ -1,0 +1,76 @@
+<!doctype html>
+<!-- Session Flow Hero A4 — Composer im Glass-Look mit Projekt-Kontext-Chip (16:9) -->
+<html><head><meta charset='utf-8'><link rel='stylesheet' href='base.css'>
+<style>
+.window{width:1280px;height:720px;background:linear-gradient(180deg,#191b21,#131519)}
+/* Chat-Bühne, Composer ist der Star */
+.m-top{display:flex;align-items:center;gap:10px;padding:18px 30px;border-bottom:1px solid var(--stroke);
+  font-size:17px;font-weight:600;color:var(--text2)}
+.m-top .ci{font-size:19px;color:var(--text3)}
+.m-top .live{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;
+  color:#b1d1f5;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:99px;padding:6px 14px}
+.m-top .live i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(88,166,255,.8)}
+.chat{flex:1;padding:34px 60px 20px;gap:24px;filter:saturate(1.02)}
+.m-user{font-size:16.5px;padding:14px 19px;border-radius:18px 18px 6px 18px;max-width:60%}
+.avrow{font-size:13px}.avrow .av{width:25px;height:25px;border-radius:8px;font-size:15px}
+.line{font-size:16.5px;line-height:1.6}
+.line code{font-size:15.5px;padding:2px 7px;border-radius:6px}
+/* Composer: groß, zentral, Glass */
+.composer{margin:0 80px 46px;border-radius:28px}
+.comp-clip{border-radius:28px}
+.comp-ring{border-radius:29px;opacity:.6}
+.comp-grad{border-radius:28px;
+  background:linear-gradient(165deg,rgba(88,166,255,.13),transparent 46%,rgba(57,197,207,.05))}
+.comp-in{padding:18px 20px 20px;gap:14px}
+.comp-row1{display:flex;align-items:center;gap:10px}
+.pchip{height:36px;font-size:16px;font-weight:600;padding:0 15px;gap:10px;border-radius:11px;
+  background:rgba(255,255,255,.09)}
+.pchip .pdot{width:11px;height:11px;box-shadow:0 0 8px rgba(88,166,255,.8)}
+.pchip .pcar{font-size:15px}
+.plusbtn{width:36px;height:36px;border-radius:11px;font-size:20px}
+.cinput{font-size:18px;min-height:30px;padding:2px 4px}
+.comp-row3{display:flex;align-items:center;gap:9px}
+.modelpill{display:flex;align-items:center;gap:8px;height:30px;padding:0 13px;border-radius:99px;
+  background:rgba(255,255,255,.06);border:1px solid var(--stroke);font-size:13.5px;color:var(--text2)}
+.modelpill .ci{font-size:15px;color:var(--text3)}
+.sendbtn{margin-left:auto;width:40px;height:40px;border-radius:13px;font-size:21px}
+/* frosted Look verstärken: Inhalt oben leicht dimmen, damit Frost sichtbar bleibt */
+.chat-above{opacity:.85}
+</style></head>
+<body><div class='stage'><div class='canvas'>
+<div class='window'>
+  <div class='main'>
+    <div class='m-top'><span class='ci'></span> Hero-Renderings bauen
+      <span class='live'><i></i>Schreibt…</span>
+    </div>
+    <div class='chat chat-above'>
+      <div class='m-user'>Rüst den Composer mit dem neuen Projekt-Chip ein.</div>
+      <div class='m-assist'>
+        <div class='avrow'><span class='av'><span class='ci'></span></span> Hermes · Agent</div>
+        <div class='line'>Erledigt — die <b>Projekt-Pill</b> sitzt jetzt in der ersten Zeile über dem Eingabefeld. Sie zeigt das Ziel-Projekt der nächsten Eingabe:</div>
+        <div class='line'>Neue Session → Chip wählt das Projekt <b>vor</b> der ersten Nachricht; bestehende Session → Chip verschiebt die Session ins gewählte Projekt.</div>
+        <div class='line'>Der Wechsel öffnet das Menü mit <code>Kein Projekt (Home)</code> und der Projektliste mit Farb-Punkten.</div>
+      </div>
+    </div>
+    <div class='composer'>
+      <div class='comp-ring'></div>
+      <div class='comp-clip'><div class='comp-grad'></div>
+        <div class='comp-in'>
+          <div class='comp-row1'>
+            <span class='pchip'><span class='pdot'></span>session-flow<span class='ci pcar'></span></span>
+            <span class='plusbtn'><span class='ci'></span></span>
+          </div>
+          <div class='cinput'>Was kommt als Nächstes?</div>
+          <div class='comp-row3'>
+            <span class='modelpill'><span class='ci'></span>Hermes Agent</span>
+            <span class='modelpill'><span class='ci'></span>Reasoning: mittel</span>
+            <span class='sendbtn'><span class='ci'></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class='capwrap'><div class='caption'><b>Composer</b> — Glass mit Arc-Ring &amp; Projekt-Kontext-Chip (v1.21)</div></div>
+</div></div></body></html>

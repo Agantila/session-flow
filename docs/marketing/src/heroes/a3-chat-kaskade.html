@@ -1,0 +1,115 @@
+<!doctype html>
+<!-- Session Flow Hero A3 — Chat, Line-by-line-Kaskade eingefroren (16:9) -->
+<html><head><meta charset='utf-8'><link rel='stylesheet' href='base.css'>
+<style>
+.window{width:1280px;height:720px}
+/* schmale Session-Liste links (Kontext), Chat dominiert */
+.pane{width:420px}
+.phead{padding:14px 16px 10px;gap:9px}
+.ibtn{width:36px;height:36px;border-radius:10px;font-size:19px}
+.searchbox{height:38px;border-radius:10px;font-size:15px;margin:0 16px 12px;gap:8px}
+.searchbox .ci{font-size:16px}
+.ghd{padding:8px 15px 8px 12px;font-size:15px;gap:8px}
+.ghd .caret{font-size:16px;width:16px}
+.ghd .fic{font-size:17px}
+.ghd .gcnt{font-size:13px}
+.srow{margin:2px 10px;padding:8px 10px;border-radius:11px;gap:10px}
+.srow .act{font-size:17px;width:20px}
+.srow .stitle{font-size:15px}
+.srow .smeta{font-size:12.5px}
+.stack{height:22px;margin:3px 18px 10px 26px}
+.stack i{height:8px}
+.stack i:nth-child(2){top:6px}.stack i:nth-child(3){top:12px}
+/* Chat */
+.main{background:linear-gradient(180deg,#15171c,#111318)}
+.m-top{display:flex;align-items:center;gap:10px;padding:18px 30px;border-bottom:1px solid var(--stroke);
+  font-size:18px;font-weight:600;color:var(--text)}
+.m-top .ci{font-size:20px;color:var(--text3)}
+.m-top .live{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;
+  color:#b1d1f5;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:99px;padding:6px 14px}
+.m-top .live i{width:8px;height:8px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 10px rgba(88,166,255,.8)}
+.chat{flex:1;padding:30px 44px 20px;gap:22px}
+.m-user{font-size:16px;padding:13px 18px;border-radius:18px 18px 6px 18px;max-width:64%}
+.avrow{font-size:13px}.avrow .av{width:24px;height:24px;border-radius:8px;font-size:15px}
+.line{font-size:16px;line-height:1.6}
+.line code{font-size:15px;padding:2px 7px;border-radius:6px}
+.line ul{margin:6px 0 0 22px;display:flex;flex-direction:column;gap:5px}
+/* eingefrorene Kaskade: untere Zeilen laufen noch ein */
+.cas-3{opacity:.72;transform:translateY(12px)}
+.cas-2{opacity:.45;transform:translateY(24px)}
+.cas-1{opacity:.2;transform:translateY(34px)}
+/* Composer andocken */
+.composer{margin:0 44px 24px}
+.comp-in{padding:13px 15px 14px;gap:11px}
+.pchip{height:30px;font-size:14px;padding:0 12px;gap:8px}
+.pchip .pdot{width:9px;height:9px}
+.plusbtn{width:30px;height:30px;border-radius:10px;font-size:17px}
+.cinput{font-size:16px;min-height:28px}
+</style></head>
+<body><div class='stage'><div class='canvas'>
+<div class='window'>
+  <div class='pane'>
+    <div class='phead'>
+      <span class='ibtn primary'><span class='ci'></span></span>
+      <span class='spacer'></span>
+      <span class='ibtn'><span class='ci'></span></span>
+    </div>
+    <div class='searchbox'><span class='ci'></span><span class='ph'>Sessions durchsuchen…</span></div>
+    <div class='ghd'>
+      <span class='caret'><span class='ci'></span></span>
+      <span class='fic'><span class='ci'></span></span>
+      <span>session-flow</span>
+      <span class='gcnt'>4</span>
+    </div>
+    <div class='srow'>
+      <span class='act' style='color:var(--ok)'><span class='ci'></span></span>
+      <span class='stitle'>Roadmap-Review Q4</span>
+    </div>
+    <div class='srow on'>
+      <span class='act' style='color:#b1d1f5'><span class='ci'></span></span>
+      <span class='stitle'>Hero-Renderings bauen</span>
+    </div>
+    <div class='srow'>
+      <span class='act' style='color:var(--text4)'><span class='ci'></span></span>
+      <span class='stitle'>Shotlist-QA Rev. 2</span>
+    </div>
+    <div class='stack'><i></i><i></i><i></i></div>
+  </div>
+  <div class='main'>
+    <div class='m-top'><span class='ci'></span> Hero-Renderings bauen
+      <span class='live'><i></i>Schreibt…</span>
+    </div>
+    <div class='chat'>
+      <div class='m-user'>Öffne die Session und zeig mir, wie die Antworten hier reinkommen.</div>
+      <div class='m-assist'>
+        <div class='avrow'><span class='av'><span class='ci'></span></span> Hermes · Agent</div>
+        <div class='line'>Die Session ist offen. Der Verlauf wird <b>Zeile für Zeile</b> eingeblendet — jede Zeile erscheint genau einmal, mit Easing statt hartem Sprung.</div>
+        <div class='line'>Beim Öffnen kaskadiert der sichtbare Verlauf von oben nach unten:</div>
+        <div class='line'><ul>
+          <li>Kaskade-Dauer einstellbar (<code>Dauer</code>, <code>Versatz pro Zeile</code>)</li>
+          <li>Movement pro Zeile konfigurierbar (<code>Bewegung (px)</code>)</li>
+          <li>Easing-Kurve wählbar — weich, sanft, ruhig oder federnd</li>
+        </ul></div>
+        <div class='line cas-3'>Beim Streamen revealen neue Zeilen im selben Rhythmus, sobald sie fertig geschrieben sind.</div>
+        <div class='line cas-2'>Thinking-Blöcke und Code-Karten lassen sich gezielt ausnehmen.</div>
+        <div class='line cas-1'>Einstellungen: Chat → Chat-Animation.</div>
+      </div>
+    </div>
+    <div class='composer'>
+      <div class='comp-ring'></div>
+      <div class='comp-clip'><div class='comp-grad'></div>
+        <div class='comp-in'>
+          <div class='comp-row1'>
+            <span class='pchip'><span class='pdot'></span>session-flow<span class='ci pcar'></span></span>
+            <span class='plusbtn'><span class='ci'></span></span>
+          </div>
+          <div class='cinput'>Was kommt als Nächstes?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class='capwrap'><div class='caption'><b>Chat</b> — Line-by-line-Kaskade, eingefroren kurz nach dem Öffnen</div></div>
+</div></div></body></html>

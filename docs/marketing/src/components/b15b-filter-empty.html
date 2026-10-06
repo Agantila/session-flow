@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Session Flow — b15b-filter-empty</title>
+<link rel="stylesheet" href="assets/codicon.css">
+<link rel="stylesheet" href="sf-plugin.css">
+<link rel="stylesheet" href="showcase.css">
+</head>
+<body class="card-body">
+<div class="card" id="shot">
+  <div class="stage">
+    <div class="motif" style="--w:600px;--z:1.15;--r:10px">
+      <div class="sf-pane">
+        <div class="sf-filterbar"><div class="sf-filter-search"><i class="codicon codicon-search" style="font-size:12px"></i><input type="text" placeholder="Sessions durchsuchen…" value="ollama" readonly><button type="button" class="sf-filter-clear" aria-label="Suche löschen"><i class="codicon codicon-close" style="font-size:11px"></i></button></div><div class="seg-track" role="radiogroup"><button type="button" data-active="false">Alle</button><button type="button" data-active="true">Aktiv</button><button type="button" data-active="false">Archiv</button></div></div>
+        <div class="sf-list">
+          <div class="sf-empty">
+            <div class="sf-empty-title">Keine Sessions passen zu diesem Filter</div>
+            <div class="sf-empty-body">Anderen Suchbegriff oder Schnellfilter versuchen.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Filter-Empty — kein Treffer im Schnellfilter</div>
+</div>
+</body>
+</html>

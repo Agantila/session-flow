@@ -1,0 +1,8 @@
+file 'frames/s1-kaskade-%03d.png'
+duration 1.25
+file 'frames/s2-chip-%03d.png'
+duration 1.25
+file 'frames/s3-hud-%03d.png'
+duration 1.25
+file 'frames/s4-donut-%03d.png'
+duration 1.25

@@ -1,0 +1,93 @@
+<!doctype html>
+<!-- Session Flow Hero A5 — Ctrl+Scroll-HUD als Overlay über dem Chat (16:9) -->
+<html><head><meta charset='utf-8'><link rel='stylesheet' href='base.css'>
+<style>
+.window{width:1280px;height:720px}
+.pane{width:420px}
+.phead{padding:14px 16px 10px;gap:9px}
+.ibtn{width:36px;height:36px;border-radius:10px;font-size:19px}
+.searchbox{height:38px;border-radius:10px;font-size:15px;margin:0 16px 12px;gap:8px}
+.searchbox .ci{font-size:16px}
+.ghd{padding:8px 15px 8px 12px;font-size:15px;gap:8px}
+.ghd .caret{font-size:16px;width:16px}
+.ghd .fic{font-size:17px}
+.ghd .gcnt{font-size:13px}
+.srow{margin:2px 10px;padding:8px 10px;border-radius:11px;gap:10px}
+.srow .act{font-size:17px;width:20px}
+.srow .stitle{font-size:15px}
+.srow.hv{background:var(--row-hover)}
+.main{background:linear-gradient(180deg,#15171c,#111318)}
+.m-top{display:flex;align-items:center;gap:10px;padding:18px 30px;border-bottom:1px solid var(--stroke);
+  font-size:18px;font-weight:600;color:var(--text)}
+.m-top .ci{font-size:20px;color:var(--text3)}
+.chat{flex:1;padding:30px 48px 20px;gap:20px}
+.m-user{font-size:16px;padding:13px 18px;border-radius:18px 18px 6px 18px;max-width:62%}
+.avrow{font-size:13px}.avrow .av{width:24px;height:24px;border-radius:8px;font-size:15px}
+.line{font-size:16px;line-height:1.6}
+/* HUD gemäß plugin.js .sf-hud-card, als großer eingefrorener Moment */
+.hud{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);z-index:9;
+  display:flex;align-items:center;gap:12px;padding:14px 24px;border-radius:15px;
+  border:1px solid var(--stroke2);
+  background:rgba(22,24,29,.94);backdrop-filter:blur(8px);
+  box-shadow:0 14px 40px rgba(0,0,0,.5)}
+.hud .hci{color:#b1d1f5;font-size:20px}
+.hud .hidx{font-size:16px;color:var(--text3)}
+.hud .htitle{font-size:19px;font-weight:600;color:var(--text);white-space:nowrap}
+.hud .hgrp{font-size:15px;color:var(--text4);padding-left:13px;border-left:1px solid rgba(255,255,255,.09)}
+/* Scroll-Positionsleiste als Teil des Moments */
+.hudtrack{position:absolute;right:22px;top:120px;bottom:120px;width:5px;border-radius:99px;
+  background:rgba(255,255,255,.07);z-index:8}
+.hudthumb{position:absolute;right:19px;top:150px;width:11px;height:90px;border-radius:99px;
+  background:var(--accent);box-shadow:0 0 14px rgba(88,166,255,.65);z-index:8}
+</style></head>
+<body><div class='stage'><div class='canvas'>
+<div class='window'>
+  <div class='pane'>
+    <div class='phead'>
+      <span class='ibtn primary'><span class='ci'></span></span>
+      <span class='spacer'></span>
+      <span class='ibtn'><span class='ci'></span></span>
+    </div>
+    <div class='searchbox'><span class='ci'></span><span class='ph'>Sessions durchsuchen…</span></div>
+    <div class='ghd'>
+      <span class='caret'><span class='ci'></span></span>
+      <span class='fic'><span class='ci'></span></span>
+      <span>session-flow</span>
+      <span class='gcnt'>4</span>
+    </div>
+    <div class='srow'>
+      <span class='act' style='color:var(--ok)'><span class='ci'></span></span>
+      <span class='stitle'>Roadmap-Review Q4</span>
+    </div>
+    <div class='srow hv'>
+      <span class='act' style='color:#b1d1f5'><span class='ci'></span></span>
+      <span class='stitle'>Hero-Renderings bauen</span>
+    </div>
+    <div class='srow'>
+      <span class='act' style='color:var(--text4)'><span class='ci'></span></span>
+      <span class='stitle'>Shotlist-QA Rev. 2</span>
+    </div>
+  </div>
+  <div class='main'>
+    <div class='m-top'><span class='ci'></span> Hero-Renderings bauen</div>
+    <div class='chat'>
+      <div class='m-user'>Blätter ein wenig durch den Verlauf.</div>
+      <div class='m-assist'>
+        <div class='avrow'><span class='av'><span class='ci'></span></span> Hermes · Agent</div>
+        <div class='line'>Mit <b>Strg+Scroll</b> springst du sessionweise durch die offenen Chats — das HUD blendet kurz Position und Titel ein.</div>
+        <div class='line'>Position 2 von 4 · <code>Hero-Renderings bauen</code> in <code>session-flow</code>.</div>
+        <div class='line'>Der HUD-Moment ist hier eingefroren: halbtransparent, unteres Drittel, mit Session-Titel und Gruppe.</div>
+        <div class='line'>In Bewegung löst jede Rasterschritt einen neuen HUD-Puls aus; die Dauer ist einstellbar (HUD-Dauer).</div>
+      </div>
+    </div>
+    <div class='hudtrack'></div><div class='hudthumb'></div>
+    <div class='hud'>
+      <span class='ci hci'></span>
+      <span class='hidx'>2 / 4</span>
+      <span class='htitle'>Hero-Renderings bauen</span>
+      <span class='hgrp'>session-flow</span>
+    </div>
+  </div>
+</div>
+<div class='capwrap'><div class='caption'><b>Ctrl+Scroll-HUD</b> — Positions- &amp; Titel-Overlay, eingefroren</div></div>
+</div></div></body></html>

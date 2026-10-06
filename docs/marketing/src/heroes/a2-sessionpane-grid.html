@@ -1,0 +1,138 @@
+<!doctype html>
+<!-- Session Flow Hero A2 — Session Pane, Grid-Ansicht, More-Menü offen (16:9) -->
+<html><head><meta charset='utf-8'><link rel='stylesheet' href='base.css'>
+<style>
+.window{width:1280px;height:720px;position:relative}
+.pane{width:560px}
+.phead{padding:16px 20px 12px;gap:10px}
+.ibtn{width:40px;height:40px;border-radius:11px;font-size:22px}
+.psearch{flex-direction:row;align-items:center;gap:11px;padding:4px 20px 14px}
+.searchbox{flex:1}
+.searchbox{height:42px;border-radius:11px;font-size:17px;padding:0 12px;gap:9px}
+.searchbox .ci{font-size:18px}
+.segment{border-radius:11px;padding:3px;gap:3px}
+.segment span{font-size:15px;padding:7px 10px;border-radius:8px}
+.pane-body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.ghd{padding:10px 18px 10px 14px;font-size:17px;gap:9px}
+.ghd .caret{font-size:18px;width:18px}
+.ghd .dot{width:11px;height:11px}
+.ghd .fic{font-size:19px}
+.ghd .gcnt{font-size:14px}
+.srow{margin:2px 12px;padding:9px 11px;border-radius:12px;gap:11px}
+.srow .act{font-size:19px;width:22px}
+.srow .stitle{font-size:17px}
+.srow .smeta{font-size:14px}
+.srow .dots{font-size:18px;width:24px;height:24px;border-radius:7px}
+/* Grid-Bereich in der Pane selbst (v1.20 Grid) */
+.gridwrap{flex:1;padding:6px 14px 12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.gcard{background:var(--card);border:1px solid var(--stroke);border-radius:14px;
+  padding:13px 14px;display:flex;flex-direction:column;gap:8px;position:relative}
+.gcard .crow{display:flex;align-items:center;gap:9px}
+.gcard .cact{font-size:19px}
+.gcard .ctitle{font-size:16px;font-weight:600;color:var(--text);flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gcard .cdots{color:var(--text3);font-size:19px;width:26px;height:26px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;background:var(--row-hover)}
+.gcard .cmeta{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text4)}
+.gcard .cdot{width:8px;height:8px;border-radius:50%}
+.gcard .cbar{height:4px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+.gcard .cbar i{display:block;height:100%;width:62%;background:var(--accent);border-radius:99px}
+.gcard.sel{border-color:color-mix(in srgb,var(--accent) 45%,transparent);
+  background:color-mix(in srgb,var(--accent) 9%,var(--card))}
+/* More-Menü, offen über der ausgewählten Karte */
+.menu2{position:absolute;top:278px;left:267px;z-index:9;width:290px;
+  background:#22262e;border:1px solid var(--stroke2);border-radius:14px;
+  box-shadow:0 28px 64px rgba(0,0,0,.55);padding:8px}
+.menu2 .mi{display:flex;align-items:center;gap:12px;font-size:16px;color:var(--text2);
+  padding:10px 12px;border-radius:9px}
+.menu2 .mi .ci{font-size:19px;color:var(--text3)}
+.menu2 .mi.hv{background:var(--row-hover);color:var(--text)}
+.menu2 .mi.hv .ci{color:var(--text)}
+.menu2 .msep{height:1px;background:var(--stroke);margin:6px 8px}
+.menu2 .mi.danger{color:var(--err)}.menu2 .mi.danger .ci{color:var(--err)}
+</style></head>
+<body><div class='stage'><div class='canvas'>
+<div class='window'>
+  <div class='pane'>
+    <div class='phead'>
+      <span class='ibtn primary'><span class='ci'></span></span>
+      <span class='ibtn'><span class='ci'></span></span>
+      <span class='spacer'></span>
+      <span class='ibtn'><span class='ci'></span></span>
+    </div>
+    <div class='psearch'>
+      <div class='searchbox'><span class='ci'></span><span class='ph'>Sessions durchsuchen…</span></div>
+      <div class='segment'><span class='on'>Alle</span><span>Aktiv</span><span>Archiv</span></div>
+    </div>
+    <div class='pane-body'>
+      <div class='ghd'>
+        <span class='caret'><span class='ci'></span></span>
+        <span class='fic'><span class='ci'></span></span>
+        <span>session-flow</span>
+        <span class='gcnt'>6 Sessions</span>
+      </div>
+      <div class='gridwrap'>
+        <div class='grid2'>
+          <div class='gcard'>
+            <div class='crow'><span class='cact' style='color:var(--ok)'><span class='ci'></span></span>
+              <span class='ctitle'>Docs-Sprint</span>
+              <span class='cdots'><span class='ci'></span></span></div>
+            <div class='cmeta'><span class='cdot' style='background:var(--text4)'></span> vor 3 Std. · 12,4k Tokens</div>
+            <div class='cbar'><i></i></div>
+          </div>
+          <div class='gcard sel'>
+            <div class='crow'><span class='cact' style='color:#b1d1f5'><span class='ci'></span></span>
+              <span class='ctitle'>Hero-Renderings bauen</span>
+              <span class='cdots'><span class='ci'></span></span></div>
+            <div class='cmeta'><span class='cdot' style='background:var(--accent)'></span> Tool läuft · playwright</div>
+            <div class='cbar'><i></i></div>
+          </div>
+          <div class='gcard'>
+            <div class='crow'><span class='cact' style='color:var(--warn)'><span class='ci'></span></span>
+              <span class='ctitle'>Release-Notes Review</span>
+              <span class='cdots'><span class='ci'></span></span></div>
+            <div class='cmeta'><span class='cdot' style='background:var(--warn)'></span> Wartet auf Antwort</div>
+            <div class='cbar'><i></i></div>
+          </div>
+          <div class='gcard'>
+            <div class='crow'><span class='cact' style='color:var(--text4)'><span class='ci'></span></span>
+              <span class='ctitle'>CHANGELOG v1.21</span>
+              <span class='cdots'><span class='ci'></span></span></div>
+            <div class='cmeta'><span class='cdot' style='background:var(--text4)'></span> vor 20 Min. · 8,1k Tokens</div>
+            <div class='cbar'><i></i></div>
+          </div>
+        </div>
+      </div>
+      <div class='srow'>
+        <span class='act' style='color:var(--text4)'><span class='ci'></span></span>
+        <span class='stitle'>Marketing-Ordner aufräumen</span>
+        <span class='smeta'>gestern</span>
+        <span class='dots'><span class='ci'></span></span>
+      </div>
+    </div>
+  </div>
+  <div class='main' style='background:
+    radial-gradient(60% 50% at 70% 20%,rgba(88,166,255,.05),transparent 70%),
+    linear-gradient(180deg,#15171c,#111318)'>
+    <div style='flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--text4)'>
+      <div style='width:74px;height:74px;border-radius:22px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);border:1px solid var(--stroke);font-size:34px;color:var(--text3)'><span class='ci'></span></div>
+      <div style='font-size:21px;font-weight:600;color:var(--text3)'>Grid-Ansicht</div>
+      <div style='font-size:15px'>Kompakte Session-Karten mit Live-Status.</div>
+    </div>
+  </div>
+  <!-- offenes More-Menü der ausgewählten Grid-Karte -->
+  <div class='menu2'>
+    <div class='mi'><span class='ci'></span> Öffnen</div>
+    <div class='mi hv'><span class='ci'></span> Umbenennen…</div>
+    <div class='mi'><span class='ci'></span> Anpinnen</div>
+    <div class='mi'><span class='ci'></span> Session-Farbe</div>
+    <div class='msep'></div>
+    <div class='mi'><span class='ci'></span> Terminal öffnen</div>
+    <div class='mi'><span class='ci'></span> Archivieren</div>
+    <div class='msep'></div>
+    <div class='mi danger'><span class='ci'></span> Löschen</div>
+  </div>
+</div>
+<div class='capwrap'><div class='caption'><b>Session Pane</b> — Grid-Ansicht mit More-Menü</div></div>
+</div></div></body></html>

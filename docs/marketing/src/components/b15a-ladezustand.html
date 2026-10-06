@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Session Flow — b15a-ladezustand</title>
+<link rel="stylesheet" href="assets/codicon.css">
+<link rel="stylesheet" href="sf-plugin.css">
+<link rel="stylesheet" href="showcase.css">
+</head>
+<body class="card-body">
+<div class="card" id="shot">
+  <div class="stage">
+    <div class="motif" style="--w:600px;--z:1.12;--r:10px">
+      <div class="sf-pane" style="padding:8px">
+        <div class="sf-section">
+          <div class="sf-group-head sf-group-project sf-group-twoline"><span class="sf-group-caret"><i class="codicon codicon-chevron-down" style="font-size:12px"></i></span><span class="sf-group-lead-icon"><i class="codicon codicon-folder" style="font-size:13px;color:#58a6ff"></i></span><span class="sf-group-text"><span class="sf-group-name">Projekte werden geladen…</span><span class="sf-group-sub">Sessions erscheinen sofort; die Projekt-Gruppierung folgt unmittelbar.</span></span><span class="sf-group-actions" title="Neue Session in diesem Projekt"><i class="codicon codicon-add" style="font-size:14px"></i></span><span class="sf-group-count">0</span></div>
+        </div>
+        <div class="sf-load" data-phase="gate">
+          <div class="sf-load-title"><i class="codicon codicon-plug" style="font-size:14px"></i> Warte auf das Gateway…</div>
+          <div class="sf-load-bar"></div>
+          <div class="sf-load-hint">Sobald das Gateway die Sessions anzeigt, erscheinen sie samt Projekten hier automatisch.</div>
+        </div>
+        <div class="sf-load" data-phase="loading">
+          <div class="sf-load-title"><i class="codicon codicon-loading sf-icon-spin" style="font-size:14px"></i> Sessions werden geladen…</div>
+          <div class="sf-load-bar"></div>
+          <div class="sf-load-hint">Sessions und Projekte werden gerade geladen.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Ladezustand — Gateway-Gate, Ladebalken und Pending-Sektion</div>
+</div>
+</body>
+</html>

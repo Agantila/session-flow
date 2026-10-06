@@ -13,6 +13,34 @@ SDK (`~/.hermes/desktop-plugins/`). No build step, no dependencies, one file.
 
 A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
 
+## Showcase
+
+![Session Pane with project groups, pinned section and search bar](docs/marketing/heroes/sf-hero-a1-sessionpane-liste-16x9.png)
+
+| | |
+|---|---|
+| ![Chat line-by-line cascade](docs/marketing/heroes/sf-hero-a3-chat-kaskade-16x9.png) | ![Composer glass look with project chip](docs/marketing/heroes/sf-hero-a4-composer-glass-16x9.png) |
+| ![Ctrl+Scroll HUD](docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png) | ![Settings — everything configurable](docs/marketing/heroes/sf-hero-a7-settings-16x9.png) |
+| ![Grid session view with more menu open](docs/marketing/heroes/sf-hero-a2-sessionpane-grid-16x9.png) | ![Sidebar-style content tabs with working-session glow](docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png) |
+| ![Personalised workspace — own chat background, accent in focus](docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png) | |
+
+▶ **See it move:** the 5-second Hyperframes animation
+([MP4](docs/marketing/animation/sf-hyperframes-1920x1080-5s.mp4) ·
+[WebM](docs/marketing/animation/sf-hyperframes-1920x1080-5s.webm) ·
+[GIF](docs/marketing/animation/sf-hyperframes-1920x1080-5s.gif))
+shows the cascade, the project chip, the Ctrl+Scroll HUD and the context donut
+in one short loop.
+
+**19 component cards (1:1)** — every UI element that shapes the new look, each
+in its own card, ready to drop into docs, slides or the marketplace listing:
+[docs/marketing/components/](docs/marketing/components/). The full inventory is
+in [docs/marketing/INVENTORY.md](docs/marketing/INVENTORY.md).
+
+> All 30 images are reproducible from the HTML sources under
+> [docs/marketing/src/](docs/marketing/src/). Re-render with
+> `docs/marketing/src/heroes/render.sh` and
+> `docs/marketing/src/components/render.sh`.
+
 ## Features
 
 1. **Line-by-line chat animation** — Assistant answers ease in instead of

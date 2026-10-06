@@ -11,3 +11,6 @@ Thumbs.db
 *.zip
 *.bak
 *.tmp
+
+# Hyperframes-Frames (Renderer-Output; 120 PNGs ~150 MB; aus src/ reproduzierbar)
+docs/marketing/animation/frames/
