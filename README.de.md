@@ -274,6 +274,22 @@ dem Einstiegspunkt des Plan-/Dokumentationssystems unter
 Siehe [CONTRIBUTING.md](CONTRIBUTING.md) — Dev-Loop, Konventionen, PR-Checkliste
 und wie das Repo auf GitHub veröffentlicht wird.
 
+## Listing im Hermes-Plugin-Katalog
+
+Für die Aufnahme in `hermes plugins catalog` / `hermes plugins search`:
+
+- Der Katalogeintrag liegt in
+  [`plugin-catalog/session-flow.yaml`](plugin-catalog/session-flow.yaml) im
+  `NousResearch/hermes-agent`-Repo (PR only — human-merged).
+- `sha` muss ein exakter 40-Hex-Commit-Pin sein. Bump = neuer PR, dessen Diff
+  neu reviewt wird.
+- Die vollständige PR-Beschreibungs-Vorlage (Capabilities, Disclosure nach
+  Regel 13, Verifikations-Schritte) liegt in
+  [docs/PLUGIN-CATALOG-PR.md](docs/PLUGIN-CATALOG-PR.md) — in den
+  Katalog-PR kopieren und SHA + Version anpassen.
+- `requires_hermes` ist ein SemVer-Floor (`">=0.21.5"`), `version` matched
+  den gepinnten Code.
+
 ## Sicherheit
 
 Siehe [SECURITY.md](SECURITY.md) — Plugins laufen ungesandboxed im Renderer;

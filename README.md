@@ -264,6 +264,22 @@ the entry point for the plan/documentation system under
 See [CONTRIBUTING.md](CONTRIBUTING.md) (German) — dev loop, conventions, PR
 checklist and how to publish the repo to GitHub.
 
+## Listing in the Hermes Plugin Catalog
+
+For inclusion in `hermes plugins catalog` / `hermes plugins search`:
+
+- The catalog entry lives in
+  [`plugin-catalog/session-flow.yaml`](plugin-catalog/session-flow.yaml) in
+  the upstream `NousResearch/hermes-agent` repo (PR only — human-merged).
+- `sha` must be an exact 40-hex commit pin. Bumping the pin is a new PR
+  whose diff reviewers re-review.
+- The full PR-description template (capabilities, disclosure under Rule 13,
+  verification steps) lives in
+  [docs/PLUGIN-CATALOG-PR.md](docs/PLUGIN-CATALOG-PR.md) — copy it into the
+  catalog PR and edit the SHA + version.
+- `requires_hermes` is a SemVer floor (`">=0.21.5"`), `version` matches the
+  pinned code.
+
 ## Security
 
 See [SECURITY.md](SECURITY.md) — plugins run unsandboxed in the renderer; report
