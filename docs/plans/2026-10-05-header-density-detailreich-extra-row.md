@@ -1,8 +1,9 @@
 # Kopfzeilen-Dichte „Detailreich": zweite Kennzahl-Zeile
 
-- **Status**: In Arbeit (Hybrid-Pfad freigegeben durch Benutzer 2026-10-05)
+- **Status**: Offen — blockiert auf App-Route `/api/getFolderSize` (Rest
+  umgesetzt und live; siehe „Stand" am Ende)
 - **Erstellt**: 2026-10-05
-- **Abgeschlossen**: —
+- **Abgeschlossen**: — (Teil-Lieferung in v1.18.0, Stabilisierung in v1.22.2)
 - **Betrifft**: `plugin.js` (`SectionHeader`, `buildSections`, neuer Atom
   `$folderSizes`, Settings, CSS, Render-Smoketest), `docs/SETTINGS.md`,
   `CHANGELOG.md`, `package.json`. **Kein** Gateway-Patch nötig — der
@@ -226,3 +227,22 @@ angegeben):
   usage` echte Token-Summen UND `updated_at` liefern, kann die Hybrid-
   Zeile durch eine ehrliche Gesamt-Zeile ersetzt werden (heutiger
   Hybrid zeigt nur Live-Ausschnitte).
+
+## Stand (geprüft 2026-10-06)
+
+- **Umgesetzt und live**: zweite Kennzahl-Zeile in `detailed`
+  (`.sf-group-stats-2` innerhalb `.sf-group-threeline`), „Letzte Änderung"
+  aus `max(started_at, last_active)` plus „Tokens: used / max · %" aus
+  `$ctxInfo` — live im laufenden Desktop mit fünf Projekt-Gruppen gesehen.
+- **Stabilisiert in v1.22.2**: der Nachlade-`useEffect` für die Ordnergröße
+  lag im `density === 'detailed'`-Zweig und ließ die Pane beim Umschalten der
+  Dichte mit React #300/#310 abstürzen — Plan
+  `docs/plans/2026-10-06-fix-kopfzeilen-dichte-crash.md`.
+- **Blockiert (der Grund für den „Offen"-Status)**: die Kennzahl
+  „Ordner: … MB" fehlt weiterhin, weil die App-Route `/api/getFolderSize`
+  NICHT existiert. Gegengeprüft am 2026-10-06: kein Treffer für
+  `getFolderSize` im hermes-agent-Checkout (weder Electron-IPC noch
+  REST-Router) — `fetchFolderSizeOnce()` läuft daher in den `catch`-Zweig,
+  cacht nichts und die Zeile lässt das Feld ehrlich weg. Sobald die Route
+  da ist, funktioniert die Kennzahl ohne Plugin-Änderung (der Aufruf steht
+  schon).
