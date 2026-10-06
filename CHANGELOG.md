@@ -3,6 +3,43 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.24.1] — 2026-10-06
+
+### Fixed
+- **Bootstrap-Fehler hatte keinen Weg zurück (Pane blieb im Fehlerzustand
+  hängen)**: scheiterte der ERSTE Daten-Satz beim App-Start (REST-Bridge +
+  RPC), blieb `$loadPhase = 'error'` dauerhaft stehen — der Reconnect-Listener
+  zog nur die Listen nach, nicht die Lade-UI, und die Pane bot keine
+  Handhabe. `reconnectRefresh()` setzt die Phase jetzt bei
+  `!bootstrapDoneOnce || Phase error` auf `loading`, und der Fehler-Leerzustand
+  trägt einen **Retry-Button** („Erneut versuchen"), der Sessions, Projekt-Baum
+  und Pin-Spiegel direkt neu lädt. Plan:
+  `docs/plans/2026-10-06-analyse-verbesserungen.md` (Befunde A + C).
+- **Composer-Pick blieb im „schon im Projekt"-Fall stehen**: der
+  Draft-Pick-Übergang (`adoptComposerPickForNewSession`) räumte den Pick erst
+  NACH dem Projekt-Lookup weg — traf der „Session liegt bereits im
+  Ziel-Projekt"-No-Op zu, zeigte der Chip weiter das alte Label. Der Pick wird
+  jetzt in ALLEN No-Op-Pfaden verworfen (Befund B).
+- **Rehoming-Fehler war still**: schlugen `session.workspace.move` UND der
+  `session.cwd.set`-Fallback fehl, bekam der User weder Toast noch Feedback
+  und der Pick suggerierte weiter Gültigkeit. Jetzt error-Toast
+  („Projekt konnte nicht gesetzt werden") + Pick-Verwurf (Befund E).
+
+### Added
+- **Schnellfilter „Angepinnt"**: die Filter-Leiste der Pane hat zwischen
+  „Aktiv" und „Archiv" jetzt einen vierten Modus, der NUR die angepinnten
+  Sessions zeigt (die feste Pinned-Sektion); die Textsuche greift darin wie
+  überall (Befund H).
+- **„Alles zurücksetzen" in Einstellungen → Über**: setzt ALLE Optionen zurück
+  UND löscht manuelle Gruppen, Projekt-Zuordnungen (Seeds) und den
+  Composer-Pick — hinter einem Bestätigungsdialog (destructive). Sessions
+  selbst bleiben unberührt (Befund J).
+
+### Changed
+- `measureComposerRadius()` schreibt `--sf-arc-radius` nur noch bei
+  Wertänderung — der 4-s-Takt erzeugt keinen Style-Invalidierungsschub mehr,
+  wenn die Composer-Kontur sich nicht geändert hat (Befund L).
+
 ## [1.24.0] — 2026-10-06
 
 ### Fixed

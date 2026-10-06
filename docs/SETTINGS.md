@@ -97,12 +97,15 @@ Pane-Besuch startet die Filter immer frisch):
 
 - **Suche**: Textfeld, durchsucht Titel, Branch und Vorschau (klein-/
   großschreibungsunabhängig). Ein ✕ im Feld leert die Suche.
-- **Schnellfilter**: `Alle` / `Aktiv` als Segmented-Control (der frühere
-  `Angepinnt`-Chip ist die feste Angepinnt-Sektion). `Alle` zeigt die
+- **Schnellfilter**: `Alle` / `Aktiv` / `Angepinnt` / `Archiv` als
+  Segmented-Control (der frühere `Angepinnt`-Chip ist die feste Angepinnt-Sektion).
+  `Alle` zeigt die
   Startzeit-Reihenfolge mit Gruppen; `Aktiv` zeigt eine **flache Liste ohne
   Kopfzeilen**: laufende Sessions oben, darunter nur Sessions, die **heute**
   aktiv waren (lokale Mitternacht als Grenze) — je absteigend nach letzter
-  Aktivität. Alles andere wird ausgeblendet.
+  Aktivität. `Angepinnt` (seit v1.24.1) zeigt NUR die feste Angepinnt-Sektion
+  mit ihren Zeilen; `Archiv` lädt die archivierten Sessions on demand (60-s-TTL).
+  Alles andere wird ausgeblendet.
 - Wird die Liste durch Suche bzw. den Aktiv-Modus leer, erscheint ein eigener
   Leerzustand („Keine Sessions passen zu diesem Filter") statt des
   generischen „keine Sessions"-Hinweises.
@@ -370,4 +373,7 @@ Pane farbgleich mit der nativen Sessions-Sidebar.
 - **Lizenz**: MIT (Open Source) — frei nutzbar, veränderbar und teilbar.
 - **Zähler**: Sessions und manuelle Gruppen in der aktuellen Liste.
 - **Zurücksetzen**: „Einstellungen zurücksetzen" und „Gruppen zurücksetzen"
-  stellen den Auslieferungszustand wieder her.
+  stellen den Auslieferungszustand wieder her. **„Alles zurücksetzen" (seit
+  v1.24.1)** geht einen Schritt weiter und löscht zusätzlich Projekt-Zuordnungen
+  (Seeds) und den Composer-Pick — hinter einem Bestätigungsdialog; die Sessions
+  selbst bleiben immer unberührt.

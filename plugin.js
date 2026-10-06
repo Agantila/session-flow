@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.24.0'
+const VERSION = '1.24.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1244,7 +1244,16 @@ function measureComposerRadius() {
       return
     }
 
-    document.documentElement.style.setProperty('--sf-arc-radius', `max(0px, calc(${value} - 1px))`)
+    // Nur schreiben, wenn sich der Wert geändert hat (v1.24.0): der 4-s-Takt
+    // kostet sonst bei jedem Tick einen Style-Invalidierungsschub, obwohl die
+    // Kontur sich selten ändert.
+    const next = `max(0px, calc(${value} - 1px))`
+
+    if (document.documentElement.style.getPropertyValue('--sf-arc-radius') === next) {
+      return
+    }
+
+    document.documentElement.style.setProperty('--sf-arc-radius', next)
   } catch (error) {
     console.warn(`[${ID}] radius measure failed`, error)
   }
@@ -1863,10 +1872,12 @@ function projectForCwd(cwd) {
  * `resolveNewSessionCwd` = Projekt-Scope-Wurzel). Quelle sind genau die Atome
  * der NATIVEN Sessions-Seitenleiste: ihr „+" am Projekt / der Projekt-Scope
  * setzen `$currentCwd` bzw. `hermes.desktop.projectScope` (persistentAtom
- * schreibt den Key bei jeder Änderung — Lesen ist ehrlich, Schreiben nicht).
- * Früher rief diese Funktion die ASYNC `resolveNewProjectSessionCwd()` ohne
- * await auf → `.cwd` eines Promise war immer undefined, der Chip lernte nie
- * einen nativen Anker.
+ * schreibt den Key bei jeder Änderung — Lesen ist ehrlich, Schreiben nicht;
+ * deshalb liest NUR diese Funktion den localStorage und KEIN Plugin-Pfad
+ * schreibt ihn — siehe applyComposerPick, dort der bewusste Nicht-Schreib-
+ * Kommentar). Früher rief diese Funktion die ASYNC
+ * `resolveNewProjectSessionCwd()` ohne await auf → `.cwd` eines Promise war
+ * immer undefined, der Chip lernte nie einen nativen Anker.
  */
 function composerDraftAnchor() {
   let scope = ''
@@ -1987,6 +1998,20 @@ async function rehomeFocusedSession(storedId, node) {
         console.warn(`[${ID}] session.cwd.set (Pill-Fallback) fehlgeschlagen`, error)
       }
     }
+  }
+
+  // Beide Schreibwege gescheitert → sichtbar melden (v1.24.0) und Pick
+  // verwerfen, damit der Chip nicht weiter Gültigkeit suggeriert. Vorher
+  // blieb der Fehler still: kein Toast, Pick stand weiter im Atom.
+  if (!persisted) {
+    $composerPick.set({ id: '', label: '', color: null, at: 0 })
+    host.notify({
+      kind: 'error',
+      message: CTX?.i18n?.t('composerProjectRehomeFail')
+        || 'Projekt konnte nicht gesetzt werden — bitte erneut versuchen.'
+    })
+
+    return
   }
 
   const targetNode = $projectsList.get().find(entry => !entry.isNoProject && entry.path === cwd)
@@ -3401,6 +3426,15 @@ function bootstrapSessionData() {
 
 /** Zieht beim Reconnect/Resume genau das nach, was potentiell veraltet ist. */
 function reconnectRefresh() {
+  // Selbstheilung nach Cold-Start-Fehler (v1.24.0): War der ERSTE Daten-Satz
+  // beim App-Start erfolglos (Phase „error", Store leer), läuft der Reconnect
+  // wie ein echter Bootstrap — mit Lade-UI statt eingefrorenem Fehlertext.
+  // Ohne diesen Zweig blieb die Pane nach einem initialen Gateway-Fehler
+  // dauerhaft im error-Zustand, obwohl der Socket längst wieder offen war.
+  if (!bootstrapDoneOnce || $loadPhase.get() === 'error') {
+    $loadPhase.set('loading')
+  }
+
   // Debounced Session-Liste (REST liefert pinned/unread/costs → der am
   // schnellsten „alt" wirkende Datensatz).
   scheduleSessionsRefresh(400)
@@ -3424,6 +3458,16 @@ function reconnectRefresh() {
  * noch nicht gefüllt aussieht — Session-Liste nur bei leerem Store,
  * Projekt-Baum/Pins analog. Guards + TTL-Checks in jedem Refresh fangen
  * Spam ab.
+ *
+ * Bekanntes, bewusstes Verhalten (v1.24.0 dokumentiert): Eine ECHT leere
+ * Session-Liste (keine Sessions vorhanden) wird von diesem Nachlauf nicht
+ * unterschieden von „Cache noch kalt" — der 1,8-s-/4,5-s-Tick fragt dann
+ * einmal nach, erhält weiterhin leer und stellt danach nichts mehr an. Der
+ * sichtbare Effekt ist ein einmaliger, stiller Doppel-Request, kein UI-
+ * Flackern: `$sessions` bleibt auf `[]` und die Pane zeigt ihren normalen
+ * Leerzustand. Kein Umbau nötig; falls das je messbar stört, wäre ein
+ * „leer + erfolgreich geladen"-Marker (Refresh-Succeeded-Stamp ohne Rows)
+ * der ehrliche Hebel.
  */
 function scheduleSettleIn(ctx) {
   const setTimer = typeof ctx?.setTimeout === 'function' ? ctx.setTimeout : (fn, ms) => window.setTimeout(fn, ms)
@@ -4497,6 +4541,7 @@ const EN = {
   empty: 'No sessions found',
   emptyHint: 'Start a chat — it will show up here as a tab.',
   error: 'Could not load the session list',
+  errorRetry: 'Retry',
 
   // Actions
   open: 'Open',
@@ -4780,6 +4825,8 @@ const EN = {
   aboutStatsDesc: 'Sessions and manual groups in the current list.',
   aboutResetSettings: 'Reset settings',
   aboutResetSettingsDesc: 'Restore every option on this page to its default.',
+  aboutResetAll: 'Reset everything',
+  aboutResetAllDesc: 'Resets all options AND deletes manual groups, project assignments and the composer pick. Sessions themselves stay untouched.',
   aboutResetGroups: 'Reset groups',
   aboutResetGroupsDesc: 'Delete all manual groups — the sessions stay in the list.',
   aboutHint: 'Changes apply and persist immediately. File: desktop-plugins/session-flow/plugin.js',
@@ -4986,6 +5033,7 @@ const EN = {
   composerProjectMenuHint: 'Target project for the next message',
   composerProjectPickToast: 'No projects yet — create one in the sessions pane.',
   composerProjectRehomeOk: 'Project set',
+  composerProjectRehomeFail: 'Project could not be set — please try again.',
   composerProjectHomeSessionHint: 'An existing session cannot move to Home.',
   composerProjectPill: 'Project pill in composer',
   composerProjectPillDesc: 'Shows the target project above the input field and lets you switch it before the first message (new session) or re-home the current session.',
@@ -5111,6 +5159,7 @@ const DE = {
   empty: 'Keine Sessions gefunden',
   emptyHint: 'Starte einen Chat — er erscheint hier als Tab.',
   error: 'Session-Liste konnte nicht geladen werden',
+  errorRetry: 'Erneut versuchen',
 
   open: 'Öffnen',
   openTab: 'In neuem Tab öffnen',
@@ -5387,6 +5436,8 @@ const DE = {
   aboutStatsDesc: 'Sessions und manuelle Gruppen in der aktuellen Liste.',
   aboutResetSettings: 'Einstellungen zurücksetzen',
   aboutResetSettingsDesc: 'Setzt alle Optionen dieser Seite auf ihre Standardwerte zurück.',
+  aboutResetAll: 'Alles zurücksetzen',
+  aboutResetAllDesc: 'Setzt alle Optionen zurück UND löscht manuelle Gruppen, Projekt-Zuordnungen und den Composer-Pick. Die Sessions selbst bleiben unberührt.',
   aboutResetGroups: 'Gruppen zurücksetzen',
   aboutResetGroupsDesc: 'Löscht alle manuellen Gruppen — die Sessions bleiben in der Liste.',
   aboutHint: 'Änderungen werden sofort wirksam und gespeichert. Datei: desktop-plugins/session-flow/plugin.js',
@@ -5593,6 +5644,7 @@ const DE = {
   composerProjectMenuHint: 'Ziel-Projekt für die nächste Eingabe',
   composerProjectPickToast: 'Noch keine Projekte — im Sessions-Pane anlegen.',
   composerProjectRehomeOk: 'Projekt gesetzt',
+  composerProjectRehomeFail: 'Projekt konnte nicht gesetzt werden — bitte erneut versuchen.',
   composerProjectHomeSessionHint: 'Eine bestehende Session kann nicht nach Home verschoben werden.',
   composerProjectPill: 'Projekt-Pill im Composer',
   composerProjectPillDesc: 'Zeigt das Ziel-Projekt über dem Eingabefeld und erlaubt den Wechsel vor der ersten Eingabe (neue Session) bzw. das Verschieben der aktuellen Session.',
@@ -5932,6 +5984,9 @@ html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx[data-level=high]{--sf
 .sf-load-bar::after{content:"";position:absolute;inset:0;width:38%;border-radius:inherit;background:var(--ui-accent);animation:sf-load-slide 1.15s var(--ease-out,cubic-bezier(0.22,1,0.36,1)) infinite}
 @keyframes sf-load-slide{0%{transform:translateX(-110%)}100%{transform:translateX(290%)}}
 .sf-load-hint{font-size:.75rem;line-height:1.45;color:var(--ui-text-quaternary)}
+/* Retry-Button im Fehler-Leerzustand (v1.24.1): eigene Aktionszeile mit
+   Abstand zum Fehlertext, Button nutzt die SDK-Button-Optik (ghost). */
+.sf-load-actions{display:flex;justify-content:center;margin-top:10px}
 html[data-renderer-animations-paused] .sf-load-bar::after{animation-play-state:paused}
 @media (prefers-reduced-motion:reduce){.sf-load-bar::after{animation:none;transform:translateX(60%)}}
 
@@ -9093,9 +9148,20 @@ function SessionsPane() {
     return [row.title, row.branch, row.preview].some(value => String(value || '').toLowerCase().includes(needle))
   }
 
-  // Suche UND der Aktiv-Modus gelten als aktive Filter (Zähler, Leerzustand).
-  const filterActive = Boolean(needle) || filterMode === 'active'
+  // Suche UND der Aktiv-/Angepinnt-Modus gelten als aktive Filter (Zähler,
+  // Leerzustand).
+  const filterActive = Boolean(needle) || filterMode === 'active' || filterMode === 'pinned'
   const filteredSections = useMemo(() => {
+    // Angepinnt-Modus (v1.24.0): NUR die Pinned-Sektion zeigen — die Zeilen
+    // sind bereits der Pin-Spiegel, Suche greift wie überall. Ohne Treffer
+    // gilt der normale Filter-Leerzustand.
+    if (filterMode === 'pinned') {
+      return sections
+        .filter(section => section.kind === 'pinned')
+        .map(section => ({ ...section, items: section.items.filter(matchesFilter) }))
+        .filter(section => section.items.length > 0 || section.isDropPlaceholder)
+    }
+
     if (!needle && filterMode !== 'active') {
       return sections
     }
@@ -9898,6 +9964,7 @@ function SessionsPane() {
         options: [
           { id: 'all', label: t('filterAll') },
           { id: 'active', label: t('filterActive') },
+          { id: 'pinned', label: t('filterPinned') },
           { id: 'archived', label: t('filterArchived') }
         ],
         value: filterMode
@@ -9970,11 +10037,27 @@ function SessionsPane() {
   } else if (!rows.length && loadPhase !== 'ready' && loadPhase !== 'error') {
     body = loadingBody
   } else if (!rows.length && error) {
+    // Fehler + keine Daten: Fehlertext + Retry-Button statt toter Fläche
+    // (v1.24.0) — vorher blieb nur der statische Hinweis ohne Handhabe.
     body = jsxs('div', {
-      className: 'sf-empty',
+      className: 'sf-empty sf-empty-error',
+      'data-phase': 'error',
       children: [
         jsx('div', { className: 'sf-empty-title', children: t('error') }),
-        jsx('div', { className: 'sf-empty-body', children: error })
+        jsx('div', { className: 'sf-empty-body', children: error }),
+        jsx('div', { className: 'sf-load-actions', children:
+          jsx(Button, {
+            onClick: () => {
+              haptic('tap')
+              void refreshSessions()
+              void refreshProjectsList()
+              void refreshPinnedIds()
+            },
+            size: 'sm',
+            variant: 'ghost',
+            children: t('errorRetry')
+          })
+        })
       ]
     })
   } else if (!rows.length) {
@@ -10222,6 +10305,9 @@ function SettingsPage() {
   const settings = useValue($settings)
   const rows = useValue($sessions)
   const groupsState = useValue($groupsState)
+  // Full-Reset-Bestätigung (v1.24.0): Settings + Gruppen + Zuordnungen in einem
+  // Schritt — mit ConfirmDialog, kein stiller Wipe.
+  const [resetAllOpen, setResetAllOpen] = useState(false)
 
   const animation = settings.animation
   const wheel = settings.wheel
@@ -11578,6 +11664,16 @@ function SettingsPage() {
             action: null
           }),
           jsx(Row, {
+            title: t('aboutResetAll'),
+            description: t('aboutResetAllDesc'),
+            action: jsx(Button, {
+              onClick: () => setResetAllOpen(true),
+              size: 'sm',
+              variant: 'ghost',
+              children: t('aboutResetAll')
+            })
+          }),
+          jsx(Row, {
             title: t('aboutResetSettings'),
             description: t('aboutResetSettingsDesc'),
             action: jsx(Button, {
@@ -11599,7 +11695,28 @@ function SettingsPage() {
           }),
           jsx('p', { className: 'sf-hint', children: t('aboutHint') })
         ]
-      })
+      }),
+      resetAllOpen
+        ? jsx(ConfirmDialog, {
+          cancelLabel: t('cancel'),
+          confirmLabel: t('aboutResetAll'),
+          destructive: true,
+          description: t('aboutResetAllDesc'),
+          onClose: () => setResetAllOpen(false),
+          onConfirm: () => {
+            resetSettings()
+            resetGroups()
+            // Auch die Laufzeit-Overlays leeren (v1.24.0): Projekt-Seed und
+            // Composer-Pick sind Plugin-seitige Zuordnungen — ein „Alles
+            // zurücksetzen", das sie überspringt, wäre nur ein halber Wipe.
+            $sessionProjectSeed.set({})
+            $composerPick.set({ id: '', label: '', color: null, at: 0 })
+            setResetAllOpen(false)
+          },
+          open: true,
+          title: t('aboutResetAll')
+        })
+        : null
     ]
   })
 }
@@ -11701,6 +11818,9 @@ export default {
     console.info(`[${ID}] v${VERSION} loaded (glass: ${readSetting('glass', 'enabled') ? 'on' : 'off'})`)
 
     // Radius des Glow-Rings folgt live der echten Composer-Kontur (Theme-unabhängig).
+    // Idle-Drossel (v1.24.0): alle 4 s wird nur geschrieben, wenn sich der
+    // gemessene Wert geändert hat — measureComposerRadius macht den DOM-Read
+    // sowieso nur bei vorhandener Composer-Fläche und vergleicht vor dem Set.
     ctx.setInterval(() => measureComposerRadius(), 4000)
 
 

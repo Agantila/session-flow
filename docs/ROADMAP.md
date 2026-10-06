@@ -1,10 +1,18 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.24.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.24.1 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Analyse-Befunde umgesetzt** (v1.24.1, Plan
+  `docs/plans/2026-10-06-analyse-verbesserungen.md`): Bootstrap-Fehler
+  selbstheilend (Reconnect setzt Lade-UI zurück, Retry-Button im
+  Fehler-Leerzustand), Composer-Pick wird in allen No-Op-Pfaden verbraucht,
+  Rehoming-Fehler sichtbar (error-Toast + Pick-Verwurf), Schnellfilter
+  „Angepinnt" in der Filter-Leiste, „Alles zurücksetzen" (Settings + Gruppen +
+  Seeds + Pick) in Einstellungen → Über, Radius-Messung schreibt nur bei
+  Wertänderung.
 - **`tabs.openIntent` zwingt bei aktivem `tabs.asTabSelector` „Ersetzen"**
   (v1.24.0): drei `host.openSession`-Aufrufer (`openFreshSession`,
   `wheelController.cycleNext`, `TabRow.onClick` → Wrapper `open(row,
