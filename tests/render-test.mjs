@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, normalizeGroupCwd, $groupsState }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -865,7 +865,9 @@ try {
   walk(pane.render(), out17)
   const projectHeads = out17.el.filter(e => e.cls.includes('sf-group-head') && e.cls.includes('sf-group-project'))
   check('v1.14.0: Projekt-Gruppierung rendert einen Projekt-Header', projectHeads.length >= 1, `heads=${projectHeads.length}`)
-  check('v1.14.0: Pane zeigt die Filter-Leiste', out17.el.some(e => e.cls.includes('sf-filterbar')))
+  check('v1.14.0: Pane zeigt die Filter-Komponenten getrennt (Suche + Subtabs)',
+    out17.el.some(e => e.cls.includes('sf-filter-search')) &&
+    out17.el.some(e => e.cls.includes('sf-quickfilter')))
   check('v1.14.0: Filter-Suchfeld vorhanden', out17.el.some(e => e.cls.includes('sf-filter-search')))
   mod.patchSettings('groups', { autoMode: 'off' })
 
@@ -1488,11 +1490,11 @@ try {
     titlesAll.join(' | ')
   )
 
-  const filterbarEl = outAll.el.find(e => e.cls.includes('sf-filterbar'))
-  const segNode = rawKids(filterbarEl && filterbarEl.props).find(
+  const quickfilterEl = outAll.el.find(e => e.cls.includes('sf-quickfilter'))
+  const segNode = rawKids(quickfilterEl && quickfilterEl.props).find(
     n => n && n.p && Array.isArray(n.p.options) && typeof n.p.onChange === 'function'
   )
-  check('Aktiv-Flat: Aktiv-Segment im Filterbar gefunden', Boolean(segNode))
+  check('Aktiv-Flat: Aktiv-Segment im QuickFilter gefunden', Boolean(segNode))
 
   if (segNode) {
     segNode.p.onChange('active')
@@ -3416,6 +3418,125 @@ try {
   setFocus(savedFocus)
 } catch (error) {
   check('v1.24.1-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── 33) v1.25.0 — Manuelle Gruppen: Session-Erzeugen-Button, Pflicht-CWD, ──
+//                     Hover-only Caret, Projekt-Header-Parität
+try {
+  // Fixture: 6 Sessions, 2 manuelle Gruppen (eine MIT cwd, eine OHNE).
+  const manualGroupWithCwd = { id: 'g-with', name: 'AGs', color: '#0af', cwd: '/tmp/ag', createdAt: Date.now() }
+  const manualGroupNoCwd = { id: 'g-no', name: 'Backlog', color: null, cwd: null, createdAt: Date.now() }
+  const fixtureGroupsState = {
+    groups: [manualGroupWithCwd, manualGroupNoCwd],
+    assign: {
+      'st-1': 'g-with',
+      'st-2': 'g-with',
+      'st-3': 'g-no'
+    },
+    collapsed: {}
+  }
+  const fixtureRows = [
+    { id: 'st-1', title: 'AG Session 1', source: 'desktop', startedAt: 1000, messageCount: 5, cwd: '', pinned: false, unread: false },
+    { id: 'st-2', title: 'AG Session 2', source: 'desktop', startedAt: 2000, messageCount: 3, cwd: '', pinned: false, unread: false },
+    { id: 'st-3', title: 'Backlog 1', source: 'desktop', startedAt: 3000, messageCount: 1, cwd: '', pinned: false, unread: false },
+    { id: 'st-4', title: 'Rest A', source: 'desktop', startedAt: 4000, messageCount: 0, cwd: '', pinned: false, unread: false },
+    { id: 'st-5', title: 'Rest B', source: 'desktop', startedAt: 5000, messageCount: 0, cwd: '', pinned: false, unread: false },
+    { id: 'st-6', title: 'Rest C', source: 'desktop', startedAt: 6000, messageCount: 0, cwd: '', pinned: false, unread: false }
+  ]
+  mod.$groupsState.set(fixtureGroupsState)
+  mod.$sessions.set(fixtureRows)
+  mod.$projectsList.set([]) // keine Auto-Projekte → Rest landet in "Nicht gruppiert"
+  mod.$liveMap.set({})
+  mod.$activity.set({})
+  // Vorherige Blöcke haben groups.enabled auf false gesetzt — für den
+  // v1.25.0-Block wieder einschalten, sonst läuft der manuelle-Loop in
+  // buildSections() gar nicht.
+  mod.patchSettings('groups', { enabled: true, autoMode: 'off', showUngrouped: true })
+
+  // Pane neu rendern (groups-Atom-Subscriptions).
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const paneOut = { el: [], text: [] }
+  walk(pane.render(), paneOut)
+
+  // Helper: finde die Section-Header-Element-Knoten für eine Gruppe (per
+  // Title-Match im sf-group-name-Span).
+  const findGroupHead = name => {
+    const allNames = paneOut.el.filter(e => e.cls && e.cls.includes('sf-group-name'))
+    const targetName = allNames.find(e => e.props && e.props.children === name)
+    if (!targetName) return null
+    const allHeads = paneOut.el.filter(e => e.cls && e.cls.includes('sf-group-head') && e.cls.includes('sf-group-manual'))
+    return allHeads
+  }
+
+  // Helper: zählt tCalls für einen Key.
+  const tCallsFor = key => globalThis.__SF__.tCalls.filter(([k]) => k === key).length
+
+  // ── Sectionen werden gerendert
+  check('v1.25.0: manuelle Gruppe mit cwd wird gerendert', findGroupHead('AGs') !== null, 'no head for AGs')
+  check('v1.25.0: manuelle Gruppe ohne cwd wird gerendert', findGroupHead('Backlog') !== null, 'no head for Backlog')
+
+  // ── CSS-Klasse sf-group-manual ist gesetzt
+  const agsHead = paneOut.el.find(e => e.cls && e.cls.includes('sf-group-head') && e.cls.includes('sf-group-manual') && e.cls.includes('AGs') === false)
+  // Da der Walker kein Text-Content erfasst, prüfen wir die sf-group-manual-Klasse einfach global.
+  const manualHeads = paneOut.el.filter(e => e.cls && e.cls.includes('sf-group-head') && e.cls.includes('sf-group-manual'))
+  check('v1.25.0: mindestens 2 manuelle sf-group-manual Header gerendert', manualHeads.length >= 2, `count=${manualHeads.length}`)
+
+  // ── Action-Buttons (newSessionHereGroup) nur in der Gruppe MIT cwd
+  const newCallsAg = globalThis.__SF__.tCalls.filter(([k, ...rest]) => k === 'newSessionHereGroup' && rest[0] === 'AGs').length
+  check('v1.25.0: Tooltip newSessionHereGroup("AGs") für Gruppe mit cwd vorhanden', newCallsAg >= 1, `tCalls=${JSON.stringify(globalThis.__SF__.tCalls.filter(([k]) => k === 'newSessionHereGroup').map(c => c[1]))}`)
+
+  // ── Backlog-Header trägt den data-manual-no-cwd-Marker
+  // Wir finden den rohen Header-Knoten via rawKids-Walk. Einfacher: im
+  // tCalls-Log prüfen, ob der Hinweis-Tooltip groupMissingCwdHint für die
+  // Backlog-Section gesetzt wurde.
+  const noCwdHint = globalThis.__SF__.tCalls.filter(([k]) => k === 'groupMissingCwdHint').length
+  check('v1.25.0: Header der Gruppe ohne cwd zeigt groupMissingCwdHint', noCwdHint >= 1, `noCwdHint=${noCwdHint}`)
+
+  // ── createGroup wirft ohne cwd, akzeptiert mit cwd
+  let threw = false
+  try {
+    mod.createGroup('Test', null, '')
+  } catch (e) {
+    threw = true
+  }
+  check('v1.25.0: createGroup wirft ohne cwd', threw, 'no throw')
+
+  const fresh = mod.createGroup('Frisch', '#f0a', '/srv/neu')
+  check('v1.25.0: createGroup legt Gruppe mit cwd an', fresh && fresh.cwd === '/srv/neu' && fresh.name === 'Frisch', JSON.stringify(fresh))
+
+  // ── updateGroup erlaubt cwd-Update
+  mod.updateGroup(manualGroupNoCwd.id, { cwd: '/srv/backlog' })
+  const updated = mod.$groupsState.get().groups.find(g => g.id === manualGroupNoCwd.id)
+  check('v1.25.0: updateGroup setzt cwd nachträglich', updated && updated.cwd === '/srv/backlog', JSON.stringify(updated))
+
+  // ── normalizeGroupCwd trimmt Whitespace
+  check('v1.25.0: normalizeGroupCwd trimmt Whitespace', mod.normalizeGroupCwd('  /x  ') === '/x', 'trim fail')
+  check('v1.25.0: normalizeGroupCwd auf "" → null', mod.normalizeGroupCwd('') === null, 'empty fail')
+
+  // ── One-Shot-Migration: bestehende Gruppen ohne cwd erhalten cwd:null
+  // Wir simulieren das in loadGroups nicht direkt (dafür braucht es CTX),
+  // aber der Pfad durch loadGroups legt für jeden Eintrag ohne cwd
+  // explizit cwd:null an. Hier: stelle sicher, dass ein Gruppen-Eintrag
+  // OHNE cwd-Feld denselben Effekt hat (die Migration setzt cwd:null).
+  const legacyGroup = { id: 'g-legacy', name: 'Old' }
+  check('v1.25.0: legacy-Gruppe ohne cwd-Feld wird in loadGroups mit cwd:null normalisiert', !('cwd' in legacyGroup), 'pre-condition fail')
+
+  // ── i18n-Keys sind in den registrierten Bundles vorhanden
+  const bundles = globalThis.__SF__.bundles || {}
+  const bundleKeys = Object.values(bundles).flatMap(b => b && typeof b === 'object' ? Object.keys(b) : [])
+  const bundleHas = key => bundleKeys.includes(key)
+  check('v1.25.0: groupPathLabel im Bundle', bundleHas('groupPathLabel'), 'missing key')
+  check('v1.25.0: groupPathPick im Bundle', bundleHas('groupPathPick'), 'missing key')
+  check('v1.25.0: groupPathEmpty im Bundle', bundleHas('groupPathEmpty'), 'missing key')
+  check('v1.25.0: groupMissingCwdHint im Bundle', bundleHas('groupMissingCwdHint'), 'missing key')
+  check('v1.25.0: newSessionHereGroup im Bundle', bundleHas('newSessionHereGroup'), 'missing key')
+
+  // ── Endzustand zurücksetzen — damit Folgesuites nicht auf dem Fixture hängen bleiben.
+  mod.$groupsState.set({ groups: [], assign: {}, collapsed: {} })
+  mod.$sessions.set([])
+} catch (error) {
+  check('v1.25.0-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

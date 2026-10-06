@@ -1,10 +1,20 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.24.1 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.25.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Manuelle Gruppen mit Session-Erzeugen-Button und Projekt-Header-Parität**
+  (v1.25.0, Plan `docs/plans/2026-10-06-group-create-session-hover-caret.md`):
+  Jede manuelle Gruppe trägt jetzt einen Pflicht-Ordnerpfad (`cwd`); der
+  Header rendert dann ein `+`-Aktions-Icon (hover-only, identische Optik
+  zu Projekt-Headern). Klick erzeugt eine neue Session in genau diesem
+  Ordner (`session.create` + `session.cwd.set`-Anker). Caret ist
+  hover-only. Migration: bestehende Gruppen ohne `cwd` bekommen
+  `cwd:null`, das `+` bleibt für sie versteckt, Edit-Button mit
+  Hinweis-Tooltip „Ordner setzen" übernimmt. GroupDialog hat eine neue
+  Pfad-Zeile mit „Ordner wählen…"-Button über `host.hermesDesktop.selectPaths`.
 - **Analyse-Befunde umgesetzt** (v1.24.1, Plan
   `docs/plans/2026-10-06-analyse-verbesserungen.md`): Bootstrap-Fehler
   selbstheilend (Reconnect setzt Lade-UI zurück, Retry-Button im

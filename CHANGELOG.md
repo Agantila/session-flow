@@ -3,6 +3,42 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.25.0] — 2026-10-06
+
+### Added
+- **Manuelle Gruppen: Session-Erzeugen-Button + Projekt-Header-Parität**:
+  wer eine manuelle Gruppe anlegt, muss jetzt einen Ordner-Pfad wählen
+  (Pflichtfeld im Dialog) und bekommt dann ein `+`-Aktions-Icon auf dem
+  Header — Klick erzeugt eine neue Session direkt in diesem Ordner,
+  exakt wie unter Projekten in Hermes Desktop (`session.create` +
+  `session.cwd.set`-Anker, Plan
+  `2026-10-05-new-session-project-anchor-v2.md`). Der Caret ist hover-only
+  (identisch zu Projekt-Headern), die Edit-Affordanz bleibt für manuelle
+  Gruppen erhalten.
+- **Migrations-Pfad** für vor 1.25.0 angelegte Gruppen: bestehende
+  Gruppen ohne `cwd` bekommen in `loadGroups()` `cwd:null` gesetzt — ihr
+  Header zeigt das `+` nicht, dafür den Edit-Button mit Hinweis-Tooltip
+  („Ordner setzen — Gruppe bearbeiten und Pfad wählen."). Beim ersten
+  Bearbeiten kann der Pfad nachgepflegt werden.
+
+### Changed
+- `createGroup(name, color, cwd)` — dritter Parameter Pflicht; Aufrufer
+  ohne `cwd` (Dialog Save) bekommen einen Fehler und der Dialog bleibt
+  offen mit Hinweis.
+- `updateGroup(groupId, patch)` normalisiert `cwd` über
+  `normalizeGroupCwd()` (Whitespace, leere Strings → `null`).
+- `GroupDialog` hat eine neue Pfad-Zeile: read-only Anzeige +
+  „Ordner wählen…"-Button über `host.hermesDesktop.selectPaths`
+  (derselbe Door wie der Projekt-Dialog). Der Save-Button ist deaktiviert,
+  solange der Pfad leer ist.
+- Section-Header: manuell-Gruppen tragen die Klassen `sf-group-manual`
+  (Caret-Hover-only) und, ohne CWD, `sf-group-manual-no-cwd` +
+  `data-manual-no-cwd`-Attribut. Action-Spans bekommen
+  `data-sf-action="new" | "unpin" | "edit"`, damit CSS und Tests den
+  Button eindeutig adressieren können.
+- i18n (EN + DE): `newSessionHereGroup(name)`, `groupPathLabel`,
+  `groupPathPick`, `groupPathEmpty`, `groupMissingCwdHint`.
+
 ## [1.24.1] — 2026-10-06
 
 ### Fixed

@@ -141,6 +141,27 @@ Pane-Besuch startet die Filter immer frisch):
 Gruppen-Daten (Name, Farbe, Zuordnung, Collapse-Zustand) liegen separat unter
 `hermes.plugin.session-flow.groups.v1`.
 
+### Gruppen-Pfad und Session-Erzeugen-Button (v1.25.0)
+
+Jede manuelle Gruppe trägt ab v1.25.0 einen **Pflicht-Ordnerpfad** (`cwd`).
+Beim Anlegen fordert der Dialog den Pfad über „Ordner wählen…" (der
+`selectPaths`-IPC-Door der App, gleiche Quelle wie der Projekt-Dialog);
+der Save-Button bleibt deaktiviert, solange der Pfad leer ist. Beim
+Bearbeiten kann der Pfad gesetzt/geändert werden.
+
+- **Mit Pfad** rendert der Header ein `+`-Aktions-Icon (hover-only,
+  sichtbar bei Maus-Focus, identisch zur Projekt-Header-Affordanz).
+  Klick → `startNewSessionInCwd(group.cwd, group.name)` — neue Session
+  landet direkt in diesem Ordner, exakt wie bei Projekt-Headern.
+- **Ohne Pfad** (bestehende Gruppen aus v1.24.x vor der Migration, oder
+  ein neu angelegter Pfad wurde nachträglich geleert) zeigt der Header
+  stattdessen den Edit-Button mit Hinweis-Tooltip „Ordner setzen — Gruppe
+  bearbeiten und Pfad wählen."; das `+` ist per CSS-Regel
+  `display:none` versteckt (`data-sf-action="new"`).
+- **Migration**: bestehende Gruppen ohne `cwd`-Feld bekommen in
+  `loadGroups()` `cwd: null` gesetzt (One-Shot-Pfad). Folge-Renderings
+  lesen den Wert und steuern Header-Verhalten + Edit-Dialog.
+
 ### Kopfzeilen-Dichte (`groups.headerDensity`)
 
 Steuert, wie groß/kräftig eine einklappbare Sektions-Kopfzeile (Datum, Quelle,

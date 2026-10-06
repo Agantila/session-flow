@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.24.1'
+const VERSION = '1.25.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1483,8 +1483,19 @@ function loadGroups() {
     saved = null
   }
 
+  // One-Shot-Migration (v1.25.0): Gruppen, die vor 1.25.0 angelegt wurden,
+  // haben noch keinen `cwd`. Wir setzen ihn hier explizit auf `null`, damit
+  // der Render-Code in SectionHeader (`section.cwd && onNewHere → + sichtbar`)
+  // sauber zwischen "Pfad gesetzt" und "noch leer" unterscheiden kann. Früher
+  // angelegte Gruppen bekommen beim ersten Bearbeiten den Pfad-Affordanz-Hinweis.
+  const migratedGroups = (Array.isArray(saved?.groups) ? saved.groups : []).map(entry => {
+    if (!entry || typeof entry !== 'object') return entry
+    if (Object.prototype.hasOwnProperty.call(entry, 'cwd')) return entry
+    return { ...entry, cwd: null }
+  })
+
   $groupsState.set({
-    groups: Array.isArray(saved?.groups) ? saved.groups : [],
+    groups: migratedGroups,
     assign: isPlainObject(saved?.assign) ? saved.assign : {},
     collapsed: isPlainObject(saved?.collapsed) ? saved.collapsed : {}
   })
@@ -1497,20 +1508,36 @@ function newGroupId() {
   return `g${Date.now().toString(36)}${groupSeq.toString(36)}`
 }
 
-function createGroup(name, color) {
+function createGroup(name, color, cwd) {
   const state = $groupsState.get()
   const trimmed = String(name || '').trim() || 'Gruppe'
-  const group = { id: newGroupId(), name: trimmed, color: color || null, createdAt: Date.now() }
+  const normalizedCwd = normalizeGroupCwd(cwd)
+  // Pflicht-Pfad (v1.25.0): ohne CWD bekommt die Gruppe kein `+` im Header.
+  // Wirft hier, damit der Aufrufer (Dialog Save) gezielt reagieren kann.
+  if (!normalizedCwd) {
+    throw new Error('group-cwd-required')
+  }
+  const group = { id: newGroupId(), name: trimmed, color: color || null, cwd: normalizedCwd, createdAt: Date.now() }
   $groupsState.set({ ...state, groups: [...state.groups, group] })
   scheduleGroupsSave()
   return group
 }
 
+/** Pfad-Whitespace + leere Strings → null. Behält absolute/relative Pfade wie sie sind. */
+function normalizeGroupCwd(cwd) {
+  const trimmed = String(cwd || '').trim()
+  return trimmed || null
+}
+
 function updateGroup(groupId, patch) {
   const state = $groupsState.get()
+  // Pfad-Whitespace normalisieren — damit der Dialog konsistent ist.
+  const normalized = patch && Object.prototype.hasOwnProperty.call(patch, 'cwd')
+    ? { ...patch, cwd: normalizeGroupCwd(patch.cwd) }
+    : patch
   $groupsState.set({
     ...state,
-    groups: state.groups.map(group => (group.id === groupId ? { ...group, ...patch } : group))
+    groups: state.groups.map(group => (group.id === groupId ? { ...group, ...normalized } : group))
   })
   scheduleGroupsSave()
 }
@@ -4323,6 +4350,7 @@ function buildSections() {
         groupId: group.id,
         title: group.name,
         color: group.color || null,
+        cwd: group.cwd || '',
         collapsed: Boolean(groupsState.collapsed[key]),
         items: sortRows(items)
       })
@@ -4805,6 +4833,11 @@ const EN = {
   groupsHint: 'Manage groups via right-click on a tab or a group header. Drag & drop moves sessions into groups.',
   noProject: 'No project',
   newSessionHere: 'New session in this project',
+  newSessionHereGroup: name => `New session in "${name}"`,
+  groupPathLabel: 'Folder path',
+  groupPathPick: 'Pick folder…',
+  groupPathEmpty: 'No folder set — pick a path to create sessions here.',
+  groupMissingCwdHint: 'Set folder — click to edit the group and pick a path.',
   dropHereHint: label => `→ Move to "${label}"`,
   pinnedSection: 'Pinned',
   pinnedSectionTip: 'Pinned sessions — drop here to pin',
@@ -5417,6 +5450,11 @@ const DE = {
   groupsHint: 'Gruppen verwaltest du per Rechtsklick auf einen Tab oder die Gruppen-Überschrift. Ziehen & Ablegen sortiert Sessions ein.',
   noProject: 'Kein Projekt',
   newSessionHere: 'Neue Session in diesem Projekt',
+  newSessionHereGroup: name => `Neue Session in „${name}"`,
+  groupPathLabel: 'Ordnerpfad',
+  groupPathPick: 'Ordner wählen…',
+  groupPathEmpty: 'Kein Ordner — bitte Pfad wählen, um hier Sessions zu erzeugen.',
+  groupMissingCwdHint: 'Ordner setzen — Gruppe bearbeiten und Pfad wählen.',
   dropHereHint: label => `→ Nach „${label}" verschieben`,
   pinnedSection: 'Angepinnt',
   pinnedSectionTip: 'Angepinnte Sessions — hier ablegen zum Anpinnen',
@@ -5831,11 +5869,19 @@ const CSS = `
 .sf-group-head:hover .sf-group-actions:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.1))}
 .sf-group-head:hover .sf-group-actions,.sf-group-head:focus-within .sf-group-actions{opacity:1}
 .sf-group-unassigned .sf-group-name{font-weight:600;color:var(--ui-text-tertiary)}
-/* Projekt-Ordner-Header (wie "Projekte" in Hermes Desktop): Caret erst beim
-   Überfahren sichtbar — der Ordner-Icon-Kopf bleibt sonst ruhig. Der Name
-   trägt dasselbe Gewicht wie Typ-Header (CLI/Desktop/…) — keine Sonderrolle. */
-.sf-group-project .sf-group-caret{opacity:0;transition:opacity .12s ease}
-.sf-group-project:hover .sf-group-caret,.sf-group-project:focus-within .sf-group-caret{opacity:1}
+/* Projekt-Ordner-Header (wie "Projekte" in Hermes Desktop) und manuelle
+   Gruppen: Caret erst beim Überfahren sichtbar — der Icon-Kopf bleibt
+   sonst ruhig. Manuelle Gruppen teilen damit das gleiche Verhalten wie
+   Projekt-Header (v1.25.0 — manuelle Gruppen unterstützen jetzt auch
+   Session-Erzeugen via +). Der Name trägt dasselbe Gewicht wie
+   Typ-Header (CLI/Desktop/…) — keine Sonderrolle. */
+.sf-group-project .sf-group-caret,.sf-group-manual .sf-group-caret{opacity:0;transition:opacity .12s ease}
+.sf-group-project:hover .sf-group-caret,.sf-group-project:focus-within .sf-group-caret,.sf-group-manual:hover .sf-group-caret,.sf-group-manual:focus-within .sf-group-caret{opacity:1}
+/* Manuelle Gruppen ohne CWD: das `+`-Aktions-Icon bleibt weg, der Edit-
+   Button (immer noch sichtbar bei Hover) wird zum Hinweis-Slot. Die
+   Edit-Geste funktioniert weiter — der User kommt darüber in den Dialog
+   und kann den Pfad nachpflegen. */
+.sf-group-manual-no-cwd .sf-group-actions[data-sf-action=new]{display:none}
 /* Zweizeilige Köpfe (Subzeile vorhanden) bekommen etwas mehr Luft, statt den
    Text einzuquetschen — die Zeilenhöhe wächst nur, wenn wirklich zwei Zeilen
    da sind (Projektpfad oder, in Detailreich, Kennzahlen). */
@@ -5887,12 +5933,12 @@ html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 .sf-tab[data-just-moved=true]{animation:sf-just-moved .6s ease-out}
 @media (prefers-reduced-motion:reduce){.sf-tab[data-just-moved=true]{animation:none;background-color:color-mix(in srgb,var(--ui-accent) 20%,transparent)}}
 html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-play-state:paused}
-.sf-filterbar{display:flex;align-items:center;gap:6px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary)}
-.sf-filter-search{position:relative;display:flex;align-items:center;gap:4px;flex:1;min-width:0;height:22px;padding:0 6px;border-radius:6px;background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--ui-text-quaternary)}
+.sf-filter-search{position:relative;display:flex;align-items:center;gap:4px;width:100%;min-width:0;height:22px;padding:0 6px;border-radius:6px;background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--ui-text-quaternary);margin:4px 6px;box-sizing:border-box}
 .sf-filter-search input{flex:1;min-width:0;height:100%;border:0;background:transparent;color:var(--foreground);font-size:11px;padding:0}
 .sf-filter-search input:focus{outline:none}
 .sf-filter-clear{display:flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;padding:0;border:0;background:transparent;color:var(--ui-text-quaternary);cursor:pointer;border-radius:3px}
 .sf-filter-clear:hover{background:var(--ui-control-hover-background,rgba(127,127,127,.14));color:var(--foreground)}
+.sf-quickfilter{display:flex;align-items:center;justify-content:center;padding:2px 6px 4px;border-bottom:1px solid var(--ui-stroke-tertiary)}
 .sf-tab-lead{display:flex;align-items:center;justify-content:center;width:16px;flex-shrink:0;color:var(--ui-text-tertiary)}
 .sf-tab-lead[data-kind=thinking],.sf-tab-lead[data-kind=streaming],.sf-tab-lead[data-kind=working]{color:var(--ui-accent)}
 .sf-tab-lead[data-kind=tool]{color:var(--ui-accent)}
@@ -7427,11 +7473,16 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
   const open = !section.collapsed
   const color = section.color || null
   const isProject = section.kind === 'project'
+  const isManual = section.kind === 'manual'
   const isPinned = section.kind === 'pinned'
   const isProjectPending = section.kind === 'project-pending'
   const title = section.titleKey ? t(section.titleKey) : section.title || t('ungrouped')
   const collapsible = section.kind !== 'ungrouped'
   const editable = section.kind === 'manual'
+  // Manuelle Gruppe ohne CWD: kein `+` (sonst landet die Session in „Kein
+  // Projekt"). Stattdessen rendert der Edit-Button (schon immer für `editable`)
+  // den Hinweis-Tooltip — der User klickt zum Pfad-Setzen in den Dialog.
+  const canNewHere = isProject ? Boolean(onNewHere) : isManual ? Boolean(onNewHere && section.cwd) : false
   const showDetail = section.kind !== 'ungrouped' && density !== 'compact'
   const liveMap = useValue($liveMap)
   const ctxInfo = useValue($ctxInfo)
@@ -7572,11 +7623,14 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
       'sf-group-head',
       section.kind === 'ungrouped' && 'sf-group-unassigned',
       isProject && 'sf-group-project',
+      isManual && 'sf-group-manual',
       isPinned && 'sf-group-pinned',
+      isManual && !section.cwd && 'sf-group-manual-no-cwd',
       subtext && 'sf-group-twoline',
       stats2Children && 'sf-group-threeline'
     ),
     'data-drop': dropActive ? 'true' : undefined,
+    'data-manual-no-cwd': isManual && !section.cwd ? 'true' : undefined,
     onClick: collapsible ? () => onToggle() : undefined,
     onContextMenu: editable
       ? event => {
@@ -7587,7 +7641,17 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
     onDoubleClick: editable ? () => onEdit() : undefined,
     role: collapsible ? 'button' : undefined,
     'aria-expanded': collapsible ? open : undefined,
-    title: isProject ? section.cwd || title : isPinned ? t('pinnedSectionTip') : editable ? t('editGroup') : open ? t('collapse') : t('expand'),
+    title: isProject
+      ? section.cwd || title
+      : isPinned
+        ? t('pinnedSectionTip')
+        : editable && !section.cwd
+          ? t('groupMissingCwdHint')
+          : editable
+            ? t('editGroup')
+            : open
+              ? t('collapse')
+              : t('expand'),
     children: [
       isPinned ? null : jsx('span', { className: 'sf-group-caret', children: jsx(Caret, { open }) }),
       lead,
@@ -7595,19 +7659,21 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
       dropActive
         ? jsx('span', { className: 'sf-group-drophint', children: t(isPinned ? 'dropPinHint' : 'dropHereHint', title) })
         : null,
-      isProject && onNewHere
+      canNewHere
         ? jsx('span', {
             className: 'sf-group-actions',
+            'data-sf-action': 'new',
             onClick: event => {
               event.stopPropagation()
               onNewHere(section)
             },
-            title: t('newSessionHere'),
+            title: isManual ? t('newSessionHereGroup', title) : t('newSessionHere'),
             children: jsx(Codicon, { name: 'add', size: '0.875rem' })
           })
         : isPinned
           ? jsx('span', {
               className: 'sf-group-actions',
+              'data-sf-action': 'unpin',
               title: t('unpinAll'),
               onClick: event => {
                 event.stopPropagation()
@@ -7618,6 +7684,8 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
           : editable
           ? jsx('span', {
               className: 'sf-group-actions',
+              'data-sf-action': 'edit',
+              title: t('editGroup'),
               onClick: event => {
                 event.stopPropagation()
                 onEdit()
@@ -8570,7 +8638,7 @@ function RowDialogHost({ state, setState, t }) {
 }
 
 function newGroupDialogState() {
-  return { open: false, mode: 'create', groupId: null, name: '', color: null }
+  return { open: false, mode: 'create', groupId: null, name: '', color: null, cwd: '' }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8741,18 +8809,42 @@ function GroupDialog({ state, setState, t }) {
   const groupsState = $groupsState.get()
   const editing = state.mode === 'edit' ? groupsState.groups.find(entry => entry.id === state.groupId) : null
 
+  // Beim Wechsel in den Edit-Modus greift der bestehende Pfad — der User
+  // behält so den bisherigen Wert, bis er aktiv einen neuen wählt. Eine
+  // lokale `state.cwd`-Spur wird nur geschrieben, wenn der Picker einen
+  // Pfad liefert oder der User ihn tippt/leert; `effectiveCwd` fällt
+  // ansonsten auf den Wert aus dem Store zurück.
+  const editingCwd = editing ? String(editing.cwd || '') : ''
+  const effectiveCwd = state.mode === 'edit' ? (state.cwd || editingCwd) : state.cwd
+
   const commit = () => {
     const name = state.name.trim()
+    const cwd = (state.mode === 'edit' ? effectiveCwd : state.cwd).trim()
 
     if (state.mode === 'create') {
-      const group = createGroup(name || t('newGroup'), state.color)
-      void group
+      try {
+        createGroup(name || t('newGroup'), state.color, cwd)
+      } catch (error) {
+        // group-cwd-required — Dialog bleibt offen, Hinweis wird unten gerendert.
+        setState({ ...state, error: String((error && error.message) || error) })
+        return
+      }
     } else if (state.mode === 'edit' && editing) {
-      updateGroup(editing.id, { name: name || editing.name, color: state.color })
+      updateGroup(editing.id, { name: name || editing.name, color: state.color, cwd })
     }
 
     setState(newGroupDialogState())
   }
+
+  const pickFolder = async () => {
+    const picked = await pickProjectFolder()
+    if (picked) {
+      setState({ ...state, cwd: picked })
+    }
+  }
+
+  // Save-Button ist nur erlaubt, wenn der Pfad nicht leer ist.
+  const canSubmit = !!(effectiveCwd || '').trim()
 
   return jsx(Dialog, {
     open: state.open,
@@ -8774,13 +8866,36 @@ function GroupDialog({ state, setState, t }) {
                 autoFocus: true,
                 onChange: event => setState({ ...state, name: event.target.value }),
                 onKeyDown: event => {
-                  if (event.key === 'Enter') {
+                  if (event.key === 'Enter' && canSubmit) {
                     commit()
                   }
                 },
                 placeholder: t('groupNamePlaceholder'),
                 value: state.name
               })
+            ]
+          }),
+          jsxs('div', {
+            className: 'sf-dialog-row',
+            children: [
+              jsx('label', { className: 'sf-dialog-label', children: t('groupPathLabel') }),
+              jsx('div', { className: 'sf-proj-folder-input', children: [
+                jsx('span', {
+                  className: 'sf-proj-folder-path',
+                  title: effectiveCwd || '',
+                  children: effectiveCwd || jsx('span', { className: 'sf-proj-folder-empty', children: t('groupPathEmpty') })
+                }),
+                jsx(Button, {
+                  disabled: false,
+                  onClick: () => void pickFolder(),
+                  size: 'sm',
+                  variant: 'ghost',
+                  children: jsxs('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 }, children: [
+                    jsx(Codicon, { name: 'folder-opened', size: '0.75rem' }),
+                    t('groupPathPick')
+                  ] })
+                })
+              ] })
             ]
           }),
           jsxs('div', {
@@ -8794,6 +8909,8 @@ function GroupDialog({ state, setState, t }) {
               })
             ]
           }),
+          !canSubmit ? jsx('div', { className: 'sf-dialog-hint', children: t('groupPathEmpty') }) : null,
+          state.error ? jsx('div', { className: 'sf-dialog-error', children: state.error }) : null,
           jsxs(DialogFooter, {
             children: [
               state.mode === 'edit'
@@ -8814,6 +8931,7 @@ function GroupDialog({ state, setState, t }) {
                 children: t('cancel')
               }),
               jsx(Button, {
+                disabled: !canSubmit,
                 onClick: commit,
                 children: state.mode === 'edit' ? t('save') : t('create')
               })
@@ -9340,7 +9458,8 @@ function SessionsPane() {
         mode: 'edit',
         groupId: group.id,
         name: group.name,
-        color: group.color || null
+        color: group.color || null,
+        cwd: group.cwd || ''
       })
     }
   }
@@ -9521,7 +9640,7 @@ function SessionsPane() {
               }
             },
             onEdit: () => editGroup(section),
-            onNewHere: section.kind === 'project' ? newSessionHere : undefined,
+            onNewHere: (section.kind === 'project' || (section.kind === 'manual' && section.cwd)) ? newSessionHere : undefined,
             onPinToggle:
               section.kind === 'pinned' && section.items.length > 0
                 ? () => {
@@ -9932,44 +10051,49 @@ function SessionsPane() {
     ]
   })
 
-  // Filter-Leiste — Textsuche + Schnellfilter, wie unter Hermes Desktop ⟶
-  // Sessions. Rein clientseitig (siehe needle/matchesFilter oben), keine
-  // Persistierung, damit sie jeden neuen Pane-Besuch frisch startet.
-  const filterBar = jsxs('div', {
-    className: 'sf-filterbar',
+  // Suchpfad-Komponente (v1.25.0): frei von Filter-Tabs, damit sie an einer
+  // anderen Stelle platziert werden kann als das Quick-Filter-Segment.
+  // Rein clientseitig (siehe needle/matchesFilter oben), keine Persistierung,
+  // damit sie jeden neuen Pane-Besuch frisch startet.
+  const searchField = jsx('div', {
+    className: 'sf-filter-search',
     children: [
-      jsxs('div', {
-        className: 'sf-filter-search',
-        children: [
-          jsx(Codicon, { name: 'search', size: '0.75rem' }),
-          jsx(Input, {
-            'aria-label': t('filterPlaceholder'),
-            onChange: event => setFilterText(event.target.value),
-            placeholder: t('filterPlaceholder'),
-            value: filterText
-          }),
-          filterText
-            ? jsx('button', {
-                'aria-label': t('filterClear'),
-                className: 'sf-filter-clear',
-                onClick: () => setFilterText(''),
-                type: 'button',
-                children: jsx(Codicon, { name: 'close', size: '0.7rem' })
-              })
-            : null
-        ]
+      jsx(Codicon, { name: 'search', size: '0.75rem' }),
+      jsx(Input, {
+        'aria-label': t('filterPlaceholder'),
+        onChange: event => setFilterText(event.target.value),
+        placeholder: t('filterPlaceholder'),
+        value: filterText
       }),
-      jsx(Segment, {
-        onChange: setFilterMode,
-        options: [
-          { id: 'all', label: t('filterAll') },
-          { id: 'active', label: t('filterActive') },
-          { id: 'pinned', label: t('filterPinned') },
-          { id: 'archived', label: t('filterArchived') }
-        ],
-        value: filterMode
-      })
+      filterText
+        ? jsx('button', {
+            'aria-label': t('filterClear'),
+            className: 'sf-filter-clear',
+            onClick: () => setFilterText(''),
+            type: 'button',
+            children: jsx(Codicon, { name: 'close', size: '0.7rem' })
+          })
+        : null
     ]
+  })
+
+  // Quick-Filter-Komponente (v1.25.0): die Subtabs „Alle / Aktiv / Angepinnt
+  // / Archiv" sind EIGENE Komponente, damit sie getrennt vom Suchfeld
+  // platziert werden kann. Früher waren beide in einer `sf-filterbar`-Row
+  // zusammengefasst; eine geteilte Komponente hinderte das Pane daran, die
+  // Suche über und die Tabs unter der Anzahl der Sessions zu legen.
+  const quickFilter = jsx('div', {
+    className: 'sf-quickfilter',
+    children: jsx(Segment, {
+      onChange: setFilterMode,
+      options: [
+        { id: 'all', label: t('filterAll') },
+        { id: 'active', label: t('filterActive') },
+        { id: 'pinned', label: t('filterPinned') },
+        { id: 'archived', label: t('filterArchived') }
+      ],
+      value: filterMode
+    })
   })
 
   // Archiv-Liste: flach, mit Restore-Aktion je Zeile (More-Menü zeigt
@@ -10094,8 +10218,12 @@ function SessionsPane() {
     className: 'sf-pane',
     children: [
       navAppsBar,
+      // Suche steht oben — erste Haupt-Aktion der Session-Liste.
+      // Subtabs (Alle/Aktiv/Angepinnt/Archiv) sind eigene Komponente
+      // `quickFilter` und liegen separat (siehe Pane-Body-Anordnung).
+      searchField,
       toolbar,
-      filterBar,
+      quickFilter,
       body,
       jsx(GroupDialog, { state: dialog, setState: setDialog, t }),
       jsx(RowDialogHost, { state: rowDialog, setState: setRowDialog, t }),
