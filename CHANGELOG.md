@@ -3,6 +3,39 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.23.0] — 2026-10-06
+
+### Fixed
+- **„Neue Session" in der Kopfzeile: Fehler „Session owner could not be
+  resolved"**: das Plugin erzeugt Sessions per `session.create` auf dem
+  ambienten Socket und öffnete sie ohne Owner-Hinweis. Eine frische Session hat
+  weder Zeile noch Hinweis (DB-Row lazy, `projects.tree` lässt 0-Turn-Sessions
+  weg) — die App routet fail-closed und fand bei mehreren Profilen keinen
+  Owner. Neuer Helper `openFreshSession()` übergibt das Socket-Profil an
+  `host.openSession` (das SDK trägt daraus den Hinweis vor dem Resume ein) und
+  lässt den Profil-Scope der Liste unangetastet (`keepAllProfilesScope:
+  false`). Wirkt für „+" (Kopfzeile), Projekt-Header-„+", Composer-Chip und
+  „Zweig erstellen" (gleiche Fehlerklasse). `session.create` trägt jetzt das
+  Socket-Profil statt des fokussierten Session-Profils.
+- **Composer-Chip lernte nie einen nativen Anker**: `composerDraftAnchor()` rief
+  die async `resolveNewProjectSessionCwd()` ohne `await`. Jetzt ein
+  synchroner Spiegel des App-Sendewegs (Home-Scope → detached, sonst
+  Arbeitsordner, sonst Projekt-Scope).
+- **Chip schrieb `hermes.desktop.projectScope`** — wirkungslos für den laufenden
+  Draft, ließ die App aber beim nächsten Start ungefragt in das Projekt
+  einsteigen. Der Write ist entfernt.
+
+### Changed
+- **Composer-Chip arbeitet mit der nativen Sessions-Seitenleiste wie mit dem
+  Pane**: zeigt das Projekt des Draft-Arbeitsordners bzw. Projekt-Scopes und
+  für bestehende (frische) Sessions das Projekt ihres Arbeitsordners; das Menü
+  markiert das aktive Projekt und zieht die Projektliste beim Öffnen frisch.
+  Ein Draft-Pick wird beim Übergang auf die von der App angelegte Session per
+  `session.workspace.move` angewandt (nicht bei bekannten/bestehenden
+  Sessions, nicht bei eigenen Creates des Plugins, nicht wenn die Session
+  schon im Projekt liegt). Plan:
+  `docs/plans/2026-10-06-neue-session-owner-und-chip-nativ.md`.
+
 ## [1.22.2] — 2026-10-06
 
 ### Fixed

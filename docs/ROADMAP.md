@@ -1,10 +1,17 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.22.2 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.23.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **„Neue Session" ohne Owner-Fehler + Composer-Chip auf dem nativen Sendeweg**
+  (v1.23.0): frische Plugin-Sessions werden über `openFreshSession()` mit
+  Owner-Hinweis geöffnet (SDK `openSession` mit `profile`), der Chip spiegelt
+  den App-Sendeweg synchron und übernimmt einen Draft-Pick beim Übergang auf
+  die native Session. Offen: echte Draft-CWD-Tür der App (dann entfällt die
+  Nachträglich-Übernahme). Plan:
+  `docs/plans/2026-10-06-neue-session-owner-und-chip-nativ.md`.
 - **Pane-Crash beim Umschalten auf Kopfzeilen-Dichte „Detailreich" behoben**
   (v1.22.2): der `useEffect` für die Projekt-Ordnergröße lag innerhalb des
   `density === 'detailed'`-Zweigs von `SectionHeader`, damit hing die

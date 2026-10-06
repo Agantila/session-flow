@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -2999,6 +2999,143 @@ try {
   mod.applyRows()
 } catch (error) {
   check('Theme-Farben-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// v1.23.0: Neue Session ohne „Owner nicht gefunden\" + Composer-Chip auf dem nativen Sendeweg.
+try {
+  const calls = []
+  const opens = []
+  const notifies = []
+  const prevReq = hostStub.request
+  const prevOpen = hostStub.openSession
+  const prevNotify = hostStub.notify
+  const savedSessions = mod.$sessions.get()
+  const savedProjects = mod.$projectsList.get()
+  const savedLs = globalThis.window.localStorage
+  const savedCwd = hostStub.state.cwd.get()
+  const savedFocus = hostStub.state.focusedStoredSessionId.get()
+  const savedProfile = hostStub.state.profile.get()
+  const node = (id, label, path, ids = []) => ({ id, label, path, color: '#0af', icon: 'folder', isAuto: false, isNoProject: false, sessionIds: new Set(ids) })
+
+  hostStub.notify = n => { notifies.push(n) }
+  hostStub.openSession = async (id, opts) => { opens.push({ id, opts: { ...opts } }) }
+  hostStub.request = async (method, params) => {
+    calls.push({ method, params: params ? { ...params } : {} })
+    if (method === 'session.create') return { session_id: 'rt-own-01', stored_session_id: 'st-own-01', info: {} }
+    if (method === 'session.branch_stored') return { stored_session_id: 'st-branch-01' }
+    if (method === 'projects.tree') return { projects: [] }
+    if (method === 'session.list') return { sessions: [] }
+    if (method === 'session.active_list') return { sessions: [] }
+    return {}
+  }
+  // Verspätete, nicht awaitete Create-Pfade früherer Sektionen auslaufen lassen,
+  // dann Aufzeichnung leeren — sonst mischen sie sich in die Zählung.
+  await new Promise(resolve => setTimeout(resolve, 150))
+  calls.length = 0
+  opens.length = 0
+
+  // A) Owner-Hinweis: openSession bekommt das Socket-Profil (SDK schreibt daraus den Hinweis),
+  //    session.create trägt dasselbe Profil, die Listen-Ansicht bleibt im Standard-Scope.
+  hostStub.state.profile.set('work')
+  await mod.startNewSessionInCwd('/tmp/own', 'Own')
+  const createCall = calls.find(c => c.method === 'session.create')
+  check('Owner-Fix: session.create trägt das aktive Socket-Profil', createCall?.params?.profile === 'work', `profile=${createCall?.params?.profile}`)
+  check(
+    'Owner-Fix: host.openSession bekommt profile (→ Owner-Hinweis) und lässt den Profil-Scope in Ruhe',
+    opens.length === 1 && opens[0].id === 'st-own-01' && opens[0].opts.profile === 'work' && opens[0].opts.keepAllProfilesScope === false,
+    JSON.stringify(opens)
+  )
+  hostStub.state.profile.set('')
+  check('Owner-Fix: leeres Profil fällt auf default zurück (nie leer an den Owner-Pfad)', mod.ambientOwnerProfile() === 'default', mod.ambientOwnerProfile())
+  opens.length = 0
+  await mod.branchSessionRow({ id: 'st-parent', cwd: '/tmp/own' })
+  check(
+    'Owner-Fix: auch Branch-Sessions werden mit Owner-Hinweis geöffnet (gleiche Fehlerklasse)',
+    opens.length === 1 && opens[0].id === 'st-branch-01' && opens[0].opts.profile === 'default',
+    JSON.stringify(opens)
+  )
+
+  // B) Chip: Projekt aus Arbeitsordner (längster Pfad), Anker spiegelt den nativen Sendeweg.
+  mod.$projectsList.set([node('p-a', 'Alpha', '/w/alpha'), node('p-ab', 'AlphaSub', '/w/alpha/sub'), node('p-b', 'Beta', '/w/beta')])
+  check('projectForCwd: längster Pfad gewinnt', mod.projectForCwd('/w/alpha/sub/x')?.id === 'p-ab', mod.projectForCwd('/w/alpha/sub/x')?.id)
+  check('projectForCwd: Ordner im Projekt → Projekt', mod.projectForCwd('/w/beta/src')?.id === 'p-b', mod.projectForCwd('/w/beta/src')?.id)
+  check('projectForCwd: Präfix ohne Pfadgrenze matcht nicht', mod.projectForCwd('/w/betamax') === null, String(mod.projectForCwd('/w/betamax')?.id))
+
+  globalThis.window.localStorage = { getItem: key => (key === 'hermes.desktop.projectScope' ? '__all_projects__' : null), setItem() {}, removeItem() {} }
+  hostStub.state.cwd.set('/w/beta/src')
+  mod.$composerPick.set({ id: '', label: '', color: null, at: 0 })
+  check('Chip: Draft zieht das Projekt aus dem Arbeitsordner der NATIVEN Seitenleiste', mod.composerDraftLabel()?.id === 'p-b', JSON.stringify(mod.composerDraftLabel()))
+  hostStub.state.cwd.set('')
+  globalThis.window.localStorage = { getItem: key => (key === 'hermes.desktop.projectScope' ? 'p-a' : null), setItem() {}, removeItem() {} }
+  check('Chip: ohne cwd zieht der Draft das Projekt des Projekt-Scopes', mod.composerDraftLabel()?.id === 'p-a', JSON.stringify(mod.composerDraftLabel()))
+  globalThis.window.localStorage = { getItem: key => (key === 'hermes.desktop.projectScope' ? '__no_project__' : null), setItem() {}, removeItem() {} }
+  hostStub.state.cwd.set('/w/beta/src')
+  check('Chip: Home-Scope → kein Projekt (wie der App-Sendeweg)', mod.composerDraftLabel() === null, JSON.stringify(mod.composerDraftLabel()))
+  globalThis.window.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
+
+  // C) Draft-Pick → neue Session: der Pick wird auf die von der App angelegte Session angewandt.
+  const setFocus = id => hostStub.state.focusedStoredSessionId.set(id)
+  const moves = () => calls.filter(c => c.method === 'session.workspace.move')
+  mod.$sessions.set([...savedSessions, { id: 'st-known', title: 'k', message_count: 3 }])
+  setFocus('')
+  setFocus('st-consume') // verbraucht einen evtl. verbliebenen Eigen-Create-Guard
+  setFocus('')
+  calls.length = 0
+  hostStub.state.cwd.set('/tmp')
+  mod.$composerPick.set({ id: 'p-a', label: 'Alpha', color: '#0af', at: Date.now() })
+  setFocus('st-new-native')
+  await new Promise(resolve => setTimeout(resolve, 20))
+  check(
+    'Chip-Pick: neue native Session wird per session.workspace.move ins Pick-Projekt gehoben',
+    moves().length === 1 && moves()[0].params.session_key === 'st-new-native' && moves()[0].params.cwd === '/w/alpha',
+    JSON.stringify(moves())
+  )
+  check('Chip-Pick: Pick wird verbraucht (kein Nachlaufen in spätere Drafts)', mod.$composerPick.get().id === '', JSON.stringify(mod.$composerPick.get()))
+
+  setFocus('')
+  calls.length = 0
+  mod.$composerPick.set({ id: 'p-a', label: 'Alpha', color: '#0af', at: Date.now() })
+  setFocus('st-known')
+  await new Promise(resolve => setTimeout(resolve, 20))
+  check('Chip-Pick: bestehende Session aus der Seitenleiste wird NICHT umgehängt', moves().length === 0, JSON.stringify(moves()))
+
+  setFocus('')
+  calls.length = 0
+  hostStub.state.cwd.set('/w/alpha/deep')
+  setFocus('st-already-inside')
+  await new Promise(resolve => setTimeout(resolve, 20))
+  check('Chip-Pick: Session liegt schon im Pick-Projekt → kein Move', moves().length === 0, JSON.stringify(moves()))
+
+  setFocus('')
+  calls.length = 0
+  hostStub.state.cwd.set('/tmp')
+  mod.$composerPick.set({ id: 'p-a', label: 'Alpha', color: '#0af', at: Date.now() })
+  await mod.startNewSessionInCwd('/w/beta', 'Beta') // Plugin-eigenes Create setzt den Guard
+  setFocus('st-own-02')
+  await new Promise(resolve => setTimeout(resolve, 20))
+  check('Chip-Pick: eigene verankerte Session (+/Projekt-Header) wird nicht umgehängt', moves().length === 0, JSON.stringify(moves()))
+
+  hostStub.state.cwd.set('/tmp')
+  mod.$composerPick.set({ id: '', label: '', color: null, at: 0 })
+  setFocus('')
+  setFocus('st-x')
+  setFocus('')
+  calls.length = 0
+  setFocus('st-no-pick')
+  await new Promise(resolve => setTimeout(resolve, 20))
+  check('Chip-Pick: ohne Pick passiert beim Draft→Session-Übergang nichts', moves().length === 0, JSON.stringify(moves()))
+
+  setFocus(savedFocus)
+  hostStub.state.cwd.set(savedCwd)
+  hostStub.state.profile.set(savedProfile)
+  globalThis.window.localStorage = savedLs
+  mod.$sessions.set(savedSessions)
+  mod.$projectsList.set(savedProjects)
+  hostStub.request = prevReq
+  hostStub.openSession = prevOpen
+  hostStub.notify = prevNotify
+} catch (error) {
+  check('v1.23.0-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

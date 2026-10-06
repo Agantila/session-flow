@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.22.2'
+const VERSION = '1.23.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1830,13 +1830,71 @@ function projectForStoredSession(storedId) {
   return node ? { id: node.id, label: node.label, color: node.color, path: node.path } : null
 }
 
-/** Anker, den die App selbst für einen Draft resolve-n würde (App-Logik gespiegelt). */
-function composerDraftAnchor() {
-  try {
-    return resolveNewProjectSessionCwd() || { cwd: '', label: '' }
-  } catch {
-    return { cwd: '', label: '' }
+/** Projekt-Knoten, dessen Pfad `cwd` enthält (längster Pfad gewinnt — Worktrees/Unterordner). */
+function projectForCwd(cwd) {
+  const target = String(cwd || '').trim().replace(/[\\/]+$/, '')
+
+  if (!target) {
+    return null
   }
+
+  let best = null
+  let bestLen = -1
+
+  for (const node of $projectsList.get()) {
+    const base = String(node.path || '').trim().replace(/[\\/]+$/, '')
+
+    if (node.isNoProject || !base) {
+      continue
+    }
+
+    if ((target === base || target.startsWith(`${base}/`)) && base.length > bestLen) {
+      best = node
+      bestLen = base.length
+    }
+  }
+
+  return best
+}
+
+/**
+ * Anker, den die App für einen Draft beim Senden auflöst — SYNCHRON gespiegelt
+ * (`use-session-actions`: Home-Scope → detached, sonst `$currentCwd`, sonst
+ * `resolveNewSessionCwd` = Projekt-Scope-Wurzel). Quelle sind genau die Atome
+ * der NATIVEN Sessions-Seitenleiste: ihr „+" am Projekt / der Projekt-Scope
+ * setzen `$currentCwd` bzw. `hermes.desktop.projectScope` (persistentAtom
+ * schreibt den Key bei jeder Änderung — Lesen ist ehrlich, Schreiben nicht).
+ * Früher rief diese Funktion die ASYNC `resolveNewProjectSessionCwd()` ohne
+ * await auf → `.cwd` eines Promise war immer undefined, der Chip lernte nie
+ * einen nativen Anker.
+ */
+function composerDraftAnchor() {
+  let scope = ''
+  let cwd = ''
+
+  try {
+    scope = String(window.localStorage?.getItem('hermes.desktop.projectScope') || '')
+  } catch {
+    scope = ''
+  }
+
+  if (scope === '__no_project__') {
+    return { cwd: '', node: null }
+  }
+
+  try {
+    cwd = String(host.state?.cwd?.get?.() || '').trim()
+  } catch {
+    cwd = ''
+  }
+
+  if (!cwd && scope && scope !== '__all_projects__') {
+    const scoped = $projectsList.get().find(entry => entry.id === scope && !entry.isNoProject)
+
+    cwd = String(scoped?.path || '').trim()
+  }
+
+  return { cwd, node: projectForCwd(cwd) }
 }
 
 /**
@@ -1864,19 +1922,10 @@ async function applyComposerPick(node) {
   //    erste Quelle vor App-Scope/active_id (siehe resolveNewProjectSessionCwd).
   $composerPick.set({ id: node.id, label: node.label, color: node.color, at: Date.now() })
 
-  // 2) App-Scope im localStorage anpassen — der App-Atom `$projectScope` liest
-  //    beim Modul-Init aus diesem Key. Wenn die App ihren Atom zur Laufzeit
-  //    erneut liest (z. B. via window-Event), fällt sie auf den neuen Wert
-  //    zurück. Wir setzen den Scope explizit — `__no_project__` für Home,
-  //    sonst die Projekt-ID.
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const scopeValue = node.id && !node.isNoProject ? node.id : '__no_project__'
-      window.localStorage.setItem('hermes.desktop.projectScope', scopeValue)
-    }
-  } catch {
-    // localStorage kann in Edge-Cases (Sandbox, Privacy-Mode) werfen — kein Blocker.
-  }
+  // Bewusst KEIN Schreiben von `hermes.desktop.projectScope`: der App-Atom liest
+  // den Key nur beim Modul-Init — ein Write änderte nichts am laufenden Draft,
+  // ließe die App aber beim NÄCHSTEN Start ungefragt in diesem Projekt
+  // einsteigen. Der Draft-Pick wirkt über `adoptComposerPickForNewSession`.
 
   if (focusedStored) {
     try {
@@ -1957,6 +2006,84 @@ async function rehomeFocusedSession(storedId, node) {
 }
 
 /**
+ * Draft-Pick → echte Session (der native Sendeweg).
+ *
+ * Der Composer-Chip im Draft ist nur ein Merker: das App-Senden löst seinen
+ * Arbeitsordner selbst auf (`$currentCwd`/`$projectScope`, keine Plugin-
+ * Schreib-Tür). Legt die App die Session aus dem Draft an — egal ob der
+ * Draft aus der NATIVEN Sessions-Seitenleiste oder dem Plugin-Pane stammt —,
+ * wechselt der fokussierte Stored-Id-Wert von leer auf eine neue ID. In genau
+ * diesem Moment wird der gültige Pick per `session.workspace.move` auf die
+ * neue Session angewandt (Chip verhält sich damit überall gleich). Nicht
+ * eingreifen, wenn (a) die ID schon bekannt ist (bestehende Session aus der
+ * Seitenleiste geöffnet), (b) das Plugin selbst gerade eine verankerte Session
+ * erzeugt (`ownCreateUntil`) oder (c) die Session ohnehin im Pick-Projekt
+ * liegt.
+ */
+let adoptPrevStored = null
+let ownCreateUntil = 0
+
+function adoptComposerPickForNewSession() {
+  let next = ''
+
+  try {
+    next = String(host.state?.focusedStoredSessionId?.get?.() || '')
+  } catch {
+    next = ''
+  }
+
+  const prev = adoptPrevStored
+
+  adoptPrevStored = next
+
+  if (prev === null || prev || !next) {
+    return
+  }
+
+  const pick = activeComposerPick()
+
+  // Der Übergang gehört dem eigenen Create (einmalig verbrauchen).
+  if (Date.now() < ownCreateUntil) {
+    ownCreateUntil = 0
+
+    return
+  }
+
+  if (!pick || pick.id === '__no_project__') {
+    return
+  }
+
+  if ($sessions.get().some(row => row.id === next)) {
+    return
+  }
+
+  const node = $projectsList.get().find(entry => entry.id === pick.id && !entry.isNoProject)
+  const path = String(node?.path || '').trim()
+
+  if (!node || !path) {
+    return
+  }
+
+  $composerPick.set({ id: '', label: '', color: null, at: 0 })
+
+  let cwd = ''
+
+  try {
+    cwd = String(host.state?.cwd?.get?.() || '').trim()
+  } catch {
+    cwd = ''
+  }
+
+  if (cwd && (cwd === path || cwd.startsWith(`${path}/`))) {
+    return
+  }
+
+  void rehomeFocusedSession(next, node).catch(error => {
+    console.warn(`[${ID}] Draft-Pick konnte nicht angewandt werden`, error)
+  })
+}
+
+/**
  * Draft-Anzeige: aktueller Pick (Composer-Chip) gewinnt — sonst gelernter
  * Anker (App-Logik gespiegelt — Scope/active_id/letzte Session-CWD), sobald
  * ein Projekt daraus ablesbar ist.
@@ -1972,10 +2099,7 @@ function composerDraftLabel() {
     return { id: pick.id, label: pick.label, color: pick.color }
   }
 
-  const anchor = composerDraftAnchor()
-  const node = anchor.cwd
-    ? $projectsList.get().find(entry => !entry.isNoProject && entry.path && (anchor.cwd === entry.path || anchor.cwd.startsWith(`${entry.path}/`)))
-    : null
+  const { node } = composerDraftAnchor()
 
   if (node) {
     return { id: node.id, label: node.label, color: node.color }
@@ -2038,7 +2162,7 @@ function buildComposerPillMenu(doc) {
 }
 
 /** Menü-Einträge rendern (Draft: Home zuerst; Session: nur echte Projekte). */
-function renderComposerPillMenu(menu, isDraft) {
+function renderComposerPillMenu(menu, isDraft, activeId = '') {
   const doc = menu.ownerDocument
 
   while (menu.firstChild) {
@@ -2070,6 +2194,7 @@ function renderComposerPillMenu(menu, isDraft) {
     item.className = 'sf-cproj-item'
     item.setAttribute('role', 'menuitem')
     item.setAttribute('data-project', entry.id)
+    item.setAttribute('data-active', entry.id === activeId ? 'true' : 'false')
 
     const dot = doc.createElement('span')
 
@@ -2164,24 +2289,42 @@ function refreshComposerPillState(row) {
 
   let label = ''
   let color = null
-  let isDraft = true
+  let projectId = ''
+  const isDraft = !focusedStored
 
   if (focusedStored) {
-    const proj = projectForStoredSession(focusedStored)
+    // Baum/Seed zuerst; steht die Session (noch) in keinem Baum-Knoten — frisch
+    // aus der NATIVEN Seitenleiste, 0 Turns —, trägt ihr Arbeitsordner die
+    // Zuordnung (der Baum gruppiert genau nach cwd).
+    let proj = projectForStoredSession(focusedStored)
+
+    if (!proj) {
+      const known = $projectsList.get().some(entry => entry.sessionIds.has(focusedStored))
+      let cwd = ''
+
+      try {
+        cwd = String(host.state?.cwd?.get?.() || '')
+      } catch {
+        cwd = ''
+      }
+
+      const byCwd = known ? null : projectForCwd(cwd)
+
+      proj = byCwd ? { id: byCwd.id, label: byCwd.label, color: byCwd.color, path: byCwd.path } : null
+    }
 
     if (proj) {
       label = proj.label
       color = proj.color
-      isDraft = false
+      projectId = proj.id
     }
-  }
-
-  if (isDraft) {
+  } else {
     const draft = composerDraftLabel()
 
     if (draft) {
       label = draft.label
       color = draft.color
+      projectId = draft.id
     }
   }
 
@@ -2201,6 +2344,7 @@ function refreshComposerPillState(row) {
   }
 
   row.setAttribute('data-sf-cproj-draft', isDraft ? 'true' : 'false')
+  row.setAttribute('data-sf-cproj-id', projectId)
   row.setAttribute('data-sf-cproj-empty', label ? 'false' : 'true')
   row.setAttribute('data-sf-cproj-focus', focusedStored ? 'session' : 'draft')
 }
@@ -2322,7 +2466,21 @@ function syncComposerProjectPills() {
 
       if (menu.hidden && composerMenuKey !== pill) {
         const isDraft = chip.getAttribute('data-sf-cproj-draft') === 'true'
-        renderComposerPillMenu(menu, isDraft)
+        const activeId = chip.getAttribute('data-sf-cproj-id') || ''
+
+        renderComposerPillMenu(menu, isDraft, activeId)
+
+        // Projekte in der NATIVEN Seitenleiste angelegt/umbenannt? Das Gateway
+        // sendet dazu keine Events — beim Öffnen frisch ziehen (4-s-Guard) und
+        // das offene Menü nachrendern, damit es dieselbe Liste zeigt wie dort.
+        if (Date.now() - projectsListSucceededAt > 4_000) {
+          void refreshProjectsList().then(() => {
+            if (!menu.hidden && composerMenuKey === pill) {
+              renderComposerPillMenu(menu, isDraft, chip.getAttribute('data-sf-cproj-id') || '')
+            }
+          })
+        }
+
         const rect = pill.getBoundingClientRect()
         menu.style.left = `${Math.max(8, Math.round(rect.left))}px`
         menu.style.bottom = `${Math.max(8, Math.round(window.innerHeight - rect.top + 6))}px`
@@ -2854,8 +3012,51 @@ async function startNewProjectSession() {
   }
 }
 
+/**
+ * Profil des Gateway-Sockets, auf dem `host.request` landet (aktives Profil).
+ * Jede per RPC erzeugte Session gehört genau diesem Backend.
+ */
+function ambientOwnerProfile() {
+  try {
+    const profile = String(host.state?.profile?.get?.() || '').trim()
+
+    return profile || 'default'
+  } catch {
+    return 'default'
+  }
+}
+
+/**
+ * Frisch per RPC erzeugte Session öffnen — MIT Owner-Hinweis.
+ *
+ * Ursache des Fehlers „Session owner could not be resolved" (Neue Session in
+ * der Kopfzeile): die App routet jeden session-bezogenen RPC über die
+ * Owner-Leiter (Tile-Route → Owner-Hinweis → Session-Zeile → Profil-Probe)
+ * und bricht bei unbekanntem Owner fail-closed ab, sobald es mehr als ein
+ * Profil gibt. Eine Session, die das Plugin selbst erzeugt, hat weder Zeile
+ * (DB-Row entsteht lazy beim 1. Prompt) noch Hinweis — `host.openSession`
+ * ohne `profile` legt keinen an. Mit `profile` trägt das SDK den Hinweis
+ * (aktive Verbindung + Profil) VOR dem Resume ein.
+ *
+ * `keepAllProfilesScope: false` hält die Listen-Ansicht im Standard
+ * (Profil-Scope); der Default `true` würde die Seitenleiste ungefragt auf
+ * „Alle Profile" umschalten. Gilt für ALLE Create-Pfade (+, Projekt-Header,
+ * Composer-Chip, Branch) — einmal hier statt pro Aufrufer.
+ */
+async function openFreshSession(storedId) {
+  await host.openSession(storedId, {
+    intent: readSetting('tabs', 'openIntent') || 'in-place',
+    profile: ambientOwnerProfile(),
+    keepAllProfilesScope: false
+  })
+}
+
 /** Neue Session explizit in `cwd` starten — Projekt-Header-"+"-Button. */
 async function startNewSessionInCwd(cwd, label) {
+  // Eigene, bereits verankerte Session: die Draft-Pick-Übernahme darf sie nicht
+  // nachträglich in ein anderes Projekt umhängen (siehe adoptComposerPickForNewSession).
+  ownCreateUntil = Date.now() + 10_000
+
   try {
     const params = { cols: 96, source: 'desktop' }
 
@@ -2864,15 +3065,11 @@ async function startNewSessionInCwd(cwd, label) {
       params.cwd_explicit = true
     }
 
-    try {
-      const profile = host.state?.focusedSessionProfile?.get?.()
-
-      if (typeof profile === 'string' && profile.trim()) {
-        params.profile = profile.trim()
-      }
-    } catch {
-      // Ohne Profil resolve-t das Backend selbst.
-    }
+    // Owner-Profil = das Profil des Sockets, auf dem `host.request` landet —
+    // dort entsteht die Session, und genau dieses Profil muss auch der
+    // Owner-Hinweis der App tragen (siehe openFreshSession). Das fokussierte
+    // Session-Profil kann davon abweichen und ist KEINE Create-Quelle.
+    params.profile = ambientOwnerProfile()
 
     const created = await host.request('session.create', params)
     const runtimeId = String(created?.session_id || '').trim()
@@ -2919,7 +3116,7 @@ async function startNewSessionInCwd(cwd, label) {
       }
     }
 
-    await host.openSession(createdId, { intent: readSetting('tabs', 'openIntent') || 'in-place' })
+    await openFreshSession(createdId)
     void invalidateProjectTree()
     scheduleSessionsRefresh(600)
     host.notify({
@@ -5515,6 +5712,7 @@ const CSS = `
 .sf-cproj-menu-hint{padding:4px 8px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ui-text-quaternary,var(--ui-text-tertiary))}
 .sf-cproj-item{display:flex;width:100%;align-items:center;gap:8px;padding:6px 8px;border:none;border-radius:7px;background:transparent;color:var(--foreground);font-size:12px;text-align:left;cursor:pointer}
 .sf-cproj-item:hover{background:color-mix(in srgb,var(--foreground) 7%,transparent)}
+.sf-cproj-item[data-active='true']{background:color-mix(in srgb,var(--ui-accent) 14%,transparent)}
 .sf-cproj-item:focus-visible{outline:1px solid var(--ui-accent);outline-offset:-1px}
 .sf-cproj-empty{padding:6px 8px;font-size:11px;color:var(--ui-text-tertiary)}
 @media (prefers-reduced-motion:reduce){.sf-cproj-pill{transition:none}}
@@ -7892,7 +8090,7 @@ async function branchSessionRow(row) {
       throw new Error('branch lieferte keine Session-ID')
     }
 
-    await host.openSession(createdId, { intent: readSetting('tabs', 'openIntent') || 'in-place' })
+    await openFreshSession(createdId)
     scheduleSessionsRefresh(1500)
     host.notify({ kind: 'success', message: CTX?.i18n?.t('branchSession') || 'Zweig erstellt' })
   } catch (error) {
@@ -11545,12 +11743,16 @@ export default {
     // Composer-Projekt-Pill (v1.21): Sync-Takt fängt App-Re-Renders (Zeile weg
     // → neu injizieren) und Pane-Wechsel; die Listener ziehen Label/Menu-
     // Zustand sofort nach, wenn Projekte, Seed oder Fokus sich ändern.
+    adoptComposerPickForNewSession() // Baseline: aktueller Fokus, kein Übergang
     kickComposerPillSync()
     const stopComposerPillWatch = [
       $projectsList.listen(() => kickComposerPillSync()),
       $sessionProjectSeed.listen(() => kickComposerPillSync()),
       $composerPick.listen(() => kickComposerPillSync()),
-      host.state.focusedStoredSessionId.listen(() => kickComposerPillSync())
+      host.state.focusedStoredSessionId.listen(() => {
+        adoptComposerPickForNewSession()
+        kickComposerPillSync()
+      })
     ]
     ctx.setInterval(() => kickComposerPillSync(), CPROJ_SYNC_MS)
 
