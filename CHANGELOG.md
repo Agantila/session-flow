@@ -3,6 +3,26 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.26.1] — 2026-10-07
+
+### Fixed
+- **„Fertig, aber ungesehen" fehlte im Status-Indikator (Liste UND
+  Grid)**: der REST-Payload trägt `unread:true` (Antwort kam an, der
+  User war noch nicht drin), und Filter/Status-Gruppierung nutzten den
+  Zustand bereits — aber `activityFor()` (die Engine hinter dem
+  Zeilen-Indikator) las das Flag nie und ließ jede ruhige Session
+  pauschal als „idle" erscheinen. Die `data-kind=unread`-CSS-Regel war
+  toter Code. Jetzt: ruhige Session mit `unread` → `kind:'unread'`
+  (gefüllter Punkt-Glyph, Farbe `--ui-success`, Tooltip „Fertig —
+  Antwort ungesehen"). Priorität: Busy/`$activity`-Detail gewinnt vor
+  unread (ein laufender Chat zeigt seine Arbeit, nicht den Staub),
+  unread schlägt idle. Zusätzlich null-safe (`row:null` crashte beim
+  `.id`-Zugriff).
+
+### Added
+- i18n (EN+DE): `stUnread` („Done — unread answer" / „Fertig — Antwort
+  ungesehen").
+
 ## [1.26.0] — 2026-10-06
 
 ### Changed

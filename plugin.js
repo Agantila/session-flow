@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.26.0'
+const VERSION = '1.26.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -4767,6 +4767,7 @@ const EN = {
   stWorking: 'Working…',
   stWaiting: 'Waiting for input',
   stDone: 'Done',
+  stUnread: 'Done — unread answer',
   stError: 'Error',
   stIdle: 'Idle',
 
@@ -5390,6 +5391,7 @@ const DE = {
   stWorking: 'Arbeitet…',
   stWaiting: 'Wartet auf Antwort',
   stDone: 'Fertig',
+  stUnread: 'Fertig — Antwort ungesehen',
   stError: 'Fehler',
   stIdle: 'Inaktiv',
 
@@ -6709,11 +6711,19 @@ const ACTIVITY_GLYPHS = {
   working: { icon: 'sync~spin', labelKey: 'stWorking' },
   waiting: { icon: 'bell', labelKey: 'stWaiting' },
   done: { icon: 'check', labelKey: 'stDone' },
+  // „Fertig, aber ungesehen": die Antwort kam an, der User war noch nicht
+  // drin (REST `unread:true`). Gefüllter Punkt wie in Mail/Chat-Apps.
+  unread: { icon: 'circle-filled', labelKey: 'stUnread' },
   error: { icon: 'error', labelKey: 'stError' },
   idle: { icon: 'circle-outline', labelKey: 'stIdle' }
 }
 
 function activityFor(row, live, activity) {
+  // Null-safe: Stale-Renderings können mit leeren Zeilen ankommen.
+  if (!row || !row.id) {
+    return { kind: 'idle', name: '', labelKey: null }
+  }
+
   const detail = activity[row.id]
 
   if (detail) {
@@ -6734,6 +6744,16 @@ function activityFor(row, live, activity) {
     if (['working', 'starting', 'resuming'].includes(runtimeEntry.status)) {
       return { kind: 'working', name: '', labelKey: null }
     }
+  }
+
+  // v1.26.1: „fertig, aber ungesehen" — die Session ist ruhig, trägt aber
+  // noch das `unread`-Flag vom REST-Payload. Das schlägt idle: der User
+  // soll in Liste UND Grid sehen, dass hier eine ungesehene Antwort
+  // liegt (gleiche Quelle wie der „Ungelesen"-Statusfilter). Busy-Zustände
+  // oben gewinnen weiterhin — ein laufender Chat mit altem unread zeigt
+  // seine Arbeit, nicht den Staub.
+  if (row && row.unread) {
+    return { kind: 'unread', name: '', labelKey: null }
   }
 
   return { kind: 'idle', name: '', labelKey: null }

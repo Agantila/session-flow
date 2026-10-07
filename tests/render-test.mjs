@@ -360,7 +360,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, $groupsState }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, $groupsState, activityFor }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -3575,6 +3575,43 @@ try {
   mod.$projectsList.set([])
 } catch (error) {
   check('v1.26.0-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── 34) v1.26.1 — „Fertig, aber ungesehen" (unread) im Status-Indikator ───
+try {
+  const A = (row, live = {}, activity = {}) => mod.activityFor(row, live, activity)
+
+  // Kernfall: ruhige Session mit unread-Flag → kind 'unread' (statt idle).
+  const unreadRow = { id: 'u-1', unread: true }
+  check('v1.26.1: unread + ruhig → kind unread', A(unreadRow).kind === 'unread', JSON.stringify(A(unreadRow)))
+
+  // Ohne Flag bleibt es idle.
+  check('v1.26.1: ohne unread-Flag → kind idle', A({ id: 'u-2', unread: false }).kind === 'idle')
+
+  // Busy gewinnt: working-Session mit altem unread zeigt weiter „working".
+  const busyLive = { rt: { storedId: 'u-3', status: 'working' } }
+  check('v1.26.1: busy schlägt unread', A({ id: 'u-3', unread: true }, busyLive).kind === 'working')
+
+  // Waiting gewinnt ebenfalls.
+  const waitLive = { rt: { storedId: 'u-4', status: 'waiting' } }
+  check('v1.26.1: waiting schlägt unread', A({ id: 'u-4', unread: true }, waitLive).kind === 'waiting')
+
+  // $activity-Detail gewinnt über alles.
+  const actDetail = { 'u-5': { kind: 'tool', name: 'bash', at: Date.now() } }
+  check('v1.26.1: $activity-Detail schlägt unread', A({ id: 'u-5', unread: true }, {}, actDetail).kind === 'tool')
+
+  // Kein unread und kein Live → idle (Regressionsschutz).
+  check('v1.26.1: ruhig ohne Flag → weiter idle', A({ id: 'u-6' }).kind === 'idle')
+
+  // Stale-Objekte (row null/undefined) werfen nicht.
+  check('v1.26.1: row null → idle (kein Crash)', A(null).kind === 'idle')
+
+  // stUnread ist in beiden Bundles.
+  const bundles2 = globalThis.__SF__.bundles || {}
+  const bundleKeys2 = Object.values(bundles2).flatMap(b => b && typeof b === 'object' ? Object.keys(b) : [])
+  check('v1.26.1: stUnread im Bundle', bundleKeys2.includes('stUnread'))
+} catch (error) {
+  check('v1.26.1-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

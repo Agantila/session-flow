@@ -1,9 +1,16 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.26.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.26.1 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **„Fertig, aber ungesehen" im Status-Indikator** (v1.26.1):
+  `activityFor()` wertet jetzt `row.unread` aus — ruhige Sessions mit
+  ungesehener Antwort zeigen in Liste UND Grid den `unread`-Indikator
+  (gefüllter Punkt, `--ui-success`, Tooltip „Fertig — Antwort
+  ungesehen"), statt pauschal idle zu erscheinen. Busy-Zustände
+  gewinnen weiterhin. Zusätzlich: `activityFor` ist null-safe.
 
 - **Manuelle Gruppen als Projekt-Container** (v1.26.0, Plan
   `docs/plans/2026-10-06-group-as-project-container.md`): manuelle
