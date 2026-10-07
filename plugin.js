@@ -6082,6 +6082,14 @@ html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 .sf-pin-placeholder{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 10px;margin:2px 4px 4px;min-height:40px;border-radius:6px;border:1px dashed color-mix(in srgb,var(--ui-accent) 40%,transparent);color:color-mix(in srgb,var(--foreground) 70%,transparent);font-size:11px;font-weight:500;text-align:center;background:color-mix(in srgb,var(--ui-accent) 5%,transparent)}
 .sf-section[data-drop=true] .sf-pin-placeholder{border-color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 14%,transparent);color:var(--foreground)}
 .sf-pin-placeholder-text{line-height:1.2}
+/* v1.25.1: ListView-DnD-DropBar — schmale Leiste am Listenanfang, die
+   waehrend eines aktiven Drags zwei Ziele (Pin + Ungrouped) anbietet.
+   Ohne sie hatte der Flat-List-Modus keine sichtbare Drop-Area. */
+.sf-flat-dropbar{display:flex;gap:6px;padding:6px 6px 4px;margin:0 0 4px}
+.sf-flat-dropbar-target{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px;min-height:30px;border-radius:6px;border:1px dashed color-mix(in srgb,var(--ui-accent) 40%,transparent);color:color-mix(in srgb,var(--foreground) 70%,transparent);font-size:11px;font-weight:500;background:color-mix(in srgb,var(--ui-accent) 4%,transparent);transition:background-color .12s ease,border-color .12s ease,color .12s ease;cursor:default}
+.sf-flat-dropbar-target--hot,.sf-flat-dropbar-target[data-drop=true]{border-color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 18%,transparent);color:var(--foreground)}
+.sf-flat-dropbar-label{display:inline-flex;align-items:center;gap:5px;line-height:1.1}
+.sf-flat-dropbar-label [class*=codicon]{color:var(--ui-accent);flex-shrink:0}
 @media (prefers-reduced-motion:reduce){.sf-section[data-drop-ready=true]{animation:none}}
 .sf-stack{position:relative;height:12px;margin:0 4px 3px}
 .sf-stack i{position:absolute;left:0;right:0;height:7px;border-radius:5px;border:1px solid color-mix(in srgb,var(--sf-accent,var(--ui-accent)) 22%,transparent);background:color-mix(in srgb,var(--sf-accent,var(--ui-accent)) 10%,transparent)}
@@ -8302,6 +8310,20 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     'data-density': infoDensity,
     draggable: true,
     onClick: () => onOpen(row, null),
+    // v1.25.1: pointerdown-Capture bricht ab, sobald der User LINKS klickt.
+    // Der Radix-ContextMenuTrigger wickelt die Karte ein und ruft
+    // preventDefault() auf pointerdown, sobald er einen Rechtsklick
+    // erwartet - das frisst den nativen Drag-Start im Grid-View im
+    // oberen Karten-Bereich (Title/Details). Mit dem Capture-Stop
+    // erreicht der Trigger den Event nie, der Browser startet dragstart
+    // beim ersten mousemove automatisch. Rechtsklick (button===2) wird
+    // NICHT abgefangen, das ContextMenu oeffnet sich weiterhin normal.
+    onPointerDownCapture: event => {
+      if (event.button === 0) {
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+      }
+    },
     onDragStart: event => {
       // setData() passiert bereits im nativen Capture-Listener oben
       // (tabBodyRef). Hier nur State + effectAllowed-Sync.
@@ -9660,6 +9682,21 @@ function SessionsPane() {
   }
 
   const assign = (sessionId, groupId) => {
+    // Bug-Fix v1.25.1: Wenn die Session bereits gepinnt war und der User sie
+    // per DnD aus der Pinned-Sektion rauszieht, muss das pinned-Flag aktiv
+    // entpinnt werden — sonst bleibt sie unsichtbar (sie ist in pinnedItems
+    // aber nicht mehr in ungrouped, weil assign nur die Gruppen-Mitgliedschaft
+    // aendert).
+    const targetRow = rows.find(entry => entry.id === sessionId)
+    if (targetRow && targetRow.pinned) {
+      try {
+        host.sessions.pin(sessionId, false)
+      } catch {
+        /* Pin-Loeschen fehlgeschlagen - Refresh raeumt auf */
+      }
+      pinnedSucceededAt = 0
+      void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
+    }
     assignSession(sessionId, groupId)
     setDragging(null)
   }
@@ -9816,10 +9853,85 @@ function SessionsPane() {
   const flatShowingAll = flatLimit && showAllSections.has('flat-active')
   const flatVisible = flatLimit && !flatShowingAll ? activeFlatRows.slice(0, maxVisible) : activeFlatRows
 
+  // ListView-Drop-Bereich: eine schmale Leiste am Listenanfang, die waehrend
+  // eines aktiven Drags sichtbar wird. Sie hat zwei Ziele — Pin (links) und
+  // Ungrouped (rechts). Im Flat-List-Modus fehlen sonst die Sektion-Header,
+  // also gab es nichts, wohin man droppen konnte.
+  const flatDropBar = dragActive
+    ? jsxs('div', {
+        className: 'sf-flat-dropbar',
+        children: [
+          jsx('div', {
+            className: cn('sf-flat-dropbar-target', dragOverKey === 'flat-pin' && 'sf-flat-dropbar-target--hot'),
+            'data-drop-ready': 'true',
+            'data-drop': dragOverKey === 'flat-pin' ? 'true' : undefined,
+            onDragEnter: event => {
+              event.preventDefault()
+              setDragOverKey('flat-pin')
+            },
+            onDragOver: event => {
+              event.preventDefault()
+              if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+              if (dragOverKey !== 'flat-pin') setDragOverKey('flat-pin')
+            },
+            onDragLeave: event => {
+              if (event.currentTarget.contains(event.relatedTarget)) return
+              setDragOverKey(current => (current === 'flat-pin' ? null : current))
+            },
+            onDrop: event => {
+              event.preventDefault()
+              setDragOverKey(null)
+              const sessionId = event.dataTransfer?.getData('text/session-flow-session')
+                || event.dataTransfer?.getData('text/plain')
+              if (!sessionId) return
+              const targetRow = rows.find(entry => entry.id === sessionId)
+              if (targetRow && !targetRow.pinned) {
+                try { host.sessions.pin(sessionId, true) } catch { /* ignore */ }
+                pinnedSucceededAt = 0
+                void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
+                flashJustMoved(sessionId)
+              }
+            },
+            children: jsxs('span', { className: 'sf-flat-dropbar-label', children: [jsx(Codicon, { name: 'pin', size: '0.85rem' }), ' ' , t('pinnedSection')] })
+          }),
+          jsx('div', {
+            className: cn('sf-flat-dropbar-target', dragOverKey === 'flat-ungrouped' && 'sf-flat-dropbar-target--hot'),
+            'data-drop-ready': 'true',
+            'data-drop': dragOverKey === 'flat-ungrouped' ? 'true' : undefined,
+            onDragEnter: event => {
+              event.preventDefault()
+              setDragOverKey('flat-ungrouped')
+            },
+            onDragOver: event => {
+              event.preventDefault()
+              if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+              if (dragOverKey !== 'flat-ungrouped') setDragOverKey('flat-ungrouped')
+            },
+            onDragLeave: event => {
+              if (event.currentTarget.contains(event.relatedTarget)) return
+              setDragOverKey(current => (current === 'flat-ungrouped' ? null : current))
+            },
+            onDrop: event => {
+              event.preventDefault()
+              setDragOverKey(null)
+              const sessionId = event.dataTransfer?.getData('text/session-flow-session')
+                || event.dataTransfer?.getData('text/plain')
+              if (!sessionId) return
+              // ListView-Ungrouped-Drop: Pin loesen, falls noetig.
+              assign(sessionId, null)
+              flashJustMoved(sessionId)
+            },
+            children: jsxs('span', { className: 'sf-flat-dropbar-label', children: [jsx(Codicon, { name: 'list-unordered', size: '0.85rem' }), ' ', t('ungrouped') || 'Ungrouped'] })
+          })
+        ]
+      })
+    : null
+
   const flatList = jsx('div', {
     className: 'sf-list sf-list-flat',
     'data-flat': 'active',
-    children:
+    children: [
+      flatDropBar,
       activeFlatRows.length > 0
         ? jsx('div', {
             className: 'sf-items',
@@ -9853,6 +9965,7 @@ function SessionsPane() {
             ]
           })
         : null
+    ]
   })
 
   // v1.26.0: flach klappen — manuelle Gruppen-Sections werden zu
