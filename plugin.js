@@ -6260,6 +6260,16 @@ html[data-sf-grpdensity='compact'] .sf-group-head{min-height:24px}
 .sf-stack[data-style=pill] i:nth-child(2){left:2px;right:2px;top:3px;opacity:.45}
 .sf-stack[data-style=pill] i:nth-child(3){left:4px;right:4px;top:5px;opacity:.2}
 .sf-tab{display:flex;align-items:center;gap:var(--sf-row-gap,6px);min-height:var(--sf-row-min-h,26px);padding:4px var(--sf-row-pad-x,8px);border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative}
+/* v1.27.6 DnD-Hit-Test-Fix: waehrend eines aktiven Drags die .sf-tab
+   pointer-events:none schalten. HTML5-DnD feuert dragover/drop auf dem
+   obersten Element unter dem Cursor — das ist im Grid die .sf-tab-Card,
+   im List die .sf-tab-Row. Ohne diesen Bypass kommt der dragover nie bei
+   der Section (.sf-section mit onDragOver/onDrop) an, dropEffect bleibt
+   'none' und der Drop wird vom Browser verworfen. Mehr-/Drop-Indikator-
+   Klassen (.sf-flat-dropbar-target) bleiben pointer-events:auto, damit
+   die ListView-DropBar weiterhin anspricht. */
+:root[data-sf-drag='on'] .sf-tab{pointer-events:none}
+:root[data-sf-drag='on'] .sf-tab[data-dragging=true]{pointer-events:auto}
 .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
 .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12));color:var(--foreground)}
 .sf-tab[data-drop=true]{box-shadow:inset 0 0 0 1px var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 10%,transparent)}
@@ -9692,6 +9702,22 @@ function SessionsPane() {
   const sections = useMemo(() => buildSections(), [rows, groupsState, settings, projectsList, liveForSort, dragActive])
   const totalCount = sections.reduce((sum, section) => sum + section.items.length, 0)
   const maxVisible = Math.floor(clampNumber(settings.tabs.maxVisible, 0, 200, 0))
+
+  // v1.27.6 DnD-Tot-Fix: während eines aktiven Drags die .sf-tab-Karten
+  // pointer-events:none schalten — sonst trifft HTML5-DnD den dragover
+  // auf der Karte (List-Row / Grid-Card) statt auf der Section, der
+  // Section-Handler ruft kein preventDefault, dropEffect bleibt 'none'
+  // und der Drop wird abgelehnt. CSS-Selector :root[data-sf-drag=on]
+  // .sf-tab{pointer-events:none}. Attribut wird auf documentElement
+  // gesetzt — kein Re-Render, nur Style-Inversion.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (dragActive) {
+      document.documentElement.setAttribute('data-sf-drag', 'on')
+    } else {
+      document.documentElement.removeAttribute('data-sf-drag')
+    }
+  }, [dragActive])
 
   // Filter-Leiste (wie die Hermes-Sessionliste): Textsuche über Titel/Branch/
   // Vorschau + Schnellfilter (alle/angepinnt/aktiv). Rein clientseitig, nichts
