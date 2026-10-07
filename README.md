@@ -145,6 +145,8 @@ The folder name **must** be `session-flow` (= the plugin id).
 | Context menu (pin, group, colour, open as…) | Right-click a tab |
 | Create / edit / delete a group | Gear / “+” button in the pane header — or right-click / double-click a group header |
 | Move a session into a group | Drag & drop onto a group — or right-click → “In Gruppe verschieben” |
+| Pin / unpin a session | Drag onto the **Pinned** section header, or right-click → “Anpinnen” / “Lösen” |
+| Pin / unpin from the flat list view | Drag onto the **Pin / Ungrouped** drop-bar that appears at the top of the list while dragging |
 | Collapse a group | Click the group header |
 | Cycle through sessions | `Ctrl` + mouse wheel |
 | Settings | Sidebar “Session Flow” or ⌘K → “Session Flow: Einstellungen” |

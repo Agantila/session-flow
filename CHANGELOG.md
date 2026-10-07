@@ -20,6 +20,21 @@ Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
   assign-Unpin-Teil aus v1.25.1 (DnD aus der Pinned-Sektion) ist
   unverändert.
 
+### Changed
+- **Zeilen-Geometrie in List- und GridView** (Karten-Zentrierung +
+  Subtext-Luft): `.sf-tab` Padding von `2px 8px` auf `4px 8px` —
+  Title sitzt nicht mehr zu nah an der Kartenkante. `.sf-tab-main`
+  ist jetzt Flex-Column mit `justify-content: center` und `gap: 1px` —
+  Title und Details sind innerhalb der Karten-Zelle vertikal mittig
+  zueinander. `.sf-tab-title` line-height von `16px` auf `14px`
+  (matched die Lead-Icon-Höhe `var(--sf-row-lead,14px)`), `margin: 0`
+  gegen den Browser-Default. `.sf-tab-details` margin-top in ListView
+  von `4px` auf `2px` (knapper Anschluss), im GridView `3px` (etwas
+  Luft zum Title). GridView `.sf-tab-main` mit
+  `justify-content: flex-start` überschreibt den Center-Default, damit
+  die Grid-Karte oben sitzt und die Meta-Zeile über `margin-top: auto`
+  ans untere Ende gedrückt wird (bestehende Logik unverändert).
+
 ## [1.27.4] — 2026-10-07
 
 ### Fixed

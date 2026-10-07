@@ -11,6 +11,20 @@ zugesagt.
   wieder nativ; der dragstart-Capture-Listener (dataTransfer-Mime) bleibt
   als Grid-Drag-Absicherung.
 
+- **ListView-DnD-DropBar + Pinned-Unpin** (v1.25.1/v1.27.5): im
+  Flat-List-Modus fehlte jede Drop-Area, weil die Sektion-Header
+  weggelassen werden — eine schmale Leiste mit „Pin" und „Ungrouped"
+  erscheint jetzt am Listenanfang, sobald ein Drag aktiv ist. Das
+  Verschieben einer gepinnten Session aus der Pinned-Sektion in eine
+  andere Sektion löst das `pinned`-Flag automatisch (assign-Unpin).
+
+- **Zeilen-Geometrie List/Grid zentriert** (v1.27.5): `.sf-tab` Padding
+  2→4px, Title line-height 16→14px, sf-tab-main als Flex-Column mit
+  `justify-content: center` — Title und Details sind in der Karte
+  vertikal mittig zueinander und nicht mehr zu nahe an der Kartenkante.
+  GridView behält oben bündig + Meta am Boden (`justify-content:
+  flex-start` + `margin-top: auto`).
+
 - **Reset stellt die Hermes-Default-Projektgruppierung wieder her**
   (v1.27.4): `groups.autoMode`-Werksdefault ist jetzt `project` (statt
   `off`) — nach „Einstellungen zurücksetzen" gruppiert die Pane wieder

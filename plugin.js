@@ -6235,7 +6235,7 @@ html[data-sf-grpdensity='compact'] .sf-group-head{min-height:24px}
 .sf-stack[data-style=pill] i:nth-child(1){left:0;right:0;opacity:.8}
 .sf-stack[data-style=pill] i:nth-child(2){left:2px;right:2px;top:3px;opacity:.45}
 .sf-stack[data-style=pill] i:nth-child(3){left:4px;right:4px;top:5px;opacity:.2}
-.sf-tab{display:flex;align-items:center;gap:var(--sf-row-gap,6px);min-height:var(--sf-row-min-h,26px);padding:2px var(--sf-row-pad-x,8px);border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative}
+.sf-tab{display:flex;align-items:center;gap:var(--sf-row-gap,6px);min-height:var(--sf-row-min-h,26px);padding:4px var(--sf-row-pad-x,8px);border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative}
 .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
 .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12));color:var(--foreground)}
 .sf-tab[data-drop=true]{box-shadow:inset 0 0 0 1px var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 10%,transparent)}
@@ -6263,8 +6263,8 @@ html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-pl
 .sf-tab-lead[data-kind=done]{color:var(--ui-success,var(--ui-accent))}
 .sf-tab-lead[data-kind=unread]{color:var(--ui-success,var(--ui-accent))}
 .sf-tab-lead[data-kind=error]{color:var(--destructive,#ef4444)}
-.sf-tab-main{min-width:0;flex:1}
-.sf-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-label-size,10px);line-height:16px;font-weight:500;color:inherit}
+.sf-tab-main{min-width:0;flex:1;display:flex;flex-direction:column;justify-content:center;gap:1px}
+.sf-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-label-size,10px);line-height:14px;font-weight:500;color:inherit;margin:0}
 .sf-tab[data-active=true] .sf-tab-title{font-weight:600}
 .sf-tab-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,8px);line-height:1.3;color:var(--ui-text-quaternary)}
 .sf-tab-meta{display:flex;align-items:center;gap:4px;flex-shrink:0}
@@ -6305,15 +6305,16 @@ html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx[data-level=high]{--sf
 :where(.sf-items[data-view=grid]) .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08))}
 :where(.sf-items[data-view=grid]) .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12))}
 .sf-items[data-view=grid] .sf-tab-lead{align-self:flex-start;width:auto}
-.sf-items[data-view=grid] .sf-tab-main{flex:1 1 auto;width:100%}
+.sf-items[data-view=grid] .sf-tab-main{flex:1 1 auto;width:100%;justify-content:flex-start}
 .sf-items[data-view=grid] .sf-tab-title{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--sf-grid-lines,2);overflow:hidden;overflow-wrap:anywhere}
 .sf-items[data-view=grid] .sf-tab-preview{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-.sf-tab-details{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,8px);line-height:1.3;color:var(--ui-text-tertiary)}
+.sf-tab-details{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,8px);line-height:1.3;color:var(--ui-text-tertiary);margin-top:1px}
 /* Info-Dichte-Abstufung: Komfortabel+ zeigt den größeren Titel; in der Liste
    werden die Abstände lockerer, Detailreich ergänzt die Stats-Zeile. Die
    Grid-Karten behalten ihren eigenen Rhythmus (gap) ohne Extra-Margins. */
 .sf-tab[data-density=comfortable] .sf-tab-title,.sf-tab[data-density=detailed] .sf-tab-title{font-size:var(--sf-row-label-size,10px);line-height:1.3}
-.sf-items[data-view=list] .sf-tab[data-density=comfortable] .sf-tab-details,.sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-details{margin-top:4px}
+.sf-items[data-view=list] .sf-tab[data-density=comfortable] .sf-tab-details,.sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-details{margin-top:2px}
+.sf-items[data-view=grid] .sf-tab-details{margin-top:3px}
 .sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-preview{margin-top:3px}
 /* Detailreich: die Beschreibungen (Detail- und Vorschau-Zeile) brechen auf
    bis zu zwei Zeilen um statt einzeilig mit Ellipse abzuschneiden. */
