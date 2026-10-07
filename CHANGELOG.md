@@ -3,6 +3,33 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.27.7] — 2026-10-07
+
+### Fixed
+- **DnD-Drag-Start in ListView tot, in GridView nur am unteren Kartenrand
+  möglich** (eigentliche Ursache hinter der seit v1.25.1 verfolgten
+  DnD-Saga): `.sf-tab` trägt `draggable=true`, aber Title/Details/Meta
+  sind Text-Nodes mit dem Browser-Default `user-select:text`. Chromium/
+  Electron priorisiert bei `mousedown`+Bewegung über selektierbarem Text
+  **immer** die Text-Selektion vor dem `dragstart` des Vorfahren-Elements
+  — der Drag konnte in ListView nie starten (die Zeile ist fast
+  vollständig Text) und in GridView nur dort, wo kein Text-Node unter dem
+  Cursor lag (der leere Padding-Rand unterhalb der Meta-Zeile). Der
+  Hit-Test-Bypass aus v1.27.6 (`pointer-events:none` während eines
+  aktiven Drags) behebt ein nachgelagertes Problem (Drop wird abgelehnt),
+  löste aber nie das eigentliche Drag-Start-Problem. Fix: `user-select:
+  none` + `-webkit-user-select:none` + `-webkit-user-drag:element` auf
+  `.sf-tab` — der Browser bevorzugt jetzt überall auf der Karte/Zeile
+  `dragstart` statt Text-Selektion.
+- Style-Test (`tests/style-test.mjs`, Block 19) prüft jetzt dauerhaft
+  `.sf-tab` computed `user-select:none` sowie den kompletten
+  Hit-Test-Bypass-Zyklus (`pointer-events` vor/während/nach einem Drag,
+  inkl. `data-dragging`-Ausnahme) als Regression-Guard — beide Bugs
+  wurden zuvor mehrfach unbemerkt wieder eingeführt.
+
+Plan: `docs/plans/2026-10-07-dnd-tot-list-grid.md` (aktualisiert, Status
+jetzt Done).
+
 ## [1.27.5] — 2026-10-07
 
 ### Fixed

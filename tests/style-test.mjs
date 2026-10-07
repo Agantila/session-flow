@@ -1250,6 +1250,42 @@ try {
   check('v1.27.0 Geometrie-Test ohne Exception', false, error && error.message)
 }
 
+// ── 19) v1.27.7: DnD-Drag-Start-Fix — user-select:none + Hit-Test-Bypass ────
+// Regression-Guard: .sf-tab traegt draggable=true; ohne user-select:none
+// priorisiert Chromium bei mousedown+move ueber Text-Kindern (Title/
+// Details/Meta) die Text-Selektion vor dem dragstart — der Drag startete
+// in List ueberhaupt nicht und in Grid nur im leeren Rand ohne Text-Node
+// darunter. Zusaetzlich: der Hit-Test-Bypass (pointer-events:none waehrend
+// :root[data-sf-drag=on], Ausnahme fuer [data-dragging=true]) aus v1.27.6
+// muss weiterhin greifen, sonst feuert dragover nie auf der Section.
+try {
+  const DND = await page.evaluate(() => {
+    const tab = document.getElementById('l1')
+    const before = getComputedStyle(tab).pointerEvents
+    document.documentElement.setAttribute('data-sf-drag', 'on')
+    const duringNotDragging = getComputedStyle(tab).pointerEvents
+    tab.setAttribute('data-dragging', 'true')
+    const duringDragging = getComputedStyle(tab).pointerEvents
+    tab.removeAttribute('data-dragging')
+    document.documentElement.removeAttribute('data-sf-drag')
+    const after = getComputedStyle(tab).pointerEvents
+    return {
+      userSelect: getComputedStyle(tab).userSelect,
+      before,
+      duringNotDragging,
+      duringDragging,
+      after
+    }
+  })
+  check('v1.27.7 DnD: .sf-tab hat user-select:none (Drag-Start-Fix)', DND.userSelect === 'none', DND.userSelect)
+  check('v1.27.6 DnD: .sf-tab pointer-events vor Drag = auto', DND.before === 'auto', DND.before)
+  check('v1.27.6 DnD: waehrend Drag ohne data-dragging = none (Hit-Test-Bypass)', DND.duringNotDragging === 'none', DND.duringNotDragging)
+  check('v1.27.6 DnD: Drag-Quelle (data-dragging=true) bleibt auto', DND.duringDragging === 'auto', DND.duringDragging)
+  check('v1.27.6 DnD: nach Drag-Ende wieder auto', DND.after === 'auto', DND.after)
+} catch (error) {
+  check('v1.27.7 DnD-Test ohne Exception', false, error && error.message)
+}
+
 // ── Optional: Screenshots für die Sichtprüfung ──────────────────────────────
 if (process.env.SF_STYLE_SHOTS) {
   try {

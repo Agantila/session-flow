@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.27.5'
+const VERSION = '1.27.7'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -6259,7 +6259,18 @@ html[data-sf-grpdensity='compact'] .sf-group-head{min-height:24px}
 .sf-stack[data-style=pill] i:nth-child(1){left:0;right:0;opacity:.8}
 .sf-stack[data-style=pill] i:nth-child(2){left:2px;right:2px;top:3px;opacity:.45}
 .sf-stack[data-style=pill] i:nth-child(3){left:4px;right:4px;top:5px;opacity:.2}
-.sf-tab{display:flex;align-items:center;gap:var(--sf-row-gap,6px);min-height:var(--sf-row-min-h,26px);padding:4px var(--sf-row-pad-x,8px);border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative}
+.sf-tab{display:flex;align-items:center;gap:var(--sf-row-gap,6px);min-height:var(--sf-row-min-h,26px);padding:4px var(--sf-row-pad-x,8px);border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative;user-select:none;-webkit-user-select:none;-webkit-user-drag:element}
+/* v1.27.7 DnD-Drag-Start-Fix: .sf-tab traegt draggable=true, aber Title/
+   Details/Meta sind Text-Nodes mit dem Browser-Default user-select:text.
+   Chromium/Electron priorisiert bei mousedown+move ueber selektierbarem
+   Text IMMER Text-Selektion vor dem HTML5-dragstart des Ahnen-Elements —
+   der Drag startete faktisch nie, ausser an Stellen ohne Text-Node
+   darunter (z.B. der leere Padding-Rand unterhalb der Meta-Zeile in
+   GridView). user-select:none auf .sf-tab (vererbt an alle Text-Kinder)
+   nimmt dem Browser diese Prioritaet, dragstart feuert wieder ueberall
+   auf der Karte/Zeile. -webkit-user-drag:element macht .sf-tab explizit
+   zur Drag-Quelle (Electron/Chromium-Hinweis, kein Verhaltensunterschied
+   in Standard-Chromium, aber dokumentiert die Absicht). */
 /* v1.27.6 DnD-Hit-Test-Fix: waehrend eines aktiven Drags die .sf-tab
    pointer-events:none schalten. HTML5-DnD feuert dragover/drop auf dem
    obersten Element unter dem Cursor — das ist im Grid die .sf-tab-Card,

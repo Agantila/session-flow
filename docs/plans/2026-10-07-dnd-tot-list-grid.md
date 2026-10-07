@@ -1,14 +1,20 @@
 # DnD-Reparatur in TabRow (List + Grid) — Diagnose + Fix
 
-- **Status**: Offen — Diagnose abgeschlossen, Fix in plugin.js eingebaut, Verifikation ausstehend
+- **Status**: Done
 - **Erstellt**: 2026-10-07
 - **Betrifft**: `plugin.js` TabRow DnD-Pfad
-- **Version**: 1.27.6 (geplant)
+- **Version**: 1.27.6 (Hit-Test-Bypass) + 1.27.7 (echte Drag-Start-Ursache)
 
 ## Anforderung
 
 > „Ich weiß nicht, was du gemacht hast, aber das Drag and Drop für List und
 > Grid View der Session-Tab funktioniert nicht mehr." — Deniz, 2026-10-07
+
+> „Also das Problem ist immer noch das gleiche. ListView hat beim Session
+> Tab kein Drag und ich kann nicht eine neue Projektzuweisung machen. Und
+> im Grid View ist der Drag nur am unteren Ende des Session Tabs Karts
+> möglich." — Deniz, 2026-10-07 (nach dem v1.27.6-Fix, zeigt: der Fix hat
+> ein anderes Problem behoben als das vom User gemeldete)
 
 DnD muss in **List UND Grid** View der Session-Tabs wieder funktionieren
 (Drag einer Session → Drop auf Pin-Sektion, Projekt-Header, manuelle
@@ -103,5 +109,78 @@ andere Hit-Targets außerhalb `.sf-tab` sind nicht betroffen.
 - Hit-Test-Überlegungen für künftige Layout-Änderungen dokumentieren
   (jede Vergrößerung der `.sf-tab`-Box ohne DnD-Handler kann den
   gleichen Bug auslösen).
+
+## Nachtrag 2026-10-07 (v1.27.7) — der v1.27.6-Fix behob das falsche Problem
+
+Nach dem v1.27.6-Fix meldete der User: ListView hat weiterhin **gar keinen**
+Drag, GridView nur am unteren Kartenrand. Das zeigt: der Hit-Test-Bypass
+(v1.27.6) behebt den **Drop** (dragover/drop wurde vom Browser abgelehnt),
+aber das eigentliche Problem lag schon beim **Drag-Start** — der kam in
+ListView nie zustande.
+
+### Echte Ursache
+
+`.sf-tab` trägt `draggable="true"`, enthält aber fast ausschließlich
+Text-Kinder (`.sf-tab-title`, `.sf-tab-details`, `.sf-tab-meta`-Spans) mit
+dem Browser-Default `user-select: text`. Chromium/Electron behandelt einen
+`mousedown` + Bewegung über selektierbarem Text als **Text-Selektions-
+Geste** und unterdrückt dabei das `dragstart`-Event des Vorfahren-Elements
+komplett — unabhängig vom `draggable`-Attribut. Das erklärt beide
+gemeldeten Symptome exakt:
+
+- **ListView**: die Zeile ist zu >90 % von Text-Nodes bedeckt (Lead-Icon
+  ausgenommen) → Drag startet praktisch nie.
+- **GridView**: Drag funktioniert nur am „unteren Rand" — das ist exakt der
+  leere `padding-bottom`-Bereich von `.sf-tab` unterhalb der
+  `.sf-tab-meta`-Zeile (`margin-top: auto` drückt die Meta-Zeile nach
+  unten, darunter bleibt ein schmaler Text-freier Rand), der einzige
+  Bereich ohne selektierbaren Text-Node darüber.
+
+Die gesamte DnD-Saga seit v1.25.1 (pointerdown-Capture, Capture-Kill,
+Hit-Test-Bypass) hat ausschließlich den **Drop-Pfad** repariert; dieser
+Drag-Start-Bug war nie adressiert und bestand vermutlich schon vor v1.25.1
+latent (durch die damals knapperen `.sf-tab`-Boxen seltener bemerkt, weil
+Nutzer tendenziell den Lead-Icon-Rand griffen).
+
+### Fix (v1.27.7)
+
+```css
+.sf-tab{…;user-select:none;-webkit-user-select:none;-webkit-user-drag:element}
+```
+
+`user-select:none` auf `.sf-tab` vererbt sich an alle Text-Kinder (sofern
+diese es nicht explizit überschreiben — tun sie nicht), der Browser hat
+dadurch nichts mehr zu selektieren und bevorzugt überall auf der
+Karte/Zeile das native `dragstart`. `-webkit-user-drag:element` markiert
+`.sf-tab` zusätzlich explizit als Drag-Quelle (dokumentiert die Absicht,
+kein Verhaltensunterschied in Standard-Chromium gegenüber nur
+`draggable=true`).
+
+### Verifikation (v1.27.7)
+
+1. `npm run check` ✓
+2. `npm test` ✓ (Render-Smoketest, keine Regression)
+3. `npm run test:style` ✓ — neuer Block 19 in `tests/style-test.mjs`
+   bestätigt per echtem Chromium-Computed-Style:
+   - `.sf-tab` → `user-select: none`
+   - `pointer-events` vor Drag: `auto`
+   - `pointer-events` während `data-sf-drag=on` ohne `data-dragging`: `none`
+     (Hit-Test-Bypass aus v1.27.6 bleibt intakt)
+   - `pointer-events` auf der Drag-Quelle (`data-dragging=true`): `auto`
+   - `pointer-events` nach Drag-Ende: wieder `auto`
+4. **Live im Desktop** (ausstehend — User-Bestätigung nötig): Session in
+   ListView UND GridView an einer beliebigen Stelle der Karte (nicht nur
+   am Rand) greifen und auf Projekt-Header/Pin-Sektion/manuelle Gruppe
+   droppen.
+
+## Follow-ups (aktualisiert)
+
+- Probe-Block (Counter + Logger, `__SF_DND_PROBE__`) kann nach Live-
+  Bestätigung durch den User entfernt werden — er diagnostiziert den
+  Drop-Pfad, nicht den jetzt gefixten Drag-Start-Pfad, bleibt aber
+  harmlos aktiv (`console.error`-Only).
+- Bei künftigen `.sf-tab`-Layout-Änderungen: prüfen, ob neue Text-Kinder
+  `user-select` explizit überschreiben (würden den Bug lokal wieder
+  einführen).
 </content>
 </invoke>

@@ -1,9 +1,18 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.27.5 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.27.7 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **DnD-Drag-Start-Fix (echte Ursache)** (v1.27.7): `.sf-tab` fehlte
+  `user-select:none` — Chromium priorisiert bei `mousedown`+Bewegung über
+  Text-Kindern (Title/Details/Meta) die Text-Selektion vor `dragstart`.
+  ListView konnte den Drag dadurch nie starten, GridView nur am leeren
+  Padding-Rand ohne Text darunter. Die vorherigen v1.25.1–v1.27.6-Fixes
+  adressierten nur den Drop (Hit-Test/pointerdown), nicht den Start.
+  Style-Test-Regression-Guard ergänzt (user-select + voller
+  Hit-Test-Bypass-Zyklus).
 
 - **Optionsmenü + DnD-Repair** (v1.27.5): der v1.25.1-`onPointerDownCapture`
   (stopImmediatePropagation bei Linksklick) killte das More-Menü und die
