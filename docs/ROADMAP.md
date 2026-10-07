@@ -1,9 +1,15 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.27.4 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.27.5 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Optionsmenü + DnD-Repair** (v1.27.5): der v1.25.1-`onPointerDownCapture`
+  (stopImmediatePropagation bei Linksklick) killte das More-Menü und die
+  Drag-Kette in Liste UND Grid — Handler entfernt, pointerdown läuft
+  wieder nativ; der dragstart-Capture-Listener (dataTransfer-Mime) bleibt
+  als Grid-Drag-Absicherung.
 
 - **Reset stellt die Hermes-Default-Projektgruppierung wieder her**
   (v1.27.4): `groups.autoMode`-Werksdefault ist jetzt `project` (statt

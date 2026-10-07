@@ -3,6 +3,23 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.27.5] — 2026-10-07
+
+### Fixed
+- **Optionsmenü und Drag & Drop in Liste UND Grid tot** (Regression aus
+  v1.25.1): der dort eingeführte `onPointerDownCapture` rief bei JEDEM
+  Linksklick `stopImmediatePropagation()` auf der ganzen Zeile auf — der
+  pointerdown erreichte den `.sf-more`-Button (Radix
+  DropdownMenuTrigger, öffnet pointerdown-getrieben) nie, das
+  Optionsmenü öffnete nicht; die native Drag-Kette verlor zusätzlich
+  ihre pointerdown-Basis. Der Capture-Kill ist entfernt — pointerdown
+  läuft wieder frei, der More-Button (mit eigenem `stopPropagation`)
+  und der Radix-Context-Wrapper verhalten sich nativ; der Grid-Drag
+  bleibt über den nativen dragstart-Capture-Listener (`tabBodyRef`,
+  dataTransfer-Mime) abgesichert, der aus v1.25.1 bleibt. Der
+  assign-Unpin-Teil aus v1.25.1 (DnD aus der Pinned-Sektion) ist
+  unverändert.
+
 ## [1.27.4] — 2026-10-07
 
 ### Fixed

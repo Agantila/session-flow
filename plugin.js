@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.27.4'
+const VERSION = '1.27.5'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -8462,20 +8462,17 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     'data-density': infoDensity,
     draggable: true,
     onClick: () => onOpen(row, null),
-    // v1.25.1: pointerdown-Capture bricht ab, sobald der User LINKS klickt.
-    // Der Radix-ContextMenuTrigger wickelt die Karte ein und ruft
-    // preventDefault() auf pointerdown, sobald er einen Rechtsklick
-    // erwartet - das frisst den nativen Drag-Start im Grid-View im
-    // oberen Karten-Bereich (Title/Details). Mit dem Capture-Stop
-    // erreicht der Trigger den Event nie, der Browser startet dragstart
-    // beim ersten mousemove automatisch. Rechtsklick (button===2) wird
-    // NICHT abgefangen, das ContextMenu oeffnet sich weiterhin normal.
-    onPointerDownCapture: event => {
-      if (event.button === 0) {
-        event.stopPropagation()
-        event.stopImmediatePropagation()
-      }
-    },
+    // v1.27.5 (Fix für v1.25.1-Regression): Der pauschale
+    // pointerdown-Capture-Kill (stopImmediatePropagation bei button===0)
+    // hat das Optionsmenü (.sf-more → Radix DropdownMenuTrigger) und die
+    // native Drag-Kette mitgekilled — der pointerdown erreichte den
+    // Trigger-Button nie, Radix' pointerdown-getriebene Menü-Öffnung
+    // blieb aus. Der Handler ist deshalb ganz entfernt: Der pointerdown
+    // läuft wieder frei durch Capture und Bubble, More-Button (mit
+    // eigenem stopPropagation) und Radix-Trigger verhalten sich nativ.
+    // Der dataTransfer-Mime sitzt weiterhin im nativen Capture-Listener
+    // (tabBodyRef, dragstart-capture) — der Grid-Drag startet damit auch
+    // im oberen Kartenbereich.
     onDragStart: event => {
       // setData() passiert bereits im nativen Capture-Listener oben
       // (tabBodyRef). Hier nur State + effectAllowed-Sync.
