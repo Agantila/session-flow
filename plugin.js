@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.25.0'
+const VERSION = '1.26.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1483,15 +1483,44 @@ function loadGroups() {
     saved = null
   }
 
-  // One-Shot-Migration (v1.25.0): Gruppen, die vor 1.25.0 angelegt wurden,
-  // haben noch keinen `cwd`. Wir setzen ihn hier explizit auf `null`, damit
-  // der Render-Code in SectionHeader (`section.cwd && onNewHere → + sichtbar`)
-  // sauber zwischen "Pfad gesetzt" und "noch leer" unterscheiden kann. Früher
-  // angelegte Gruppen bekommen beim ersten Bearbeiten den Pfad-Affordanz-Hinweis.
-  const migratedGroups = (Array.isArray(saved?.groups) ? saved.groups : []).map(entry => {
+  // Schema-Migration (v1.26.0): manuelle Gruppen waren in v1.25.0 noch
+  // `cwd`-basiert (Pflicht-Ordnerpfad). Das Konzept hat sich als
+  // semantisch falsch herausgestellt — `session.cwd.set` lässt die neue
+  // Session als eigenen Projekt-Knoten im Server-Baum erscheinen, sie
+  // "verlässt" damit die Gruppe. v1.26.0 führt stattdessen
+  // `projectIds: string[]` ein: eine Gruppe ist ein Container über
+  // referenzierte Projekt-Knoten. Die alte `cwd` versuchen wir
+  // best-effort auf eine passende `ProjectTreeNode.id` zu mappen
+  // (Pfad-Match gegen `$projectsList`, der zum Mount-Zeitpunkt schon
+  // gefüllt sein sollte — sonst fällt der Pfad als "Projekt nicht
+  // verfügbar"-Hinweis zurück und der User ordnet manuell zu). Wenn
+  // `projectIds` schon existiert (v1.26.0-Setups), bleibt es
+  // unangetastet; alte `cwd` werden stillschweigend verworfen, sobald
+  // die Migration gelaufen ist.
+  const liveProjects = $projectsList.get()
+  const projectIdByPath = new Map()
+  for (const node of liveProjects) {
+    if (!node || !node.id || !node.path) continue
+    projectIdByPath.set(node.path, node.id)
+  }
+  const rawGroups = Array.isArray(saved?.groups) ? saved.groups : []
+  const migratedGroups = rawGroups.map(entry => {
     if (!entry || typeof entry !== 'object') return entry
-    if (Object.prototype.hasOwnProperty.call(entry, 'cwd')) return entry
-    return { ...entry, cwd: null }
+    // Bereits v1.26.0 — Liste normalisieren (Set-Semantik, Duplikate raus).
+    if (Array.isArray(entry.projectIds)) {
+      return { ...entry, projectIds: Array.from(new Set(entry.projectIds.filter(id => typeof id === 'string' && id))) }
+    }
+    // v1.25.0-Migration: `cwd` → `projectIds` (best-effort). Wenn weder
+    // projectIds noch cwd da sind: leerer Container. Das alte `cwd` wird
+    // hier bewusst VERWORFEN (kein Spread inkl. cwd) — wäre semantisch
+    // falsch (Header würde sonst + zeigen) und erzeugt Müll in der
+    // Persistenz.
+    if (typeof entry.cwd === 'string' && entry.cwd) {
+      const projectId = projectIdByPath.get(entry.cwd)
+      const next = { id: entry.id, name: entry.name, color: entry.color || null, projectIds: projectId ? [projectId] : [], createdAt: entry.createdAt || Date.now() }
+      return next
+    }
+    return { id: entry.id, name: entry.name, color: entry.color || null, projectIds: [], createdAt: entry.createdAt || Date.now() }
   })
 
   $groupsState.set({
@@ -1508,38 +1537,124 @@ function newGroupId() {
   return `g${Date.now().toString(36)}${groupSeq.toString(36)}`
 }
 
-function createGroup(name, color, cwd) {
+/** Set-Semantik: Projekt-IDs aus beliebigem Input dedupliziert, leer wenn nichts. */
+function normalizeProjectIds(ids) {
+  if (!Array.isArray(ids)) return []
+  const seen = new Set()
+  for (const id of ids) {
+    if (typeof id === 'string' && id) seen.add(id)
+  }
+  return Array.from(seen)
+}
+
+function createGroup(name, color, projectIds) {
   const state = $groupsState.get()
   const trimmed = String(name || '').trim() || 'Gruppe'
-  const normalizedCwd = normalizeGroupCwd(cwd)
-  // Pflicht-Pfad (v1.25.0): ohne CWD bekommt die Gruppe kein `+` im Header.
-  // Wirft hier, damit der Aufrufer (Dialog Save) gezielt reagieren kann.
-  if (!normalizedCwd) {
-    throw new Error('group-cwd-required')
+  const normalized = normalizeProjectIds(projectIds)
+  // v1.26.0: eine Gruppe braucht mindestens ein referenziertes Projekt,
+  // sonst ist sie semantisch wertlos. Wirft hier, damit der Dialog
+  // gezielt reagieren kann.
+  if (normalized.length === 0) {
+    throw new Error('group-projects-required')
   }
-  const group = { id: newGroupId(), name: trimmed, color: color || null, cwd: normalizedCwd, createdAt: Date.now() }
+  const group = { id: newGroupId(), name: trimmed, color: color || null, projectIds: normalized, createdAt: Date.now() }
   $groupsState.set({ ...state, groups: [...state.groups, group] })
   scheduleGroupsSave()
   return group
 }
 
-/** Pfad-Whitespace + leere Strings → null. Behält absolute/relative Pfade wie sie sind. */
-function normalizeGroupCwd(cwd) {
-  const trimmed = String(cwd || '').trim()
-  return trimmed || null
-}
-
 function updateGroup(groupId, patch) {
   const state = $groupsState.get()
-  // Pfad-Whitespace normalisieren — damit der Dialog konsistent ist.
-  const normalized = patch && Object.prototype.hasOwnProperty.call(patch, 'cwd')
-    ? { ...patch, cwd: normalizeGroupCwd(patch.cwd) }
+  // projectIds-Whitelist beim Patch — leere Liste ist erlaubt (User kann
+  // Projekte komplett entfernen, der Dialog zeigt dann den Hinweis).
+  const normalized = patch && Object.prototype.hasOwnProperty.call(patch, 'projectIds')
+    ? { ...patch, projectIds: normalizeProjectIds(patch.projectIds) }
     : patch
   $groupsState.set({
     ...state,
     groups: state.groups.map(group => (group.id === groupId ? { ...group, ...normalized } : group))
   })
   scheduleGroupsSave()
+}
+
+/**
+ * Projekt-Knoten zu einer Gruppe hinzufügen. Single-Container-Semantik
+ * (Frage 3): wenn das Projekt schon in einer anderen Gruppe ist, wird
+ * es dort entfernt. Wirft NICHT — Idempotenz ist erwünscht (Drag&Drop-
+ * wiederholungen dürfen keinen Fehler werfen).
+ */
+function addProjectToGroup(groupId, projectId) {
+  if (!groupId || !projectId) return
+  const state = $groupsState.get()
+  const target = state.groups.find(g => g.id === groupId)
+  if (!target) return
+  // Andere Gruppe, die das Projekt auch enthält → erst dort rausnehmen.
+  const cleanedOthers = state.groups.map(g => {
+    if (g.id === groupId) return g
+    if (Array.isArray(g.projectIds) && g.projectIds.includes(projectId)) {
+      return { ...g, projectIds: g.projectIds.filter(id => id !== projectId) }
+    }
+    return g
+  })
+  // Bereits enthalten? Idempotent.
+  const cleanedTarget = cleanedOthers.find(g => g.id === groupId)
+  if (cleanedTarget.projectIds.includes(projectId)) {
+    if (cleanedGroupsEqual(cleanedOthers, state.groups)) return
+    $groupsState.set({ ...state, groups: cleanedOthers })
+    scheduleGroupsSave()
+    return
+  }
+  $groupsState.set({
+    ...state,
+    groups: cleanedOthers.map(g => g.id === groupId ? { ...g, projectIds: [...g.projectIds, projectId] } : g)
+  })
+  scheduleGroupsSave()
+}
+
+/** Projekt-Knoten aus einer Gruppe entfernen. Idempotent. */
+function removeProjectFromGroup(groupId, projectId) {
+  if (!groupId || !projectId) return
+  const state = $groupsState.get()
+  const target = state.groups.find(g => g.id === groupId)
+  if (!target) return
+  const next = state.groups.map(g => {
+    if (g.id !== groupId) return g
+    if (!Array.isArray(g.projectIds) || !g.projectIds.includes(projectId)) return g
+    return { ...g, projectIds: g.projectIds.filter(id => id !== projectId) }
+  })
+  if (cleanedGroupsEqual(next, state.groups)) return
+  $groupsState.set({ ...state, groups: next })
+  scheduleGroupsSave()
+}
+
+/** Liste der Group-IDs, die ein Projekt enthalten. Für DnD und Counts. */
+function groupsContainingProject(projectId) {
+  if (!projectId) return []
+  const state = $groupsState.get()
+  const out = []
+  for (const g of state.groups) {
+    if (Array.isArray(g.projectIds) && g.projectIds.includes(projectId)) {
+      out.push(g.id)
+    }
+  }
+  return out
+}
+
+function cleanedGroupsEqual(a, b) {
+  if (a === b) return true
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const ga = a[i]
+    const gb = b[i]
+    if (ga === gb) continue
+    if (!ga || !gb) return false
+    if (ga.id !== gb.id) return false
+    const ap = Array.isArray(ga.projectIds) ? ga.projectIds : []
+    const bp = Array.isArray(gb.projectIds) ? gb.projectIds : []
+    if (ap.length !== bp.length) return false
+    for (let j = 0; j < ap.length; j++) if (ap[j] !== bp[j]) return false
+  }
+  return true
 }
 
 function deleteGroup(groupId) {
@@ -4217,6 +4332,7 @@ function buildSections() {
   const viewCfg = settings.view || {}
   const live = $liveMap.get()
   const activity = $activity.get()
+  const projectsList = $projectsList.get()
 
   // Status-Bucket je Zeile (App-Parität: session-dot-state reduziert
   // 'stalled'/'background' → 'working'; working umfasst alle Busy-Arten).
@@ -4333,26 +4449,77 @@ function buildSections() {
   }
 
   if (groupsCfg.enabled) {
-    for (const group of groupsState.groups) {
-      const items = []
+    // v1.26.0: eine manuelle Gruppe ist jetzt ein Container über
+    // `group.projectIds`. Die Section-Items sammeln weiterhin
+    // Session-zu-Gruppe-Zuordnungen aus `assign`, aber ZUSÄTZLICH
+    // projizieren wir pro referenziertem Projekt-Knoten einen
+    // Sub-Header + dessen Items. Damit bekommt jede Gruppe mehrere
+    // "Sub-Sections" vom Typ `project`, die im Render unter dem
+    // Gruppen-Header verschachtelt dargestellt werden.
+    const liveProjects = projectsList
+    const projectById = new Map()
+    for (const node of liveProjects) {
+      if (node && node.id) projectById.set(node.id, node)
+    }
 
+    for (const group of groupsState.groups) {
+      const key = `group:${group.id}`
+
+      // 1) Items, die explizit per `assign` der Gruppe zugeordnet sind
+      //    (Sessions ohne Projekt — die Vorgänger-Semantik bleibt).
+      const directItems = []
       for (const row of filtered) {
         if (groupsState.assign[row.id] === group.id) {
-          items.push(row)
+          directItems.push(row)
           assigned.add(row.id)
         }
       }
 
-      const key = `group:${group.id}`
+      // 2) Sub-Sections für jedes referenzierte Projekt.
+      const subSections = []
+      const projectIds = Array.isArray(group.projectIds) ? group.projectIds : []
+      for (const projectId of projectIds) {
+        const node = projectById.get(projectId)
+        if (node && node.isNoProject) continue // Home-Bucket zählt nicht
+        const subItems = []
+        if (node && node.sessionIds) {
+          for (const row of filtered) {
+            if (row.pinned) continue // Pinned bleibt in der Pinned-Sektion
+            if (node.sessionIds.has(row.id)) {
+              subItems.push(row)
+              assigned.add(row.id)
+            }
+          }
+        }
+        const subKey = node ? `group:${group.id}:project:${node.id}` : `group:${group.id}:project:missing:${projectId}`
+        subSections.push({
+          key: subKey,
+          kind: 'project',
+          parentGroupId: group.id,
+          projectId: node ? node.id : projectId,
+          title: node ? node.label : '(Projekt nicht verfügbar)',
+          titleKey: null,
+          color: node ? node.color || null : null,
+          icon: node ? node.icon || null : null,
+          cwd: node ? node.path || '' : '',
+          // Pro Projekt eigene Collapse-Aufzeichnung (optional, hier
+          // globaler Key damit ein "alle ausklappen" greift).
+          collapsed: Boolean(groupsState.collapsed[subKey]),
+          items: sortRows(subItems),
+          isProjectMissing: !node
+        })
+      }
+
       sections.push({
         key,
         kind: 'manual',
         groupId: group.id,
         title: group.name,
+        titleKey: null,
         color: group.color || null,
-        cwd: group.cwd || '',
         collapsed: Boolean(groupsState.collapsed[key]),
-        items: sortRows(items)
+        items: sortRows(directItems),
+        subSections
       })
     }
   }
@@ -4833,11 +5000,13 @@ const EN = {
   groupsHint: 'Manage groups via right-click on a tab or a group header. Drag & drop moves sessions into groups.',
   noProject: 'No project',
   newSessionHere: 'New session in this project',
-  newSessionHereGroup: name => `New session in "${name}"`,
-  groupPathLabel: 'Folder path',
-  groupPathPick: 'Pick folder…',
-  groupPathEmpty: 'No folder set — pick a path to create sessions here.',
-  groupMissingCwdHint: 'Set folder — click to edit the group and pick a path.',
+  groupProjectsLabel: 'Projects in this group',
+  groupProjectsEmpty: 'Pick at least one project — the group needs at least one to make sense.',
+  groupNoProjectsAvailable: 'No projects available yet. Create a project first, then assign it here.',
+  groupAddProject: ({ group, project }) => `„${project}" added to group „${group}"`,
+  groupInOtherGroupTag: ({ name }) => `in „${name}"`,
+  groupProjectInOtherGroup: ({ name }) => `Currently in group „${name}" — moving it here removes it from there.`,
+  groupEmpty: 'Empty group — drop a session here to add its project, or edit the group to pick projects.',
   dropHereHint: label => `→ Move to "${label}"`,
   pinnedSection: 'Pinned',
   pinnedSectionTip: 'Pinned sessions — drop here to pin',
@@ -5450,11 +5619,13 @@ const DE = {
   groupsHint: 'Gruppen verwaltest du per Rechtsklick auf einen Tab oder die Gruppen-Überschrift. Ziehen & Ablegen sortiert Sessions ein.',
   noProject: 'Kein Projekt',
   newSessionHere: 'Neue Session in diesem Projekt',
-  newSessionHereGroup: name => `Neue Session in „${name}"`,
-  groupPathLabel: 'Ordnerpfad',
-  groupPathPick: 'Ordner wählen…',
-  groupPathEmpty: 'Kein Ordner — bitte Pfad wählen, um hier Sessions zu erzeugen.',
-  groupMissingCwdHint: 'Ordner setzen — Gruppe bearbeiten und Pfad wählen.',
+  groupProjectsLabel: 'Projekte in dieser Gruppe',
+  groupProjectsEmpty: 'Mindestens ein Projekt wählen — eine Gruppe ohne Projekte macht keinen Sinn.',
+  groupNoProjectsAvailable: 'Noch keine Projekte vorhanden. Lege zuerst ein Projekt an und ordne es hier zu.',
+  groupAddProject: ({ group, project }) => `„${project}" zur Gruppe „${group}" hinzugefügt`,
+  groupInOtherGroupTag: ({ name }) => `in „${name}"`,
+  groupProjectInOtherGroup: ({ name }) => `Aktuell in Gruppe „${name}" — beim Hinzufügen hier wird es dort entfernt.`,
+  groupEmpty: 'Leere Gruppe — Session hier ablegen, um ihr Projekt hinzuzufügen, oder Gruppe bearbeiten.',
   dropHereHint: label => `→ Nach „${label}" verschieben`,
   pinnedSection: 'Angepinnt',
   pinnedSectionTip: 'Angepinnte Sessions — hier ablegen zum Anpinnen',
@@ -5810,8 +5981,8 @@ const CSS = `
 :root[data-sf-panesurface='native'] .sf-pane{background:var(--ui-sidebar-surface-background)}
 :root[data-sf-panesurface='chat'] .sf-pane{background:var(--ui-chat-surface-background)}
 :root[data-sf-panesurface='none'] .sf-pane{background:transparent}
-.sf-toolbar{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary);color:var(--ui-text-tertiary)}
-.sf-toolbar-count{flex:1;min-width:0;padding-left:2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ui-text-quaternary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sf-toolbar{display:flex;align-items:center;gap:6px;padding:4px 6px;border-bottom:1px solid var(--ui-stroke-tertiary);color:var(--ui-text-tertiary)}
+.sf-toolbar-count{flex:0 1 auto;min-width:0;padding-left:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ui-text-quaternary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* App-Nav-Zeile (v1.20): Icon-Buttons der ersten App-Sidebar-Sektionen.
    flex-wrap = dynamisches Umfließen in weitere Zeilen bei schmaler Breite
    oder vielen Buttons (Anforderung „umfließend"). Nur Theme-Variablen. */
@@ -5877,10 +6048,8 @@ const CSS = `
    Typ-Header (CLI/Desktop/…) — keine Sonderrolle. */
 .sf-group-project .sf-group-caret,.sf-group-manual .sf-group-caret{opacity:0;transition:opacity .12s ease}
 .sf-group-project:hover .sf-group-caret,.sf-group-project:focus-within .sf-group-caret,.sf-group-manual:hover .sf-group-caret,.sf-group-manual:focus-within .sf-group-caret{opacity:1}
-/* Manuelle Gruppen ohne CWD: das `+`-Aktions-Icon bleibt weg, der Edit-
-   Button (immer noch sichtbar bei Hover) wird zum Hinweis-Slot. Die
-   Edit-Geste funktioniert weiter — der User kommt darüber in den Dialog
-   und kann den Pfad nachpflegen. */
+/* Manuelle Gruppen (v1.26.0) — Container, kein eigenes `+` mehr. Die
+   `+`-Affordanz wandert komplett auf die Kind-Projekt-Header. */
 .sf-group-manual-no-cwd .sf-group-actions[data-sf-action=new]{display:none}
 /* Zweizeilige Köpfe (Subzeile vorhanden) bekommen etwas mehr Luft, statt den
    Text einzuquetschen — die Zeilenhöhe wächst nur, wenn wirklich zwei Zeilen
@@ -5896,6 +6065,9 @@ html[data-sf-grpdensity='compact'] .sf-group-head{min-height:24px}
 html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 /* Section-Rahmen beim Drag-over — klarer Hinweis, was ein Loslassen bewirkt. */
 .sf-section{margin-bottom:6px;border-radius:8px;transition:background-color .12s ease}
+/* v1.26.0: Kind-Projekt-Sections unter einer manuellen Gruppe — eine
+   Einrückungsstufe wie Unterordner in der nativen Sidebar. */
+.sf-section-nested{margin-left:14px;margin-bottom:4px}
 .sf-section[data-drop=true]{background:color-mix(in srgb,var(--ui-accent) 6%,transparent)}
 /* „Drop-Ready": Sektion ist akzeptierendes Ziel, aber noch nicht gehovert.
    Sanfter Rand + leichte Pulse-Animation — Drop-Area wird VISIBLE statt
@@ -5933,12 +6105,17 @@ html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 .sf-tab[data-just-moved=true]{animation:sf-just-moved .6s ease-out}
 @media (prefers-reduced-motion:reduce){.sf-tab[data-just-moved=true]{animation:none;background-color:color-mix(in srgb,var(--ui-accent) 20%,transparent)}}
 html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-play-state:paused}
-.sf-filter-search{position:relative;display:flex;align-items:center;gap:4px;width:100%;min-width:0;height:22px;padding:0 6px;border-radius:6px;background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--ui-text-quaternary);margin:4px 6px;box-sizing:border-box}
-.sf-filter-search input{flex:1;min-width:0;height:100%;border:0;background:transparent;color:var(--foreground);font-size:11px;padding:0}
-.sf-filter-search input:focus{outline:none}
+.sf-filter-search{position:relative;display:flex;align-items:center;gap:4px;flex:1;min-width:0;height:18px;padding:0 6px;border-radius:6px;background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--ui-text-quaternary)}
+.sf-filter-search input{flex:1;min-width:0;height:100%;border:0;border-radius:0;background:transparent;color:var(--foreground);font-size:11px;padding:0;box-shadow:none;outline:none}
+.sf-filter-search input:focus,.sf-filter-search input:focus-visible,.sf-filter-search input:focus-within{box-shadow:none;border-color:transparent;outline:none}
+.sf-filter-search:focus-within{box-shadow:none}
 .sf-filter-clear{display:flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;padding:0;border:0;background:transparent;color:var(--ui-text-quaternary);cursor:pointer;border-radius:3px}
 .sf-filter-clear:hover{background:var(--ui-control-hover-background,rgba(127,127,127,.14));color:var(--foreground)}
-.sf-quickfilter{display:flex;align-items:center;justify-content:center;padding:2px 6px 4px;border-bottom:1px solid var(--ui-stroke-tertiary)}
+.sf-quickfilter{display:flex;align-items:center;justify-content:center;width:100%;padding:4px 6px 6px;border-bottom:1px solid var(--ui-stroke-tertiary)}
+.sf-quickfilter>.sf-seg{width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.sf-quickfilter>.sf-seg button{width:100%;min-width:0}
+.sf-quickfilter :is([data-segmented-control],[role=group],[data-segmented]){width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.sf-quickfilter :is([data-segmented-control],[role=group],[data-segmented]) :is(button,[role=radio]){width:100%;min-width:0}
 .sf-tab-lead{display:flex;align-items:center;justify-content:center;width:16px;flex-shrink:0;color:var(--ui-text-tertiary)}
 .sf-tab-lead[data-kind=thinking],.sf-tab-lead[data-kind=streaming],.sf-tab-lead[data-kind=working]{color:var(--ui-accent)}
 .sf-tab-lead[data-kind=tool]{color:var(--ui-accent)}
@@ -7479,10 +7656,11 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
   const title = section.titleKey ? t(section.titleKey) : section.title || t('ungrouped')
   const collapsible = section.kind !== 'ungrouped'
   const editable = section.kind === 'manual'
-  // Manuelle Gruppe ohne CWD: kein `+` (sonst landet die Session in „Kein
-  // Projekt"). Stattdessen rendert der Edit-Button (schon immer für `editable`)
-  // den Hinweis-Tooltip — der User klickt zum Pfad-Setzen in den Dialog.
-  const canNewHere = isProject ? Boolean(onNewHere) : isManual ? Boolean(onNewHere && section.cwd) : false
+  // v1.26.0: manuelle Gruppen sind Container — sie tragen kein eigenes
+  // `+`-Aktion-Icon mehr. Die `+`-Affordanz wandert komplett auf die
+  // Kind-Projekt-Header (kind:'project'), wo sie semantisch korrekt
+  // sitzt (neue Session in genau diesem Projektordner).
+  const canNewHere = isProject ? Boolean(onNewHere) : false
   const showDetail = section.kind !== 'ungrouped' && density !== 'compact'
   const liveMap = useValue($liveMap)
   const ctxInfo = useValue($ctxInfo)
@@ -7625,12 +7803,10 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
       isProject && 'sf-group-project',
       isManual && 'sf-group-manual',
       isPinned && 'sf-group-pinned',
-      isManual && !section.cwd && 'sf-group-manual-no-cwd',
       subtext && 'sf-group-twoline',
       stats2Children && 'sf-group-threeline'
     ),
     'data-drop': dropActive ? 'true' : undefined,
-    'data-manual-no-cwd': isManual && !section.cwd ? 'true' : undefined,
     onClick: collapsible ? () => onToggle() : undefined,
     onContextMenu: editable
       ? event => {
@@ -7645,13 +7821,11 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
       ? section.cwd || title
       : isPinned
         ? t('pinnedSectionTip')
-        : editable && !section.cwd
-          ? t('groupMissingCwdHint')
-          : editable
-            ? t('editGroup')
-            : open
-              ? t('collapse')
-              : t('expand'),
+        : editable
+          ? t('editGroup')
+          : open
+            ? t('collapse')
+            : t('expand'),
     children: [
       isPinned ? null : jsx('span', { className: 'sf-group-caret', children: jsx(Caret, { open }) }),
       lead,
@@ -7667,7 +7841,7 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
               event.stopPropagation()
               onNewHere(section)
             },
-            title: isManual ? t('newSessionHereGroup', title) : t('newSessionHere'),
+            title: t('newSessionHere'),
             children: jsx(Codicon, { name: 'add', size: '0.875rem' })
           })
         : isPinned
@@ -7797,6 +7971,34 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   const doneFx = useValue($doneFx)
   const tabsCfg = settings.tabs
   const cozy = tabsCfg.density === 'cozy'
+
+  // DnD: React-Synthetic-Events kapseln das native `dataTransfer` in
+  // `onDragStart` so, dass `setData()` im Handler keine Types mehr
+  // persistiert (Hermes-Desktop / Electron 37+). Loesung: ein
+  // CAPTURE-Listener direkt am DOM, der VOR React laeuft, setzt die
+  // Typen auf der `nativeEvent.dataTransfer`. Der React-Handler macht
+  // danach nur noch State (visuelle Rueckmeldung).
+  const tabBodyRef = useRef(null)
+  useEffect(() => {
+    const node = tabBodyRef.current
+    if (!node) return
+    const onDragStartCapture = (nativeEvent) => {
+      const dt = nativeEvent.dataTransfer
+      if (!dt) return
+      try {
+        dt.setData('text/session-flow-session', row.id)
+        dt.setData('text/plain', row.id)
+        dt.setData('application/x-session-flow-session', row.id)
+        dt.effectAllowed = 'move'
+      } catch {
+        // Browser hat den Drag-Channel bereits geschlossen
+        // (z.B. sehr schnelle aufeinanderfolgende Starts) - ignorieren.
+      }
+    }
+    node.addEventListener('dragstart', onDragStartCapture, { capture: true })
+    return () => node.removeEventListener('dragstart', onDragStartCapture, { capture: true })
+  }, [row.id])
+
   const liveEntry = Object.values(live).find(entry => entry && entry.storedId === row.id) || null
   const justDone = Boolean(doneFx && doneFx[row.id])
   const activityDetail =
@@ -8090,6 +8292,7 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
       : 'idle'
 
   const body = jsxs('div', {
+    ref: tabBodyRef,
     className: 'sf-tab',
     'data-active': active,
     'data-live': liveBucket,
@@ -8100,13 +8303,16 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     draggable: true,
     onClick: () => onOpen(row, null),
     onDragStart: event => {
+      // setData() passiert bereits im nativen Capture-Listener oben
+      // (tabBodyRef). Hier nur State + effectAllowed-Sync.
       setDragging(row.id)
       $dragActive.set(true)
-
       try {
-        event.dataTransfer.setData('text/session-flow-session', row.id)
-        event.dataTransfer.setData('text/plain', row.id)
-        event.dataTransfer.effectAllowed = 'move'
+        if (event.dataTransfer) {
+          // Effect nochmal setzen, falls die native Capture-Listener-
+          // Phase bereits geschlossen ist - schadet nicht.
+          event.dataTransfer.effectAllowed = 'move'
+        }
       } catch {
         // ignore
       }
@@ -8638,7 +8844,7 @@ function RowDialogHost({ state, setState, t }) {
 }
 
 function newGroupDialogState() {
-  return { open: false, mode: 'create', groupId: null, name: '', color: null, cwd: '' }
+  return { open: false, mode: 'create', groupId: null, name: '', color: null, projectIds: [] }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8807,44 +9013,52 @@ function ProjectDialog({ state, setState, t }) {
 
 function GroupDialog({ state, setState, t }) {
   const groupsState = $groupsState.get()
+  const projectsList = $projectsList.get()
   const editing = state.mode === 'edit' ? groupsState.groups.find(entry => entry.id === state.groupId) : null
 
-  // Beim Wechsel in den Edit-Modus greift der bestehende Pfad — der User
-  // behält so den bisherigen Wert, bis er aktiv einen neuen wählt. Eine
-  // lokale `state.cwd`-Spur wird nur geschrieben, wenn der Picker einen
-  // Pfad liefert oder der User ihn tippt/leert; `effectiveCwd` fällt
-  // ansonsten auf den Wert aus dem Store zurück.
-  const editingCwd = editing ? String(editing.cwd || '') : ''
-  const effectiveCwd = state.mode === 'edit' ? (state.cwd || editingCwd) : state.cwd
+  // Auswahl-State: state.projectIds (Array<string>). Beim Wechsel in den
+  // Edit-Modus greift der bestehende Wert, bis der User etwas ändert.
+  const editingIds = editing && Array.isArray(editing.projectIds) ? editing.projectIds : []
+  const effectiveIds = Array.isArray(state.projectIds)
+    ? state.projectIds
+    : (state.mode === 'edit' ? editingIds : [])
+
+  // Verfügbare Projekte (ohne Home/NoProject) alphabetisch sortiert.
+  const available = projectsList
+    .filter(node => node && !node.isNoProject && node.id)
+    .slice()
+    .sort((a, b) => String(a.label || '').localeCompare(String(b.label || '')))
+
+  const toggleProject = id => {
+    if (!id) return
+    const set = new Set(effectiveIds)
+    if (set.has(id)) {
+      set.delete(id)
+    } else {
+      set.add(id)
+    }
+    setState({ ...state, projectIds: Array.from(set) })
+  }
 
   const commit = () => {
     const name = state.name.trim()
-    const cwd = (state.mode === 'edit' ? effectiveCwd : state.cwd).trim()
 
     if (state.mode === 'create') {
       try {
-        createGroup(name || t('newGroup'), state.color, cwd)
+        createGroup(name || t('newGroup'), state.color, effectiveIds)
       } catch (error) {
-        // group-cwd-required — Dialog bleibt offen, Hinweis wird unten gerendert.
         setState({ ...state, error: String((error && error.message) || error) })
         return
       }
     } else if (state.mode === 'edit' && editing) {
-      updateGroup(editing.id, { name: name || editing.name, color: state.color, cwd })
+      updateGroup(editing.id, { name: name || editing.name, color: state.color, projectIds: effectiveIds })
     }
 
     setState(newGroupDialogState())
   }
 
-  const pickFolder = async () => {
-    const picked = await pickProjectFolder()
-    if (picked) {
-      setState({ ...state, cwd: picked })
-    }
-  }
-
-  // Save-Button ist nur erlaubt, wenn der Pfad nicht leer ist.
-  const canSubmit = !!(effectiveCwd || '').trim()
+  // Save-Button: ≥ 1 Projekt muss ausgewählt sein.
+  const canSubmit = effectiveIds.length > 0
 
   return jsx(Dialog, {
     open: state.open,
@@ -8878,24 +9092,42 @@ function GroupDialog({ state, setState, t }) {
           jsxs('div', {
             className: 'sf-dialog-row',
             children: [
-              jsx('label', { className: 'sf-dialog-label', children: t('groupPathLabel') }),
-              jsx('div', { className: 'sf-proj-folder-input', children: [
-                jsx('span', {
-                  className: 'sf-proj-folder-path',
-                  title: effectiveCwd || '',
-                  children: effectiveCwd || jsx('span', { className: 'sf-proj-folder-empty', children: t('groupPathEmpty') })
-                }),
-                jsx(Button, {
-                  disabled: false,
-                  onClick: () => void pickFolder(),
-                  size: 'sm',
-                  variant: 'ghost',
-                  children: jsxs('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 }, children: [
-                    jsx(Codicon, { name: 'folder-opened', size: '0.75rem' }),
-                    t('groupPathPick')
-                  ] })
-                })
-              ] })
+              jsx('label', { className: 'sf-dialog-label', children: t('groupProjectsLabel') }),
+              jsx('div', { className: 'sf-proj-folders', children:
+                available.length === 0
+                  ? jsx('div', { className: 'sf-proj-folder-empty', children: t('groupNoProjectsAvailable') })
+                  : available.map(node => {
+                      const checked = effectiveIds.includes(node.id)
+                      const alreadyInOtherGroup = (() => {
+                        for (const g of groupsState.groups) {
+                          if (g.id === editing?.id) continue
+                          if (Array.isArray(g.projectIds) && g.projectIds.includes(node.id)) return g.name || ''
+                        }
+                        return null
+                      })()
+                      return jsxs('label', {
+                        className: 'sf-cproj-item',
+                        'data-checked': checked ? 'true' : 'false',
+                        title: alreadyInOtherGroup ? t('groupProjectInOtherGroup', { name: alreadyInOtherGroup }) : node.path || '',
+                        children: [
+                          jsx('input', {
+                            type: 'checkbox',
+                            checked,
+                            disabled: false,
+                            onChange: () => toggleProject(node.id)
+                          }),
+                          jsx('span', {
+                            className: 'sf-cproj-dot',
+                            style: node.color ? { background: node.color } : undefined
+                          }),
+                          jsx('span', { className: 'sf-cproj-label', children: node.label || node.id }),
+                          alreadyInOtherGroup
+                            ? jsx('span', { className: 'sf-cproj-tag', children: t('groupInOtherGroupTag', { name: alreadyInOtherGroup }) })
+                            : null
+                        ]
+                      }, node.id)
+                    })
+              })
             ]
           }),
           jsxs('div', {
@@ -8909,7 +9141,9 @@ function GroupDialog({ state, setState, t }) {
               })
             ]
           }),
-          !canSubmit ? jsx('div', { className: 'sf-dialog-hint', children: t('groupPathEmpty') }) : null,
+          !canSubmit
+            ? jsx('div', { className: 'sf-dialog-hint', children: t('groupProjectsEmpty') })
+            : null,
           state.error ? jsx('div', { className: 'sf-dialog-error', children: state.error }) : null,
           jsxs(DialogFooter, {
             children: [
@@ -9459,7 +9693,7 @@ function SessionsPane() {
         groupId: group.id,
         name: group.name,
         color: group.color || null,
-        cwd: group.cwd || ''
+        projectIds: Array.isArray(group.projectIds) ? [...group.projectIds] : []
       })
     }
   }
@@ -9550,7 +9784,29 @@ function SessionsPane() {
           return
         }
 
-        assign(sessionId, section.kind === 'manual' ? section.groupId : null)
+        // v1.26.0 Hybrid-DnD auf eine manuelle Gruppe (siehe oben).
+        if (section.kind === 'manual' && section.groupId) {
+          const targetRow = rows.find(entry => entry.id === sessionId)
+          if (targetRow) {
+            const resolved = resolveSessionProject(targetRow)
+            if (resolved && resolved.id && !resolved.isNoProject) {
+              addProjectToGroup(section.groupId, resolved.id)
+              flashJustMoved(sessionId)
+              host.notify({
+                kind: 'info',
+                message: t('groupAddProject', { group: section.title || '', project: resolved.name || resolved.id })
+              })
+              return
+            }
+          }
+          // Kein Projekt → alte assign-Semantik.
+          assign(sessionId, section.groupId)
+          flashJustMoved(sessionId)
+          return
+        }
+
+        // Rest (ungrouped): Session aus jeder Gruppe rausnehmen.
+        assign(sessionId, null)
         flashJustMoved(sessionId)
       }
     }
@@ -9599,10 +9855,24 @@ function SessionsPane() {
         : null
   })
 
+  // v1.26.0: flach klappen — manuelle Gruppen-Sections werden zu
+  // einer Liste aus [group-header, ...subProjects] aufgeblasen, sodass
+  // die Render-Schleife darunter ohne Sonderbehandlung auskommt.
+  // Sub-Sections tragen `parentGroupId` und haben ihren eigenen
+  // `collapsed`-State, deshalb werden sie unabhängig vom
+  // Gruppen-Header collapsed/expanded gerendert.
+  const flatSections = []
+  for (const section of filteredSections) {
+    flatSections.push(section)
+    if (section.kind === 'manual' && Array.isArray(section.subSections) && section.subSections.length) {
+      flatSections.push(...section.subSections)
+    }
+  }
   const list = jsx('div', {
     className: 'sf-list',
-    children: filteredSections.map(section => {
-      const expanded = !section.collapsed
+    children: flatSections.map(section => {
+      const isSub = section.parentGroupId != null
+      const expanded = isSub ? !section.collapsed : !section.collapsed
       const stackStyle = settings.groups.stackStyle
       const showStack = !expanded && stackStyle !== 'pill' && section.items.length > 0 && section.kind !== 'ungrouped'
       const overLimit = maxVisible > 0 && section.items.length > maxVisible
@@ -9620,11 +9890,12 @@ function SessionsPane() {
       )
 
       return jsxs('div', {
-        className: 'sf-section',
+        className: cn('sf-section', isSub && 'sf-section-nested'),
         key: section.key,
         'data-drop': dragOverKey === section.key ? 'true' : undefined,
         'data-drop-ready': dropReady ? 'true' : undefined,
         'data-pinned-placeholder': section.isDropPlaceholder ? 'true' : undefined,
+        'data-parent-group': isSub ? section.parentGroupId : undefined,
         ...sectionHandlers(section),
         children: [
           jsx(SectionHeader, {
@@ -9640,7 +9911,10 @@ function SessionsPane() {
               }
             },
             onEdit: () => editGroup(section),
-            onNewHere: (section.kind === 'project' || (section.kind === 'manual' && section.cwd)) ? newSessionHere : undefined,
+            // v1.26.0: nur Project-Sections (Top-Level oder als
+            // Gruppen-Kind) bekommen das `+` — manuelle Gruppen
+            // sind reine Container und nicht selbst Anker.
+            onNewHere: section.kind === 'project' ? newSessionHere : undefined,
             onPinToggle:
               section.kind === 'pinned' && section.items.length > 0
                 ? () => {
@@ -9692,6 +9966,16 @@ function SessionsPane() {
                           jsx(Codicon, { name: 'pin', size: '0.875rem' }),
                           jsx('span', { className: 'sf-pin-placeholder-text', children: t('pinnedDropHint') || 'Hier ablegen zum Anpinnen' })
                         ]
+                      })
+                    : null,
+                  // v1.26.0: leere manuelle Gruppe → dezenter Hinweis statt
+                  // leerer Body.
+                  section.kind === 'manual' && section.items.length === 0
+                    && (!Array.isArray(section.subSections) || section.subSections.length === 0)
+                    ? jsx('div', {
+                        key: 'sf-group-empty',
+                        className: 'sf-group-empty',
+                        children: t('groupEmpty')
                       })
                     : null,
                   overLimit
@@ -9977,9 +10261,59 @@ function SessionsPane() {
     ? null
     : jsx(NavAppsBar, { t, onNewSession: () => void startNewProjectSession() })
 
+  // Suchpfad-Komponente (v1.25.0): frei von Filter-Tabs, damit sie an einer
+  // anderen Stelle platziert werden kann als das Quick-Filter-Segment.
+  // Rein clientseitig (siehe needle/matchesFilter oben), keine Persistierung,
+  // damit sie jeden neuen Pane-Besuch frisch startet. Wird in der Toolbar
+  // konsumiert (siehe `toolbar` weiter unten). Liegt VOR `toolbar` damit
+  // die TDZ-Reihenfolge stimmt.
+  const searchField = jsx('div', {
+    className: 'sf-filter-search',
+    children: [
+      jsx(Codicon, { name: 'search', size: '0.75rem' }),
+      jsx(Input, {
+        'aria-label': t('filterPlaceholder'),
+        onChange: event => setFilterText(event.target.value),
+        placeholder: t('filterPlaceholder'),
+        value: filterText
+      }),
+      filterText
+        ? jsx('button', {
+            'aria-label': t('filterClear'),
+            className: 'sf-filter-clear',
+            onClick: () => setFilterText(''),
+            type: 'button',
+            children: jsx(Codicon, { name: 'close', size: '0.7rem' })
+          })
+        : null
+    ]
+  })
+
+  // Quick-Filter-Komponente (v1.25.0): die Subtabs „Alle / Aktiv / Angepinnt
+  // / Archiv" sind EIGENE Komponente, damit sie getrennt vom Suchfeld
+  // platziert werden kann. Liegt als eigene Zeile direkt unter der Toolbar
+  // mit voller Pane-Breite. Wird im Pane-Root konsumiert.
+  const quickFilter = jsx('div', {
+    className: 'sf-quickfilter',
+    children: jsx(Segment, {
+      onChange: setFilterMode,
+      options: [
+        { id: 'all', label: t('filterAll') },
+        { id: 'active', label: t('filterActive') },
+        { id: 'pinned', label: t('filterPinned') },
+        { id: 'archived', label: t('filterArchived') }
+      ],
+      value: filterMode
+    })
+  })
+
   const toolbar = jsxs('div', {
     className: 'sf-toolbar',
     children: [
+      // Suchfeld in der Toolbar-Zeile (v1.25.0): gehört zusammen mit
+      // der Anzahl-Label in eine Reihe, getrennt vom Subtab-Segment
+      // (`quickFilter` separat darunter). Erstes Element der Toolbar.
+      searchField,
       jsx('span', {
         className: 'sf-toolbar-count',
         children: filterActive ? t('paneCountFiltered', totalCount, activeMode ? activeFlatRows.length : filteredSections.reduce((sum, section) => sum + section.items.length, 0)) : t('paneCount', totalCount)
@@ -10049,51 +10383,6 @@ function SessionsPane() {
         })
       })
     ]
-  })
-
-  // Suchpfad-Komponente (v1.25.0): frei von Filter-Tabs, damit sie an einer
-  // anderen Stelle platziert werden kann als das Quick-Filter-Segment.
-  // Rein clientseitig (siehe needle/matchesFilter oben), keine Persistierung,
-  // damit sie jeden neuen Pane-Besuch frisch startet.
-  const searchField = jsx('div', {
-    className: 'sf-filter-search',
-    children: [
-      jsx(Codicon, { name: 'search', size: '0.75rem' }),
-      jsx(Input, {
-        'aria-label': t('filterPlaceholder'),
-        onChange: event => setFilterText(event.target.value),
-        placeholder: t('filterPlaceholder'),
-        value: filterText
-      }),
-      filterText
-        ? jsx('button', {
-            'aria-label': t('filterClear'),
-            className: 'sf-filter-clear',
-            onClick: () => setFilterText(''),
-            type: 'button',
-            children: jsx(Codicon, { name: 'close', size: '0.7rem' })
-          })
-        : null
-    ]
-  })
-
-  // Quick-Filter-Komponente (v1.25.0): die Subtabs „Alle / Aktiv / Angepinnt
-  // / Archiv" sind EIGENE Komponente, damit sie getrennt vom Suchfeld
-  // platziert werden kann. Früher waren beide in einer `sf-filterbar`-Row
-  // zusammengefasst; eine geteilte Komponente hinderte das Pane daran, die
-  // Suche über und die Tabs unter der Anzahl der Sessions zu legen.
-  const quickFilter = jsx('div', {
-    className: 'sf-quickfilter',
-    children: jsx(Segment, {
-      onChange: setFilterMode,
-      options: [
-        { id: 'all', label: t('filterAll') },
-        { id: 'active', label: t('filterActive') },
-        { id: 'pinned', label: t('filterPinned') },
-        { id: 'archived', label: t('filterArchived') }
-      ],
-      value: filterMode
-    })
   })
 
   // Archiv-Liste: flach, mit Restore-Aktion je Zeile (More-Menü zeigt
@@ -10218,10 +10507,9 @@ function SessionsPane() {
     className: 'sf-pane',
     children: [
       navAppsBar,
-      // Suche steht oben — erste Haupt-Aktion der Session-Liste.
-      // Subtabs (Alle/Aktiv/Angepinnt/Archiv) sind eigene Komponente
-      // `quickFilter` und liegen separat (siehe Pane-Body-Anordnung).
-      searchField,
+      // Suchfeld sitzt in der Toolbar-Zeile (siehe oben). Subtabs sind
+      // eigene Komponente `quickFilter` und liegen darunter mit voller
+      // Pane-Breite.
       toolbar,
       quickFilter,
       body,

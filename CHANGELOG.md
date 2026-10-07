@@ -3,6 +3,97 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.26.0] — 2026-10-06
+
+### Changed
+- **Suchfeld-Komponente von der Filter-Leiste getrennt**: das
+  „Sessions durchsuchen…"-Input ist nicht mehr gemeinsam mit den
+  Subtabs (Alle/Aktiv/Angepinnt/Archiv) in einem `sf-filterbar`-Block
+  untergebracht. Beide Komponenten sind eigene JSX-Knoten
+  (`searchField` + `quickFilter`). Das Input steht in der Toolbar-Zeile
+  vor der Anzahl („X / Y Sessions") — die Subtabs ziehen in eine eigene
+  Zeile darunter und nutzen die volle Pane-Breite (4 gleich breite
+  Spalten). UX-Konvention analog zur nativen Hermes-Sidebar
+  (`apps/desktop/src/app/chat/sidebar/index.tsx:1700`):
+  `<SearchField>` direkt vor der Liste, ohne dazwischenliegende
+  Status-Zeile.
+- **Suchfeld hat keinen Field-Schatten mehr**: das SDK-Atom `Input`
+  rendert mit der Klasse `desktop-input-chrome`, die in
+  `apps/desktop/src/styles.css:1438` einen `inset 0 1px 1px`-Field-
+  Schatten setzt. Unsere `.sf-filter-search input`-Regel hat das
+  nie neutralisiert, deshalb war im unselektierten Zustand ein
+  unschöner Schatten oben sichtbar. Regel setzt jetzt explizit
+  `box-shadow:none` und `border:0` (auch für `:focus` / `:focus-
+  visible` / `:focus-within`), damit der Container
+  (`.sf-filter-search`) die einzige Quelle für Border/Hintergrund ist.
+- **Manuelle Gruppen sind Container über `ProjectTreeNode`s** statt
+  Pflicht-Ordnerpfad: das in v1.25.0 eingeführte `cwd` hat sich als
+  semantisch falsch herausgestellt — `session.cwd.set` lässt die neue
+  Session als eigenen Projekt-Knoten im Server-Baum erscheinen, sie
+  „verlässt" damit die Gruppe. v1.26.0 führt stattdessen
+  `projectIds: string[]` ein. Schema-Migration läuft beim Laden:
+  alte `cwd` werden best-effort auf eine `ProjectTreeNode.id` gemappt
+  (Pfad-Match gegen `$projectsList`); passt nichts, fällt die Gruppe
+  als leerer Container zurück und der Nutzer ordnet manuell zu.
+- **Toolbar zentriert das Count-Label nicht mehr**: `.sf-toolbar-count`
+  ist jetzt `flex:0 1 auto` (intrinsisch), damit das Suchfeld den
+  verbleibenden Platz in der Zeile bekommt und das Count-Label
+  kompakt daneben sitzt.
+- `.sf-quickfilter > .sf-seg` stretcht jetzt per
+  `grid-template-columns: repeat(4, minmax(0,1fr))` auf volle
+  Pane-Breite (gleiche Regel defensiv auch für SDK-`SegmentedControl`-
+  Marker `[data-segmented-control]`/`[role=group]`/`[data-segmented]`).
+
+### Fixed
+- **Wiederhergestellte CSS-Regel** `.sf-group-manual-no-cwd
+  .sf-group-actions[data-sf-action=new]{display:none}` war beim
+  Refactor verloren gegangen — manuelle Gruppen ohne CWD zeigen das
+  `+`-Aktions-Icon wieder nicht.
+
+## [1.25.0] — 2026-10-06
+
+### Changed
+- **BREAKING — Manuelle Gruppen sind jetzt Container über Projekte**:
+  das v1.25.0-`cwd`-Konzept hat sich als semantisch falsch herausgestellt
+  (`session.cwd.set` ließ die neue Session als eigenen Projekt-Knoten im
+  Server-Baum erscheinen — sie „verließ" die Gruppe sofort). Eine Gruppe
+  speichert jetzt `projectIds: string[]` — Referenzen auf
+  `ProjectTreeNode`s aus `projects.tree`. Die neue Session entsteht
+  weiter über das `+` am **Projekt-Header** und ist automatisch Mitglied
+  ihrer Gruppe. Plan:
+  `docs/plans/2026-10-06-group-as-project-container.md`.
+- **Schema-Migration**: bestehende v1.25.0-Gruppen mit `cwd` werden in
+  `loadGroups()` best-effort auf `projectIds` gemappt (Pfad-Match gegen
+  `$projectsList`); das alte `cwd`-Feld wird verworfen. Nicht auflösbare
+  Pfade werden zu leeren Containern (Edit-Dialog zum Nachpflegen).
+- **Hybrid-Drag&Drop** (Frage 4): Session mit Projekt auf eine
+  Gruppen-Kopfzeile gezogen → das referenzierte Projekt wird der Gruppe
+  hinzugefügt (Info-Toast `groupAddProject`). Session ohne Projekt →
+  Fallback auf die alte `assign`-Semantik.
+- **Single-Container-Semantik** (Frage 3): ein Projekt ist in maximal
+  EINER user-definierten Gruppe — `addProjectToGroup` entfernt es
+  automatisch aus der anderen. Idempotent.
+- **GroupDialog**: Multi-Projekt-Picker (Checkbox-Liste, alphabetisch,
+  Farb-Dots) ersetzt das alte Pflicht-CWD-Feld. Save-Button braucht
+  ≥ 1 gewähltes Projekt. Projekte in anderen Gruppen werden mit Badge
+  markiert (Tooltip erklärt das Umhängen).
+- **Sub-Sections**: jede manuelle Gruppe rendert ihre referenzierten
+  Projekte als eingerückte Projekt-Sections (`sf-section-nested`,
+  `margin-left:14px`) mit voller Projekt-Header-Geometrie inkl. `+`.
+- **Kein `+` mehr auf dem Gruppen-Header** — nur noch Edit-Affordanz;
+  die Erzeugen-Geste sitzt semantisch korrekt auf den Kind-Projekten.
+
+### Removed
+- i18n-Keys `newSessionHereGroup`, `groupPathLabel`, `groupPathPick`,
+  `groupPathEmpty`, `groupMissingCwdHint`; CSS-Regel
+  `.sf-group-manual-no-cwd`; `data-manual-no-cwd`-Attribut.
+
+### Added
+- i18n-Keys (EN+DE): `groupProjectsLabel`, `groupProjectsEmpty`,
+  `groupNoProjectsAvailable`, `groupAddProject({group, project})`,
+  `groupInOtherGroupTag({name})`, `groupProjectInOtherGroup({name})`,
+  `groupEmpty`.
+
 ## [1.25.0] — 2026-10-06
 
 ### Added

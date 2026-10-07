@@ -1,20 +1,24 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.25.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.26.0 (2026-10-06). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Manuelle Gruppen als Projekt-Container** (v1.26.0, Plan
+  `docs/plans/2026-10-06-group-as-project-container.md`): manuelle
+  Gruppen speichern jetzt `projectIds[]` (Referenzen auf
+  `ProjectTreeNode`s) statt eines CWDs — das v1.25.0-`cwd`-Konzept
+  „verlor" neue Sessions an den Server-Baum und war semantisch falsch.
+  Gruppen-Dialog = Multi-Projekt-Picker; Sub-Sections mit voller
+  Projekt-Header-Optik (inkl. `+`) unter dem Gruppen-Header;
+  Hybrid-DnD (Session mit Projekt → Projekt der Gruppe zuweisen);
+  Single-Container-Semantik; best-effort Migration alter Gruppen.
 - **Manuelle Gruppen mit Session-Erzeugen-Button und Projekt-Header-Parität**
-  (v1.25.0, Plan `docs/plans/2026-10-06-group-create-session-hover-caret.md`):
-  Jede manuelle Gruppe trägt jetzt einen Pflicht-Ordnerpfad (`cwd`); der
-  Header rendert dann ein `+`-Aktions-Icon (hover-only, identische Optik
-  zu Projekt-Headern). Klick erzeugt eine neue Session in genau diesem
-  Ordner (`session.create` + `session.cwd.set`-Anker). Caret ist
-  hover-only. Migration: bestehende Gruppen ohne `cwd` bekommen
-  `cwd:null`, das `+` bleibt für sie versteckt, Edit-Button mit
-  Hinweis-Tooltip „Ordner setzen" übernimmt. GroupDialog hat eine neue
-  Pfad-Zeile mit „Ordner wählen…"-Button über `host.hermesDesktop.selectPaths`.
+  (v1.25.0, Plan
+  `docs/plans/2026-10-06-group-create-session-hover-caret.md`) —
+  **in v1.26.0 durch das Container-Konzept ersetzt**; der Pfad-Ansatz
+  wurde verworfen.
 - **Analyse-Befunde umgesetzt** (v1.24.1, Plan
   `docs/plans/2026-10-06-analyse-verbesserungen.md`): Bootstrap-Fehler
   selbstheilend (Reconnect setzt Lade-UI zurück, Retry-Button im

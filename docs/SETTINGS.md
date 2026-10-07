@@ -143,24 +143,40 @@ Gruppen-Daten (Name, Farbe, Zuordnung, Collapse-Zustand) liegen separat unter
 
 ### Gruppen-Pfad und Session-Erzeugen-Button (v1.25.0)
 
-Jede manuelle Gruppe trägt ab v1.25.0 einen **Pflicht-Ordnerpfad** (`cwd`).
-Beim Anlegen fordert der Dialog den Pfad über „Ordner wählen…" (der
-`selectPaths`-IPC-Door der App, gleiche Quelle wie der Projekt-Dialog);
-der Save-Button bleibt deaktiviert, solange der Pfad leer ist. Beim
-Bearbeiten kann der Pfad gesetzt/geändert werden.
+> **v1.26.0 — dieses Konzept wurde ersetzt.** Manuelle Gruppen sind jetzt
+> **Container über Projekte** (siehe nächster Abschnitt). Das
+> `cwd`-Feld existiert nicht mehr; bestehende Gruppen werden automatisch
+> migriert.
 
-- **Mit Pfad** rendert der Header ein `+`-Aktions-Icon (hover-only,
-  sichtbar bei Maus-Focus, identisch zur Projekt-Header-Affordanz).
-  Klick → `startNewSessionInCwd(group.cwd, group.name)` — neue Session
-  landet direkt in diesem Ordner, exakt wie bei Projekt-Headern.
-- **Ohne Pfad** (bestehende Gruppen aus v1.24.x vor der Migration, oder
-  ein neu angelegter Pfad wurde nachträglich geleert) zeigt der Header
-  stattdessen den Edit-Button mit Hinweis-Tooltip „Ordner setzen — Gruppe
-  bearbeiten und Pfad wählen."; das `+` ist per CSS-Regel
-  `display:none` versteckt (`data-sf-action="new"`).
-- **Migration**: bestehende Gruppen ohne `cwd`-Feld bekommen in
-  `loadGroups()` `cwd: null` gesetzt (One-Shot-Pfad). Folge-Renderings
-  lesen den Wert und steuern Header-Verhalten + Edit-Dialog.
+### Gruppen als Projekt-Container (v1.26.0)
+
+Eine manuelle Gruppe fasst **mehrere Hermes-Projekte** zu einer visuellen
+Einheit zusammen. Sie speichert `projectIds: string[]` — Referenzen auf
+Projekt-Knoten aus `projects.tree` (dieselbe Server-Quelle wie die
+native Sidebar).
+
+- **Erstellen/Bearbeiten**: der Gruppen-Dialog zeigt eine
+  Checkbox-Liste aller verfügbaren Projekte (alphabetisch, mit
+  Farb-Dot). Mindestens ein Projekt muss gewählt sein, sonst bleibt der
+  Save-Button deaktiviert. Projekte, die schon in einer anderen Gruppe
+  sind, tragen einen Badge („in <Gruppe>") — beim Auswählen wandern sie
+  (Single-Container-Semantik: ein Projekt ist in max. einer Gruppe).
+- **Darstellung**: unter dem Gruppen-Header erscheinen die referenzierten
+  Projekte als eingerückte Projekt-Sections (`sf-section-nested`) mit
+  voller Projekt-Header-Optik — inklusive `+`-Button (neue Session in
+  genau diesem Projekt) und Hover-Caret. Eine leere Gruppe zeigt einen
+  Hinweis statt eines leeren Körpers.
+- **Drag & Drop**: eine Session mit Projekt auf die Gruppen-Kopfzeile
+  ziehen fügt das referenzierte Projekt der Gruppe hinzu (Info-Toast);
+  eine Session ohne Projekt wird per alter `assign`-Semantik direkt der
+  Gruppe zugeordnet.
+- **Session-Erzeugen**: das `+` sitzt ausschließlich auf den
+  Projekt-Headern (in oder außerhalb von Gruppen). Der Gruppen-Header
+  selbst hat nur die Edit-Affordanz (Rechtsklick / Doppelklick).
+- **Migration**: v1.25.0-Gruppen mit `cwd` werden beim Laden
+  best-effort auf `projectIds` gemappt (Pfad → Projekt-Knoten); das
+  `cwd`-Feld wird verworfen. Nicht auflösbare Pfade werden zu leeren
+  Containern.
 
 ### Kopfzeilen-Dichte (`groups.headerDensity`)
 

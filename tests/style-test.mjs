@@ -239,6 +239,17 @@ const html = `<!doctype html>
       </div>
     </div>
   </div>
+  <!-- v1.26.0: Kind-Projekt-Section unter einer manuellen Gruppe —
+       Einrückung via sf-section-nested. -->
+  <div class="sf-section sf-section-nested" id="nested1">
+    <div class="sf-group-head sf-group-project" id="mgh3">
+      <span class="sf-group-caret"><span style="display:inline-block;width:8px;height:8px;background:#888"></span></span>
+      <span class="sf-group-text">
+        <span class="sf-group-name">Projekt in Gruppe</span>
+      </span>
+      <span class="sf-group-count">2</span>
+    </div>
+  </div>
 </body></html>`
 
 const dir = mkdtempSync(join(tmpdir(), 'session-flow-style-'))
@@ -397,6 +408,9 @@ const probeExpr = `(() => {
   }
   out.mgh1 = manualHeadInfo('mgh1')
   out.mgh2 = manualHeadInfo('mgh2')
+  // v1.26.0: Einrückung der Kind-Projekt-Section.
+  const nestedEl = document.getElementById('nested1')
+  out.nested1 = nestedEl ? { marginLeft: getComputedStyle(nestedEl).marginLeft } : null
   return out
 })()`
 
@@ -534,12 +548,10 @@ try {
   }
 
   // ── 0c) Manuelle Gruppe (v1.25.0) — Caret-Hover-only, + für ohne-cwd ─────
-  // Eine zentrale User-Anforderung: manuelle Gruppen verhalten sich
-  // optisch identisch zu Projekt-Headern. Konkret: Caret-Default
-  // opacity:0, :hover/:focus-within → 1. Bei manuellen Gruppen ohne
-  // CWD ist das `+`-Aktions-Icon per display:none versteckt — der User
-  // soll nicht in "Kein Projekt" erzeugen, sondern erst den Pfad
-  // nachpflegen (Edit-Affordanz bleibt sichtbar).
+  // v1.26.0: Manuelle Gruppen sind Container (projectIds[]), das `+`-Icon
+  // lebt NUR auf den Kind-Projekt-Headern. Die gebliebenen Style-Fakten:
+  // Caret bleibt hover-only (opacity 0 → hover 1). Neu: Kind-Projekt-
+  // Sections werden eingerückt (sf-section-nested → margin-left 14px).
   check(
     'Manuelle Gruppe mgh1: Caret Default opacity=0 (hover-only)',
     P.mgh1 && P.mgh1.caretOpacity === 0,
@@ -551,38 +563,14 @@ try {
     P.mgh1 ? `hasHoverRule=${P.mgh1.hasHoverRule}` : 'null'
   )
   check(
-    'Manuelle Gruppe mgh2 (ohne cwd): Caret ebenfalls opacity=0',
+    'Manuelle Gruppe mgh2: Caret ebenfalls opacity=0',
     P.mgh2 && P.mgh2.caretOpacity === 0,
     P.mgh2 ? `got=${P.mgh2.caretOpacity}` : 'null'
   )
   check(
-    'Manuelle Gruppe mgh2 (ohne cwd): + über sf-group-manual-no-cwd display:none',
-    P.mgh2 && P.mgh2.newActionDisplay === 'none',
-    P.mgh2 ? `newActionDisplay=${P.mgh2.newActionDisplay}` : 'null'
-  )
-  check(
-    'Manuelle Gruppe mgh2 (ohne cwd): Edit-Action bleibt sichtbar (flex)',
-    P.mgh2 && P.mgh2.editActionDisplay === 'flex',
-    P.mgh2 ? `editActionDisplay=${P.mgh2.editActionDisplay}` : 'null'
-  )
-  // Die Edit-Affordanz (data-sf-action="edit") soll weiter sichtbar sein,
-  // damit der User in den Dialog kommt und den Pfad nachpflegt. Der
-  // generische .sf-group-actions-Selector gilt für ALLE Actions —
-  // data-sf-action="new" ist spezifisch versteckt. Wir prüfen das per
-  // CSSRule-Traversal auf die data-manual-no-cwd-Regel.
-  check(
-    'Manuelle Gruppe mgh2: data-manual-no-cwd-Regel versteckt nur data-sf-action=new',
-    (() => {
-      const rule = P.mgh2 && P.mgh2.noCwdRule
-      if (!rule) return false
-      // Chromium serialisiert den Attribut-Selektor mit oder ohne
-      // Anführungszeichen; beide Formen abdecken.
-      const selectorOk =
-        rule.includes('data-sf-action="new"') || rule.includes('data-sf-action=new')
-      const displayOk = rule.includes('display: none') || rule.includes('display:none')
-      return selectorOk && displayOk
-    })(),
-    P.mgh2 && P.mgh2.noCwdRule ? `rule=${P.mgh2.noCwdRule.slice(0, 200)}` : 'no rule found'
+    'Kind-Projekt-Section nested1: eingerückt (margin-left 14px)',
+    P.nested1 && Math.round(parseFloat(P.nested1.marginLeft || '0')) === 14,
+    P.nested1 ? `marginLeft=${P.nested1.marginLeft}` : 'null'
   )
 
   // ── 1) Design AN: Grid übernimmt Verlauf + Alpha (Kern-Bugfix) ────────────
