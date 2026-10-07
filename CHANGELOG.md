@@ -3,6 +3,16 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.28.1] — 2026-10-07
+
+### Fixed
+- **UI-Tabs: Close-Button bei langen Tab-Titeln außer Reichweite** — der
+  Tab-Chip wuchs mit seinem Label unbegrenzt und schob den Close-Button aus
+  dem sichtbaren Bereich. `min-width:0` + `max-width:100%` auf dem Chip plus
+  ein schrumpfbarer Label-Container (`.pane-tab-content`,
+  `overflow:hidden`) kappen überlange Titel jetzt an der Tab-Leiste, statt
+  den Close-Button unbedienbar zu machen.
+
 ## [1.28.0] — 2026-10-07
 
 ### Changed
