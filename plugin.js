@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.28.0'
+const VERSION = '1.28.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -6577,9 +6577,16 @@ section[id^=sf-sec-]:hover .sf-section-title > svg,section[id^=sf-sec-]:hover .s
 /* Grundform: leicht abgerundet, mit Abstand (Chip-Optik) */
 :root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]){
   height:auto;
+  min-width:0;
+  max-width:100%;
   margin-block:var(--sf-ui-tab-inset-y,2px);
   border-radius:var(--sf-ui-tab-radius,4px);
   transition:background-color .1s ease
+}
+/* Label-Container schrumpfbar — Close-Button bleibt im Anschnitt erreichbar */
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content{
+  min-width:0;
+  overflow:hidden
 }
 :root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]):not(:first-child){
   margin-left:var(--sf-ui-tab-gap,2px)
