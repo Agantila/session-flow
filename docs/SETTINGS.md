@@ -134,7 +134,7 @@ Pane-Besuch startet die Filter immer frisch):
 | Key | Default | Wirkung |
 |---|---|---|
 | `groups.enabled` | `true` | Manuelle Gruppen aktiv. |
-| `groups.autoMode` | `off` | `off`, `date` (Heute/Gestern/Woche/Älter), `source` oder `project` (Projekt-Ordner — siehe unten). |
+| `groups.autoMode` | `project` | `off`, `date` (Heute/Gestern/Woche/Älter), `source`, `status` oder `project` (Projekt-Ordner — siehe unten). v1.27.4: Werksdefault `project` in Parität zur Hermes-Desktop-Sidebar; ein Reset stellt die Projektgruppierung damit wieder her. |
 | `groups.headerDensity` | `comfortable` | Typografie & Infotiefe der Kopfzeilen — siehe unten. Seit v1.27.2 steuert die Stufe nur noch Gewicht/Höhe; die Font-Größe kommt aus `groups.nameSize`. |
 | `groups.nameSize` | `10` | **Kopfzeilen-Titelgröße (px)** für Projekt- und Gruppen-Header (10–24). v1.27.3: Default 10px — gleichauf mit den Session-Titeln. |
 | `groups.nameCaps` | `true` | **Kopfzeilen-Titel in Großbuchstaben**: rendert Projekt- und Gruppen-Header-Titel uppercase (+ Letter-Spacing .04em). |

@@ -361,7 +361,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor, resetSettings, $settings }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -3692,6 +3692,41 @@ try {
   check('v1.27.0: groupMigrateFailed im Bundle', bundleKeys35.includes('groupMigrateFailed'))
 } catch (error) {
   check('v1.27.0-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── 34) v1.27.4 — Reset stellt die Hermes-Default-Projektgruppierung wieder her
+try {
+  // Simuliere den Zustand nach einem Reset: Settings auf Default (autoMode
+  // ist jetzt 'project'), Gruppen leer, Sessions + Projekt-Baum vorhanden.
+  mod.resetSettings()
+  const auto = mod.$settings.get().groups.autoMode
+  check('v1.27.4: resetSettings stellt autoMode project wieder her', auto === 'project', `autoMode=${auto}`)
+
+  // Und die Gruppierung zeigt die Zuordnung: mit autoMode 'project' landen
+  // die Sessions unter ihren Projekt-Knoten, nicht unter „Nicht gruppiert".
+  mod.$sessions.set([
+    { id: 'rs-1', title: 'P1 Session', source: 'desktop', startedAt: 1000, messageCount: 2, pinned: false, unread: false },
+    { id: 'rs-2', title: 'P2 Session', source: 'desktop', startedAt: 2000, messageCount: 2, pinned: false, unread: false }
+  ])
+  mod.$projectsList.set([
+    { id: 'pr-1', label: 'Projekt 1', color: '#0af', icon: null, isNoProject: false, isAuto: false, path: '/p1', sessionIds: new Set(['rs-1']) },
+    { id: 'pr-2', label: 'Projekt 2', color: '#f0a', icon: null, isNoProject: false, isAuto: false, path: '/p2', sessionIds: new Set(['rs-2']) }
+  ])
+  mod.patchSettings('groups', { enabled: true, autoMode: 'project' })
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const resetOut = { el: [], text: [] }
+  walk(pane.render(), resetOut)
+  const projectSections = resetOut.el.filter(e => e.cls && e.cls.includes('sf-group-head') && e.cls.includes('sf-group-project')).length
+  check('v1.27.4: nach Reset-artiger Konfiguration rendert die Pane Projekt-Kopfzeilen', projectSections >= 2, `projectHeads=${projectSections}`)
+  const ungroupedHeads = resetOut.el.filter(e => e.cls && e.cls.includes('sf-group-unassigned')).length
+  check('v1.27.4: keine „Nicht gruppiert"-Sektion, wenn alle Sessions zugeordnet', ungroupedHeads === 0, `ungrouped=${ungroupedHeads}`)
+
+  // Aufräumen
+  mod.$sessions.set([])
+  mod.$projectsList.set([])
+} catch (error) {
+  check('v1.27.4-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

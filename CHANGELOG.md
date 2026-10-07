@@ -3,6 +3,20 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.27.4] — 2026-10-07
+
+### Fixed
+- **Nach dem Reset waren alle Sessions „ohne Zuweisung"**: der
+  Werksdefault `groups.autoMode` war `off` — ein „Einstellungen
+  zurücksetzen"/„Alles zurücksetzen" stellte damit keine
+  Projektgruppierung wieder her, obwohl Hermes Desktops Sidebar
+  standardmäßig nach Projekten gruppiert. Die Zuordnung selbst
+  (`projects.tree`, serverseitig) war nie weg — nur die Anzeige-
+  Gruppierung. Fix: Werksdefault ist jetzt `project`; beide Reset-Pfade
+  ziehen den Projekt-Baum sofort frisch (`invalidateProjectTree` +
+  `refreshProjectsList` + Sessions-Refresh), damit die Projekt-Sektionen
+  ohne Wartezeit auf die 60-s-Poll erscheinen.
+
 ## [1.27.3] — 2026-10-07
 
 ### Changed

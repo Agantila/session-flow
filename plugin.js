@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.27.3'
+const VERSION = '1.27.4'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -238,7 +238,14 @@ const DEFAULT_SETTINGS = {
   },
   groups: {
     enabled: true,
-    autoMode: 'off',
+    // v1.27.4: Werksdefault 'project' — Hermes Desktop gruppiert seine
+    // Sessions-Liste standardmäßig nach Projekten; ein Session-Flow-Reset
+    // soll dieselbe Grundlage wiederherstellen (User-Report: nach Reset
+    // waren alle Sessions „ohne Zuweisung", weil 'off' keine Projekt-
+    // Gruppierung mehr lief). Die Zuordnung selbst kommt serverseitig aus
+    // projects.tree und ist vom Reset nicht betroffen — es fehlte nur die
+    // Anzeige-Gruppierung.
+    autoMode: 'project',
     headerDensity: 'comfortable',
     // Projekt-/Gruppen-Kopfzeilen-Titel: px-Größe (v1.27.3: Default 10,
     // gleichauf mit den Session-Titeln) + Kapitälchen-Toggle.
@@ -12399,7 +12406,15 @@ function SettingsPage() {
             title: t('aboutResetSettings'),
             description: t('aboutResetSettingsDesc'),
             action: jsx(Button, {
-              onClick: () => resetSettings(),
+              onClick: () => {
+                resetSettings()
+                // v1.27.4: autoMode ist nach dem Reset 'project' — den
+                // Projekt-Baum sofort frisch ziehen, damit die Projekt-
+                // Sektionen ohne Verzögerung erscheinen.
+                invalidateProjectTree()
+                void refreshProjectsList()
+                scheduleSessionsRefresh(200)
+              },
               size: 'sm',
               variant: 'ghost',
               children: t('aboutResetSettings')
@@ -12433,6 +12448,17 @@ function SettingsPage() {
             // zurücksetzen", das sie überspringt, wäre nur ein halber Wipe.
             $sessionProjectSeed.set({})
             $composerPick.set({ id: '', label: '', color: null, at: 0 })
+            // v1.27.4: Nach dem Reset läuft die Gruppierung mit dem neuen
+            // Default 'project' — der Projekt-Baum muss sofort frisch
+            // gezogen werden, sonst bleiben die Projekt-Sektionen leer,
+            // bis der nächste 60-s-Poll kommt (User-Report: „nach Reset
+            // werden Sessions ohne Zuweisung dargestellt"). Der Seed-Wipe
+            // oben macht Plugin-seitige Overlays platt; die autoritative
+            // Zuordnung kommt aus projects.tree — invalidate + sofortiger
+            // Refresh stellt sie als Anzeige wieder her.
+            invalidateProjectTree()
+            void refreshProjectsList()
+            scheduleSessionsRefresh(200)
             setResetAllOpen(false)
           },
           open: true,

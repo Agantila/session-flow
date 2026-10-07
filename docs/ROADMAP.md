@@ -1,9 +1,15 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.27.3 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.27.4 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Reset stellt die Hermes-Default-Projektgruppierung wieder her**
+  (v1.27.4): `groups.autoMode`-Werksdefault ist jetzt `project` (statt
+  `off`) — nach „Einstellungen zurücksetzen" gruppiert die Pane wieder
+  nach Projekten wie die native Sidebar; beide Reset-Pfade ziehen den
+  Projekt-Baum sofort frisch, statt auf den 60-s-Poll zu warten.
 
 - **Beide Titelbasen auf 10px** (v1.27.3): Session-Titel skaliert
   `tabs.textSize` jetzt von einer 10px-Basis (statt 13px), Detail-/Meta-
