@@ -411,21 +411,25 @@ const probeExpr = `(() => {
   // v1.26.0: Einrückung der Kind-Projekt-Section.
   const nestedEl = document.getElementById('nested1')
   out.nested1 = nestedEl ? { marginLeft: getComputedStyle(nestedEl).marginLeft } : null
-  // v1.26.2: TextSize-Skalierung — Variable wie applyRows() setzen und den
-  // berechneten Titel-Font messen (Fixture hängt am l1-Row). Danach restoren.
+  // v1.27.3: TextSize-Skalierung — Variable wie applyRows() setzen und den
+  // berechneten Titel-Font messen (Basis 10px; Fixture hängt am l1-Row).
+  // Der Default-Wert wird NACH explizitem Setzen auf 10px gelesen, damit
+  // frühere Blöcke, die die Variable verlassen haben, nicht reinfunken.
   const textSizeProbe = (() => {
     const rootEl = document.documentElement
     const rowEl = document.getElementById('l1')
     if (!rowEl) return null
     const titleEl = rowEl.querySelector('.sf-tab-title')
+    rootEl.style.setProperty('--sf-row-label-size', '10px')
+    rootEl.style.setProperty('--sf-row-detail-size', '8px')
     const labelDefault = parseFloat(getComputedStyle(titleEl).fontSize)
-    rootEl.style.setProperty('--sf-row-label-size', '16.25px') // 125 %
-    rootEl.style.setProperty('--sf-row-detail-size', '13.13px') // 125 %
+    rootEl.style.setProperty('--sf-row-label-size', '12.5px') // 125 %
+    rootEl.style.setProperty('--sf-row-detail-size', '10px') // 125 %
     const labelScaled = parseFloat(getComputedStyle(titleEl).fontSize)
     const detailsEl = rowEl.querySelector('.sf-tab-preview')
     const detailScaled = parseFloat(getComputedStyle(detailsEl).fontSize)
-    rootEl.style.setProperty('--sf-row-label-size', '13px')
-    rootEl.style.setProperty('--sf-row-detail-size', '10.5px')
+    rootEl.style.setProperty('--sf-row-label-size', '10px')
+    rootEl.style.setProperty('--sf-row-detail-size', '8px')
     return { labelDefault, labelScaled, detailScaled }
   })()
   out.textSize = textSizeProbe
@@ -608,21 +612,21 @@ try {
     P.nested1 && Math.round(parseFloat(P.nested1.marginLeft || '0')) === 14,
     P.nested1 ? `marginLeft=${P.nested1.marginLeft}` : 'null'
   )
-  // ── v1.26.2: TextSize-Skalierung (Liste + Grid über dieselben Variablen)
+  // ── v1.27.3: TextSize-Skalierung (Liste + Grid über dieselben Variablen)
   check(
-    'TextSize: Titel folgt --sf-row-label-size (125 % → ~16.25px)',
-    P.textSize && Math.abs(P.textSize.labelScaled - 16.25) <= 0.5,
+    'TextSize: Titel-Basis 10px, folgt --sf-row-label-size (125 % → 12.5px)',
+    P.textSize && P.textSize.labelDefault === 10 && Math.abs(P.textSize.labelScaled - 12.5) <= 0.5,
     P.textSize ? `default=${P.textSize.labelDefault} scaled=${P.textSize.labelScaled}` : 'null'
   )
   check(
-    'TextSize: Detail-/Preview-Zeile folgt --sf-row-detail-size (125 % → ~13.13px)',
-    P.textSize && Math.abs(P.textSize.detailScaled - 13.13) <= 0.5,
+    'TextSize: Detail-/Preview-Zeile folgt --sf-row-detail-size (125 % → 10px)',
+    P.textSize && Math.abs(P.textSize.detailScaled - 10) <= 0.5,
     P.textSize ? `detailScaled=${P.textSize.detailScaled}` : 'null'
   )
-  // ── v1.27.2: Kopfzeilen-Titel (Projekte/Gruppen) — px-Größe + Kapitälchen
+  // ── v1.27.2/1.27.3: Kopfzeilen-Titel (Projekte/Gruppen) — px-Größe + Kapitälchen
   check(
-    'Gruppen-Titel: Default 14px (größer als Session-Titel 13px)',
-    P.groupName && P.groupName.off.size === 14,
+    'Gruppen-Titel: Default 10px (gleichauf mit Session-Titeln)',
+    P.groupName && P.groupName.off.size === 10,
     P.groupName ? `got=${P.groupName.off.size}` : 'null'
   )
   check(
@@ -817,8 +821,8 @@ try {
     JSON.stringify(D.dd.details)
   )
   check(
-    'Dichte detailreich: Detail-Zeile rendert zwei Zeilen (Höhe 28 px)',
-    D.dd.details && D.dd.details.height >= 26 && D.dd.details.height <= 30 && D.dc.details.height === 14,
+    'Dichte detailreich: Detail-Zeile rendert zwei Zeilen (2× Zeilenhöhe)',
+    D.dd.details && D.dd.details.height >= D.dc.details.height * 2 - 4,
     `detailreich=${D.dd.details && D.dd.details.height}px komfortabel=${D.dc.details && D.dc.details.height}px`
   )
   check(
@@ -1236,7 +1240,9 @@ try {
   check('v1.27.0 Geometrie: Padding-X 8px links+rechts', GEO.padLeft === '8px' && GEO.padRight === '8px', `${GEO.padLeft}/${GEO.padRight}`)
   check('v1.27.0 Geometrie: Spalten-Gap 6px', GEO.gap === '6px', GEO.gap)
   check('v1.27.0 Geometrie: Lead-Cell 14px', GEO.leadW === '14px', GEO.leadW)
-  check('v1.27.0 Geometrie: Label 13px', GEO.titleSize === '13px', GEO.titleSize)
+  // v1.27.3: Label-Basis ist jetzt 10px (tabs.textSize-Variable), nicht mehr
+  // die festen 13px der Sidebar — die Geometrie (Höhe/Padding/Gap/Lead) bleibt.
+  check('v1.27.0/1.27.3 Geometrie: Label-Basis 10px (textSize-Variable)', GEO.titleSize === '10px', GEO.titleSize)
   check('v1.27.0 Geometrie: Label weight 500', GEO.titleWeight === '500', GEO.titleWeight)
   check('v1.27.0 Geometrie: Add-Button 16px (min-width/height)', GEO.addMinW === '16px' && GEO.addMinH === '16px', `${GEO.addMinW}/${GEO.addMinH}`)
   check('v1.27.0 Geometrie: Add-Button hover-BG = --ui-control-hover-background', GEO.addHoverRule.includes('ui-control-hover-background'), GEO.addHoverRule.slice(0, 140))

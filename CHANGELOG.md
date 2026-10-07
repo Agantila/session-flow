@@ -3,6 +3,18 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.27.3] — 2026-10-07
+
+### Changed
+- **Beide Titelgrößen initial 10px**: Session-Titel (`tabs.textSize`,
+  Basis 13px → **10px**, Detail-/Meta-Zeilen proportional 8px, Floor
+  8px) und Projekt-/Gruppen-Kopfzeilen (`groups.nameSize`,
+  **14px → 10px**). CSS-Fallbacks und i18n-Beschreibungen angepasst.
+  One-Shot-Migration: gespeicherte `groups.nameSize === 14` (alter
+  Default) wird beim Laden einmalig auf 10 gesetzt; explizit gewählte
+  Werte bleiben unberührt. `tabs.textSize` ist basis-unabhängig
+  (Prozentwert).
+
 ## [1.27.2] — 2026-10-07
 
 ### Added

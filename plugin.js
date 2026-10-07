@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.27.2'
+const VERSION = '1.27.3'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -179,8 +179,7 @@ const DEFAULT_SETTINGS = {
     gridGap: 6,
     gridLines: 2,
     gridPreview: true,
-    // Textgröße der Session-Zeilen (Liste + Grid): 100% = Sidebar-Standard
-    // (13px Titel). Skaliert Titel + Detail-/Meta-Zeilen proportional.
+    // v1.27.3: Basis 10px (User-Vorgabe „beide Titelgrößen 10px initial").
     textSize: 100,
     infoDensity: 'auto',
     alignTop: true,
@@ -241,9 +240,9 @@ const DEFAULT_SETTINGS = {
     enabled: true,
     autoMode: 'off',
     headerDensity: 'comfortable',
-    // Projekt-/Gruppen-Kopfzeilen-Titel: px-Größe (Default 14 — etwas
-    // größer als die 13px der Session-Titel) + Kapitälchen-Toggle.
-    nameSize: 14,
+    // Projekt-/Gruppen-Kopfzeilen-Titel: px-Größe (v1.27.3: Default 10,
+    // gleichauf mit den Session-Titeln) + Kapitälchen-Toggle.
+    nameSize: 10,
     nameCaps: true,
     stackStyle: 'spine',
     showUngrouped: true
@@ -381,6 +380,24 @@ function loadSettings() {
   }
 
   $settings.set(deepMerge(DEFAULT_SETTINGS, isPlainObject(saved) ? saved : {}))
+
+  // v1.27.3 One-Shot-Migration: die Kopfzeilen-Basis ist auf 10px
+  // umgestellt (vorher 14px). Nutzer mit dem alten Default (14) werden
+  // einmalig auf den neuen Default (10) gesetzt; explizit gesetzte Werte
+  // (≠ 14) bleiben unberührt. `tabs.textSize` ist basis-unabhängig
+  // (Prozentwert) und braucht keine Migration.
+  try {
+    const current = $settings.get()
+    if (current?.groups?.nameSize === 14) {
+      $settings.set({
+        ...current,
+        groups: { ...current.groups, nameSize: 10 }
+      })
+      scheduleSettingsSave()
+    }
+  } catch {
+    /* Migration best-effort */
+  }
 
   // Stand 2026-10-05: Chips-Glow/Hintergrund raus, nur Text + Icon. Werks-
   // standard ist jetzt „aus"; wer den Frosted-Look behalten möchte, schaltet
@@ -968,12 +985,13 @@ function applyRows() {
     root.style.setProperty('--sf-row-pad-x', '8px')
     root.style.setProperty('--sf-row-gap', '6px')
     root.style.setProperty('--sf-row-lead', '14px')
-    // Textgröße (tabs.textSize, %): 100 = Sidebar-Standard. Titel skaliert
-    // direkt über --sf-row-label-size; Detail-/Meta-Zeilen über --sf-row-detail-size
-    // (Proportional-Faktor 10.5/13 ≈ 0.8), min. 9px für Lesbarkeit.
+    // v1.27.3: Basis 10px (User-Vorgabe „beide Titelgrößen 10px initial").
+    // 100 % = 10px Titel; Detail-/Meta-Zeilen proportional (Faktor 0.8),
+    // Floor 8px für Lesbarkeit.
     const textSizePct = clampNumber(Number(tabs.textSize ?? 100), 80, 160, 100)
-    root.style.setProperty('--sf-row-label-size', `${(13 * textSizePct / 100).toFixed(2)}px`)
-    root.style.setProperty('--sf-row-detail-size', `${Math.max(9, 10.5 * textSizePct / 100).toFixed(2)}px`)
+    const labelPx = 10 * textSizePct / 100
+    root.style.setProperty('--sf-row-label-size', `${labelPx.toFixed(2)}px`)
+    root.style.setProperty('--sf-row-detail-size', `${Math.max(8, labelPx * 0.8).toFixed(2)}px`)
     root.style.setProperty('--sf-row-add-size', '16px')
     // Hex-Farben: #RGB, #RRGGBB oder #RRGGBBAA (Alpha → Verläufe mit Transparenz).
     const safeColor = (value, fallback) => (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(value || '').trim()) ? String(value).trim() : fallback)
@@ -1439,10 +1457,9 @@ function applyGroupsDensity() {
 
     document.documentElement.setAttribute('data-sf-grpdensity', density)
 
-    // v1.27.2: Kopfzeilen-Titel-Typografie (Projekt-/Gruppen-Header) —
-    // px-Größe + Kapitälchen. Als Variablen gespiegelt; die Density-Stufen
-    // steuern nur noch Gewicht/Höhe, nicht mehr die Font-Größe.
-    const namePx = clampNumber(Number(groups.nameSize ?? 14), 10, 24, 14)
+    // v1.27.2/1.27.3: Kopfzeilen-Titel-Typografie (Projekt-/Gruppen-Header) —
+    // px-Größe (Default 10, gleichauf mit den Session-Titeln) + Kapitälchen.
+    const namePx = clampNumber(Number(groups.nameSize ?? 10), 10, 24, 10)
     document.documentElement.style.setProperty('--sf-group-name-size', `${namePx}px`)
     document.documentElement.setAttribute('data-sf-groupcaps', groups.nameCaps ? 'on' : 'off')
   } catch (error) {
@@ -5052,7 +5069,7 @@ const EN = {
   groupsHeaderDensity: 'Header density',
   groupsHeaderDensityDesc: 'How much a collapsible section header shows: Comfortable is bigger & bolder with the project folder as a subtext line; Detailed adds pinned/active counts too.',
   groupsNameSize: 'Header title size (px)',
-  groupsNameSizeDesc: 'Font size of project and group header titles. Default 14px — slightly larger than the 13px session titles.',
+  groupsNameSizeDesc: 'Font size of project and group header titles. Default 10px — matching the session titles.',
   groupsNameCaps: 'Header titles in capitals',
   groupsNameCapsDesc: 'Renders project and group header titles in uppercase letters.',
   headerDensityCompact: 'Compact',
@@ -5346,7 +5363,7 @@ const EN = {
   tabsGridGap: 'Grid: gap (px)',
   tabsGridGapDesc: 'Space between grid cards.',
   tabsTextSize: 'Text size (%)',
-  tabsTextSizeDesc: 'Scales session row text in list and grid. 100% = sidebar default.',
+  tabsTextSizeDesc: 'Scales session row text in list and grid. 100% = 10px titles.',
   tabsGridLines: 'Grid: title lines',
   tabsGridLinesDesc: 'How many lines a card title may use before it is clipped.',
   tabsGridPreview: 'Grid: preview text',
@@ -5683,7 +5700,7 @@ const DE = {
   groupsHeaderDensity: 'Kopfzeilen-Dichte',
   groupsHeaderDensityDesc: 'Wie viel eine einklappbare Sektions-Kopfzeile zeigt: Komfortabel ist größer & stärker mit dem Projekt-Ordner als Subzeile; Detailreich ergänzt außerdem angepinnt/aktiv-Kennzahlen.',
   groupsNameSize: 'Kopfzeilen-Titelgröße (px)',
-  groupsNameSizeDesc: 'Schriftgröße der Projekt- und Gruppen-Kopfzeilen-Titel. Standard 14px — etwas größer als die 13px der Session-Titel.',
+  groupsNameSizeDesc: 'Schriftgröße der Projekt- und Gruppen-Kopfzeilen-Titel. Standard 10px — gleichauf mit den Session-Titeln.',
   groupsNameCaps: 'Kopfzeilen in Großbuchstaben',
   groupsNameCapsDesc: 'Stellt Projekt- und Gruppen-Kopfzeilen-Titel in Großbuchstaben dar.',
   headerDensityCompact: 'Kompakt',
@@ -5976,7 +5993,7 @@ const DE = {
   tabsGridGap: 'Grid: Abstand (px)',
   tabsGridGapDesc: 'Abstand zwischen den Karten.',
   tabsTextSize: 'Textgröße (%)',
-  tabsTextSizeDesc: 'Skaliert den Text der Session-Zeilen in Liste und Grid. 100 % = Sidebar-Standard.',
+  tabsTextSizeDesc: 'Skaliert den Text der Session-Zeilen in Liste und Grid. 100 % = 10px Titel.',
   tabsGridLines: 'Grid: Titel-Zeilen',
   tabsGridLinesDesc: 'Wie viele Zeilen ein Kartentitel nutzen darf, bevor er abgeschnitten wird.',
   tabsGridPreview: 'Grid: Vorschautext',
@@ -6132,11 +6149,11 @@ const CSS = `
    Projekt-/Gruppen-Header von Hermes Desktop, nur hier IMMER sichtbar statt
    per Hover-Tooltip, weil "Detaildichte" das ausdrücklich verlangt. */
 .sf-group-text{display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1;gap:1px}
-/* v1.27.2: Kopfzeilen-Titel-Typografie einstellbar — px-Größe über
-   --sf-group-name-size (Default 14, etwas größer als die 13px der
-   Session-Titel), Kapitälchen per data-sf-groupcaps-Toggle (echte
-   Großbuchstaben via uppercase + leicht weiterem Letter-Spacing). */
-.sf-group-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-group-name-size,14px);font-weight:700;letter-spacing:.01em}
+/* v1.27.2/1.27.3: Kopfzeilen-Titel-Typografie einstellbar — px-Größe über
+   --sf-group-name-size (Default 10, gleichauf mit den Session-Titeln),
+   Kapitälchen per data-sf-groupcaps-Toggle (echte Großbuchstaben via
+   uppercase + leicht weiterem Letter-Spacing). */
+.sf-group-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-group-name-size,10px);font-weight:700;letter-spacing:.01em}
 html[data-sf-groupcaps=on] .sf-group-name{text-transform:uppercase;letter-spacing:.04em}
 .sf-group-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:500;line-height:1.25;color:var(--ui-text-quaternary)}
 .sf-group-count{flex-shrink:0;font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
@@ -6240,9 +6257,9 @@ html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-pl
 .sf-tab-lead[data-kind=unread]{color:var(--ui-success,var(--ui-accent))}
 .sf-tab-lead[data-kind=error]{color:var(--destructive,#ef4444)}
 .sf-tab-main{min-width:0;flex:1}
-.sf-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-label-size,13px);line-height:16px;font-weight:500;color:inherit}
+.sf-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-label-size,10px);line-height:16px;font-weight:500;color:inherit}
 .sf-tab[data-active=true] .sf-tab-title{font-weight:600}
-.sf-tab-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,10.5px);line-height:1.3;color:var(--ui-text-quaternary)}
+.sf-tab-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,8px);line-height:1.3;color:var(--ui-text-quaternary)}
 .sf-tab-meta{display:flex;align-items:center;gap:4px;flex-shrink:0}
 /* Komfortabel-Dichte (Liste): einspaltig — Meta-Infos als letzte Zeile unter dem Text. */
 .sf-tab-meta-inline{margin-top:3px;flex-wrap:wrap;row-gap:2px}
@@ -6284,11 +6301,11 @@ html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx[data-level=high]{--sf
 .sf-items[data-view=grid] .sf-tab-main{flex:1 1 auto;width:100%}
 .sf-items[data-view=grid] .sf-tab-title{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--sf-grid-lines,2);overflow:hidden;overflow-wrap:anywhere}
 .sf-items[data-view=grid] .sf-tab-preview{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-.sf-tab-details{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,10.5px);line-height:1.3;color:var(--ui-text-tertiary)}
+.sf-tab-details{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,8px);line-height:1.3;color:var(--ui-text-tertiary)}
 /* Info-Dichte-Abstufung: Komfortabel+ zeigt den größeren Titel; in der Liste
    werden die Abstände lockerer, Detailreich ergänzt die Stats-Zeile. Die
    Grid-Karten behalten ihren eigenen Rhythmus (gap) ohne Extra-Margins. */
-.sf-tab[data-density=comfortable] .sf-tab-title,.sf-tab[data-density=detailed] .sf-tab-title{font-size:var(--sf-row-label-size,13px);line-height:1.3}
+.sf-tab[data-density=comfortable] .sf-tab-title,.sf-tab[data-density=detailed] .sf-tab-title{font-size:var(--sf-row-label-size,10px);line-height:1.3}
 .sf-items[data-view=list] .sf-tab[data-density=comfortable] .sf-tab-details,.sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-details{margin-top:4px}
 .sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-preview{margin-top:3px}
 /* Detailreich: die Beschreibungen (Detail- und Vorschau-Zeile) brechen auf

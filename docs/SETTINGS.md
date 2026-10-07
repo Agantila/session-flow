@@ -49,7 +49,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.gridMin` | `150` | Grid: Mindest-Kartenbreite in px (nur bei Spalten = Auto). |
 | `tabs.gridCols` | `auto` | Grid-Spalten: `auto` (nach Kartenbreite) oder fest `1`–`4`. |
 | `tabs.gridGap` | `6` | Grid: Abstand zwischen den Karten in px. |
-| `tabs.textSize` | `100` | **Textgröße (%)** für Session-Zeilen in Liste UND Grid: skaliert Titel (13px-Basis) und Detail-/Meta-Zeilen (10.5px-Basis) proportional. Bereich 80–160 %, die Info-Dichte-Stufen folgen derselben Skalierung. |
+| `tabs.textSize` | `100` | **Textgröße (%)** für Session-Zeilen in Liste UND Grid: skaliert Titel (10px-Basis) und Detail-/Meta-Zeilen (8px-Basis) proportional. Bereich 80–160 %, die Info-Dichte-Stufen folgen derselben Skalierung. |
 | `tabs.gridLines` | `2` | Grid: max. Zeilen für den Kartentitel (1–4). |
 | `tabs.gridPreview` | `true` | Grid: Vorschau der letzten Nachricht auf den Karten. |
 | `tabs.infoDensity` | `auto` | Info-Dichte: `auto` (wie Hermes), `compact`, `comfortable`, `detailed`. Komfortabel = größerer Titel (13 px), lockerere Abstände, Detail-Zeile (Modell · Nachrichten · zuletzt aktiv) und einspaltig in der Liste (Zähler/Zeit/Kontext als Fußzeile unter dem Text), Detailreich = zusätzlich Vorschau + Kontext-Auslastung als Text (wenn der Donut aus ist), zweizeilige Detail-/Vorschau-Zeilen und eine animierte Aktivitäts-Zeile (aktueller Tool Call / Status, Wechsel mit Slide-up) — in `comfortable`/`compact` belegt sie die ZWEITE Zeile und blendet die Detail-Zeile aus, solange die Aktion läuft, in `detailed` erscheint sie als eigene dritte Zeile; gilt für Liste und Grid. |
@@ -136,7 +136,7 @@ Pane-Besuch startet die Filter immer frisch):
 | `groups.enabled` | `true` | Manuelle Gruppen aktiv. |
 | `groups.autoMode` | `off` | `off`, `date` (Heute/Gestern/Woche/Älter), `source` oder `project` (Projekt-Ordner — siehe unten). |
 | `groups.headerDensity` | `comfortable` | Typografie & Infotiefe der Kopfzeilen — siehe unten. Seit v1.27.2 steuert die Stufe nur noch Gewicht/Höhe; die Font-Größe kommt aus `groups.nameSize`. |
-| `groups.nameSize` | `14` | **Kopfzeilen-Titelgröße (px)** für Projekt- und Gruppen-Header (10–24). Default 14px — initial etwas größer als die 13px der Session-Titel. |
+| `groups.nameSize` | `10` | **Kopfzeilen-Titelgröße (px)** für Projekt- und Gruppen-Header (10–24). v1.27.3: Default 10px — gleichauf mit den Session-Titeln. |
 | `groups.nameCaps` | `true` | **Kopfzeilen-Titel in Großbuchstaben**: rendert Projekt- und Gruppen-Header-Titel uppercase (+ Letter-Spacing .04em). |
 | `groups.stackStyle` | `spine` | Optik eingeklappter Gruppen: `spine`, `fanned`, `pill`. |
 | `groups.showUngrouped` | `true` | „Nicht gruppiert"-Bereich zeigen, wenn Auto-Modus aus ist. |
