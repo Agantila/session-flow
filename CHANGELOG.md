@@ -3,6 +3,55 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.28.0] — 2026-10-07
+
+### Changed
+- **DnD komplett auf Pointer-Events umgestellt** (ersetzt natives HTML5-DnD
+  aus v1.25.1–v1.27.7 restlos): nach dem `user-select:none`-Fix (v1.27.7)
+  feuerte `dragstart` zwar zuverlässig auch in ListView, aber der native
+  Drag brach danach ab, ohne dass je ein `dragover`/`drop` auf einer
+  Section ankam — Live-Logs bestätigten `dragstart`+`react-dragstart`
+  mehrfach pro Sekunde, nie `dragenter-target`/`drop`. Analyse von Hermes
+  Desktops eigenem Quellcode (`apps/desktop/src/app/chat/session-drag.ts`)
+  zeigte: die App hat ihre eigene Sidebar aus genau demselben Grund von
+  nativem DnD auf Pointer-Events umgestellt („riding the native DnD layer
+  meant … failure modes … A pointer session has none of those failure
+  modes."). Das Plugin übernimmt dasselbe Muster:
+  - `beginRowDrag()` (SessionsPane): Schwellenwert 6px, danach `setDragging`
+    + `$dragActive.set(true)` + Ghost-Chip (`createDragGhost`, reines DOM,
+    kein React — analog zu Hermes Desktops `drag-ghost.ts`).
+  - Hit-Test über `document.elementFromPoint()` +
+    `[data-sf-drop-key]`-Marker auf jeder droppable `.sf-section` sowie den
+    beiden ListView-DropBar-Zielen (`flat-pin`/`flat-ungrouped`) — kein
+    `dragover`/`dragenter` mehr nötig, ignoriert `pointer-events` korrekt.
+  - `onPointerDown` am `.sf-tab`-Body statt `draggable`/`onDragStart`;
+    `justDraggedRef` unterdrückt den synthetischen `click` nach einem
+    echten Drop (sonst öffnet jeder erfolgreiche Drop zusätzlich die
+    Session).
+  - Esc bricht sofort ab (kein `dragend`-Warten wie bei nativem DnD).
+  - `try/finally` um den Commit garantiert Cleanup auch bei Fehlern
+    (`$dragActive`/`dragging` können nicht mehr für immer hängen bleiben).
+  - Entfernt: der komplette `__DND_PROBE__`-Diagnoseblock, der native
+    `dragstart`-Capture-Listener, `sectionHandlers()`
+    (`onDragEnter/Over/Leave/Drop`), der `pointer-events:none`-Hit-Test-
+    Bypass aus v1.27.6 (nicht mehr nötig — `elementFromPoint` ignoriert
+    `pointer-events` ohnehin korrekt).
+  - `user-select:none` auf `.sf-tab` bleibt (verhindert weiterhin Text-
+    Selektion während der Pointer-Drag-Schwelle erkannt wird).
+  - Neue CSS-Klasse `.sf-drag-ghost` (cursor-folgender Chip, fixed +
+    `pointer-events:none`).
+- Style-Test (Block 19) umgeschrieben: prüft jetzt `user-select:none`,
+  dass `pointer-events` auf `.sf-tab` IMMER `auto` bleibt (kein Bypass
+  mehr aktiv) und dass `.sf-drag-ghost` `position:fixed` +
+  `pointer-events:none` trägt.
+
+**Live verifiziert** (User, 2026-10-07): Drag funktioniert jetzt in
+ListView UND GridView auf der gesamten Kartenfläche, inkl. Drop auf
+Projekt-Header innerhalb von Projekt-Gruppen.
+
+Plan: `docs/plans/2026-10-07-dnd-tot-list-grid.md` (Status: Done, mit
+Live-Bestätigung).
+
 ## [1.27.7] — 2026-10-07
 
 ### Fixed

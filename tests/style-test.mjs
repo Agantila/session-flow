@@ -1250,40 +1250,45 @@ try {
   check('v1.27.0 Geometrie-Test ohne Exception', false, error && error.message)
 }
 
-// ── 19) v1.27.7: DnD-Drag-Start-Fix — user-select:none + Hit-Test-Bypass ────
-// Regression-Guard: .sf-tab traegt draggable=true; ohne user-select:none
-// priorisiert Chromium bei mousedown+move ueber Text-Kindern (Title/
-// Details/Meta) die Text-Selektion vor dem dragstart — der Drag startete
-// in List ueberhaupt nicht und in Grid nur im leeren Rand ohne Text-Node
-// darunter. Zusaetzlich: der Hit-Test-Bypass (pointer-events:none waehrend
-// :root[data-sf-drag=on], Ausnahme fuer [data-dragging=true]) aus v1.27.6
-// muss weiterhin greifen, sonst feuert dragover nie auf der Section.
+// ── 19) v1.28.0: Pointer-Drag — user-select:none + kein Hit-Test-Bypass ─────
+// Regression-Guard: .sf-tab braucht WEITERHIN user-select:none (sonst
+// gewinnt bei mousedown+move ueber Title/Details/Meta die Text-Selektion
+// gegen die Pointer-Drag-Schwelle in beginRowDrag()). Der frühere
+// pointer-events:none-Hit-Test-Bypass (v1.27.6, nur fuer natives
+// dragover/drop) ist jetzt vollständig entfernt — pointer-events bleibt
+// IMMER 'auto', auch mit :root[data-sf-drag=on] gesetzt (die Attribut-CSS-
+// Regel existiert nicht mehr). Zusätzlich: der Ghost-Chip (.sf-drag-ghost,
+// ersetzt den Browser-Drag-Snapshot) trägt die Basis-Eigenschaften, die
+// createDragGhost() voraussetzt (fixed + pointer-events:none, damit er den
+// Hit-Test unter dem Cursor nicht selbst verfälscht).
 try {
   const DND = await page.evaluate(() => {
     const tab = document.getElementById('l1')
     const before = getComputedStyle(tab).pointerEvents
     document.documentElement.setAttribute('data-sf-drag', 'on')
-    const duringNotDragging = getComputedStyle(tab).pointerEvents
-    tab.setAttribute('data-dragging', 'true')
-    const duringDragging = getComputedStyle(tab).pointerEvents
-    tab.removeAttribute('data-dragging')
+    const whileAttrSet = getComputedStyle(tab).pointerEvents
     document.documentElement.removeAttribute('data-sf-drag')
-    const after = getComputedStyle(tab).pointerEvents
+
+    const ghost = document.createElement('div')
+    ghost.className = 'sf-drag-ghost'
+    document.body.appendChild(ghost)
+    const gcs = getComputedStyle(ghost)
+    const ghostInfo = { position: gcs.position, pointerEvents: gcs.pointerEvents }
+    ghost.remove()
+
     return {
       userSelect: getComputedStyle(tab).userSelect,
       before,
-      duringNotDragging,
-      duringDragging,
-      after
+      whileAttrSet,
+      ghostInfo
     }
   })
-  check('v1.27.7 DnD: .sf-tab hat user-select:none (Drag-Start-Fix)', DND.userSelect === 'none', DND.userSelect)
-  check('v1.27.6 DnD: .sf-tab pointer-events vor Drag = auto', DND.before === 'auto', DND.before)
-  check('v1.27.6 DnD: waehrend Drag ohne data-dragging = none (Hit-Test-Bypass)', DND.duringNotDragging === 'none', DND.duringNotDragging)
-  check('v1.27.6 DnD: Drag-Quelle (data-dragging=true) bleibt auto', DND.duringDragging === 'auto', DND.duringDragging)
-  check('v1.27.6 DnD: nach Drag-Ende wieder auto', DND.after === 'auto', DND.after)
+  check('v1.28.0 Drag: .sf-tab hat user-select:none (Drag-Start-Fix)', DND.userSelect === 'none', DND.userSelect)
+  check('v1.28.0 Drag: .sf-tab pointer-events immer auto (vor Drag)', DND.before === 'auto', DND.before)
+  check('v1.28.0 Drag: kein Hit-Test-Bypass mehr (data-sf-drag=on wirkungslos)', DND.whileAttrSet === 'auto', DND.whileAttrSet)
+  check('v1.28.0 Drag: .sf-drag-ghost ist fixed + pointer-events:none', DND.ghostInfo.position === 'fixed' && DND.ghostInfo.pointerEvents === 'none', JSON.stringify(DND.ghostInfo))
 } catch (error) {
-  check('v1.27.7 DnD-Test ohne Exception', false, error && error.message)
+  check('v1.28.0 Drag-Test ohne Exception', false, error && error.message)
 }
 
 // ── Optional: Screenshots für die Sichtprüfung ──────────────────────────────

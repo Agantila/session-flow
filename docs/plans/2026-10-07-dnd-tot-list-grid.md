@@ -1,9 +1,10 @@
 # DnD-Reparatur in TabRow (List + Grid) — Diagnose + Fix
 
-- **Status**: Done
+- **Status**: Done — live verifiziert (User, 2026-10-07, nach v1.28.0)
 - **Erstellt**: 2026-10-07
 - **Betrifft**: `plugin.js` TabRow DnD-Pfad
-- **Version**: 1.27.6 (Hit-Test-Bypass) + 1.27.7 (echte Drag-Start-Ursache)
+- **Version**: 1.27.6 (Hit-Test-Bypass, obsolet) → 1.27.7 (Drag-Start-Fix,
+  unvollständig) → **1.28.0 (kompletter Umstieg auf Pointer-Drag, Fix)**
 
 ## Anforderung
 
@@ -168,19 +169,86 @@ kein Verhaltensunterschied in Standard-Chromium gegenüber nur
      (Hit-Test-Bypass aus v1.27.6 bleibt intakt)
    - `pointer-events` auf der Drag-Quelle (`data-dragging=true`): `auto`
    - `pointer-events` nach Drag-Ende: wieder `auto`
-4. **Live im Desktop** (ausstehend — User-Bestätigung nötig): Session in
-   ListView UND GridView an einer beliebigen Stelle der Karte (nicht nur
-   am Rand) greifen und auf Projekt-Header/Pin-Sektion/manuelle Gruppe
-   droppen.
+4. **Live im Desktop**: User bestätigt 2026-10-07 nach v1.28.0 — Drag
+   funktioniert in ListView UND GridView auf der gesamten Karten-/
+   Zeilenfläche, Drop auf Projekt-Header (auch innerhalb von Projekt-
+   Gruppen), Pin-Sektion und manuelle Gruppen.
 
-## Follow-ups (aktualisiert)
+## Nachtrag 2026-10-07 (v1.28.0) — v1.27.7 löste nur den Drag-Start, nicht den Abbruch danach
 
-- Probe-Block (Counter + Logger, `__SF_DND_PROBE__`) kann nach Live-
-  Bestätigung durch den User entfernt werden — er diagnostiziert den
-  Drop-Pfad, nicht den jetzt gefixten Drag-Start-Pfad, bleibt aber
-  harmlos aktiv (`console.error`-Only).
-- Bei künftigen `.sf-tab`-Layout-Änderungen: prüfen, ob neue Text-Kinder
-  `user-select` explizit überschreiben (würden den Bug lokal wieder
-  einführen).
+Nach dem v1.27.7-Fix (`user-select:none`) bestätigten Live-Logs
+(`~/.hermes/logs/desktop.log`): `dragstart`/`react-dragstart` feuerten
+jetzt zuverlässig auch in ListView (mehrfach pro Sekunde bei
+Wiederholungsversuchen) — aber **niemals** `dragenter-target` oder `drop`
+auf irgendeiner Section. Der native Drag brach nach dem Start ab, ohne
+dass der Browser je einen gültigen Drop-Ziel-Hit-Test lieferte. GridViews
+„nur am Rand"-Symptom blieb identisch bestehen.
+
+### Echte Ursache
+
+Analyse von Hermes Desktops eigenem Quellcode
+(`apps/desktop/src/app/chat/session-drag.ts`, `src/lib/drag-ghost.ts`)
+zeigt: die App hat ihre eigene Sidebar-Session-DnD bereits von nativem
+HTML5-DnD auf einen **Pointer-Event-basierten Custom-Drag** umgestellt —
+mit der im Quellcode dokumentierten Begründung:
+
+> „This replaced the native-HTML5 drag + SessionTileDropBridge: riding
+> the native DnD layer meant macOS's cancel snap-back animation, a
+> `dragend` held hostage until that animation finished, an Esc the page
+> never even saw, and window-level armor against react-dnd/dnd-kit. A
+> pointer session has none of those failure modes."
+
+Das deckt sich 1:1 mit dem beobachteten Symptombild hier: natives DnD ist
+in diesem Electron/Wayland-Setup grundsätzlich unzuverlässig für
+Drag-Sessions innerhalb des eigenen Fensters. Alle sechs Fix-Versuche
+(v1.25.1–v1.27.7) haben auf dem nativen Pfad gepatcht, ohne die
+strukturelle Ursache zu adressieren.
+
+### Fix (v1.28.0)
+
+Natives HTML5-DnD komplett entfernt, ersetzt durch `beginRowDrag()`
+(Plugin-Variante derselben Pointer-Architektur):
+
+- **Schwellenwert** (6px) vor Drag-Engage — normale Klicks bleiben
+  unberührt.
+- **Ghost-Chip** (`createDragGhost`, reines DOM ohne React, analog zu
+  Hermes Desktops `drag-ghost.ts`) folgt dem Cursor.
+- **Hit-Test** via `document.elementFromPoint()` + `[data-sf-drop-key]`-
+  Attribut auf jeder droppable `.sf-section` sowie den beiden ListView-
+  DropBar-Zielen — kein `dragover`/`dragenter` mehr nötig, ignoriert
+  `pointer-events` korrekt (macht den v1.27.6-Hit-Test-Bypass obsolet).
+- **Esc** bricht sofort ab (kein `dragend`-Warten wie bei nativem DnD).
+- **`try/finally`** um den Commit: ein Fehler in `host.sessions.pin()`
+  o.ä. kann `$dragActive`/`dragging` nicht mehr dauerhaft hängen lassen.
+- `onClick` wird nach einem echten Drag per `justDraggedRef` unterdrückt
+  (sonst würde jeder erfolgreiche Drop zusätzlich `onOpen` auslösen).
+- Entfernt: `__DND_PROBE__`-Diagnoseblock, nativer `dragstart`-Capture-
+  Listener, `sectionHandlers()` (`onDragEnter/Over/Leave/Drop`),
+  `pointer-events:none`-Hit-Test-Bypass (v1.27.6).
+- `user-select:none` auf `.sf-tab` bleibt bestehen (verhindert weiterhin
+  Text-Selektion während der Pointer-Drag-Schwelle erkannt wird).
+
+### Verifikation (v1.28.0)
+
+1. `npm run check` ✓
+2. `npm test` ✓ (Render-Smoketest, keine Regression)
+3. `npm run test:style` ✓ — Block 19 umgeschrieben: `user-select:none`
+   weiterhin aktiv, `pointer-events` auf `.sf-tab` IMMER `auto` (kein
+   Bypass mehr wirksam, auch mit `data-sf-drag=on` gesetzt — die Regel
+   existiert nicht mehr), `.sf-drag-ghost` trägt `position:fixed` +
+   `pointer-events:none`.
+4. **Live im Desktop**: User bestätigt — Drag funktioniert jetzt in
+   ListView UND GridView auf der gesamten Fläche, inkl. Drop auf
+   Projekt-Header innerhalb von Projekt-Gruppen (das ursprünglich
+   gemeldete „innerhalb der Projekte nicht greifbar").
+
+## Follow-ups (final)
+
+- `__SF_DND_PROBE__`-Infrastruktur ist komplett entfernt (nicht mehr nur
+  deaktivierbar) — sie diagnostizierte ausschließlich den nativen
+  Drop-Pfad, der nicht mehr existiert.
+- Bei künftigen `.sf-section`/`.sf-flat-dropbar-target`-Änderungen: neue
+  droppable Ziele brauchen das `data-sf-drop-key`-Attribut, sonst findet
+  `beginRowDrag()`s Hit-Test sie nicht.
 </content>
 </invoke>

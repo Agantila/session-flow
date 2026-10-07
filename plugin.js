@@ -117,32 +117,27 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.27.7'
+const VERSION = '1.28.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
-// v1.27.5-regression-Diagnose (DnD-Tot in List/Grid): Modul-globale Counter +
-// Logger, die per Hot-Reload NICHT zurückgesetzt werden. Probe-Output geht
-// via console.error in ~/.hermes/logs/desktop.log. Per `globalThis.__SF_DND_PROBE__=false`
-// (z. B. in DevTools-Konsole) deaktivierbar; Default: an, bis der Fix kommt.
-const __DND_PROBE__ = globalThis.__SF_DND_PROBE__ !== false
-const __dndStats__ = globalThis.__dndStats__ || (globalThis.__dndStats__ = {
-  effectRuns: 0,         // wie oft der tabBodyRef-Effect gelaufen ist
-  effectAttached: 0,     // wie oft der native dragstart-Capture-Listener attached wurde
-  effectSkippedNoNode: 0,// wie oft der Effect ohne tabBodyRef.current früh raus ist
-  dragstartFired: 0,     // wie oft der native dragstart-Listener gefeuert hat
-  reactDragStartFired: 0,// wie oft der React onDragStart-Handler lief
-  dropTargetsTouched: 0, // wie oft ein sectionHandlers-onDragEnter getriggert wurde
-  drops: [],             // letzte 5 Drops: id, types, sectionKind
-  bootLogSent: false
-})
-function dndLog(tag, payload) {
-  if (!__DND_PROBE__) return
-  console.error(`[${ID}/dnd-probe] ${tag}`, JSON.stringify(payload || {}))
-}
-if (__DND_PROBE__ && !__dndStats__.bootLogSent) {
-  __dndStats__.bootLogSent = true
-  dndLog('boot', { effectRuns: 0, hint: 'probe active — drag a .sf-tab to log events' })
+// Pointer-Drag-Ghost-Chip (v1.28.0) — Plugin-Variante des Musters aus
+// Hermes Desktops eigenem `src/lib/drag-ghost.ts`: flaches, cursor-
+// folgendes Div, reines DOM (kein React), ueberlebt daher einen Pointer-
+// Drag ohne Re-Renders und raeumt sich synchron bei Esc/Drop ab.
+function createDragGhost(label) {
+  const el = document.createElement('div')
+  el.className = 'sf-drag-ghost'
+  el.textContent = String(label || '')
+  document.body.appendChild(el)
+  return {
+    moveTo(x, y) {
+      el.style.transform = `translate3d(${x + 14}px, ${y + 12}px, 0)`
+    },
+    destroy() {
+      el.remove()
+    }
+  }
 }
 
 /** Modul-globaler Kontext; in register() gesetzt, von Komponenten benutzt. */
@@ -6259,28 +6254,16 @@ html[data-sf-grpdensity='compact'] .sf-group-head{min-height:24px}
 .sf-stack[data-style=pill] i:nth-child(1){left:0;right:0;opacity:.8}
 .sf-stack[data-style=pill] i:nth-child(2){left:2px;right:2px;top:3px;opacity:.45}
 .sf-stack[data-style=pill] i:nth-child(3){left:4px;right:4px;top:5px;opacity:.2}
-.sf-tab{display:flex;align-items:center;gap:var(--sf-row-gap,6px);min-height:var(--sf-row-min-h,26px);padding:4px var(--sf-row-pad-x,8px);border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative;user-select:none;-webkit-user-select:none;-webkit-user-drag:element}
-/* v1.27.7 DnD-Drag-Start-Fix: .sf-tab traegt draggable=true, aber Title/
-   Details/Meta sind Text-Nodes mit dem Browser-Default user-select:text.
-   Chromium/Electron priorisiert bei mousedown+move ueber selektierbarem
-   Text IMMER Text-Selektion vor dem HTML5-dragstart des Ahnen-Elements —
-   der Drag startete faktisch nie, ausser an Stellen ohne Text-Node
-   darunter (z.B. der leere Padding-Rand unterhalb der Meta-Zeile in
-   GridView). user-select:none auf .sf-tab (vererbt an alle Text-Kinder)
-   nimmt dem Browser diese Prioritaet, dragstart feuert wieder ueberall
-   auf der Karte/Zeile. -webkit-user-drag:element macht .sf-tab explizit
-   zur Drag-Quelle (Electron/Chromium-Hinweis, kein Verhaltensunterschied
-   in Standard-Chromium, aber dokumentiert die Absicht). */
-/* v1.27.6 DnD-Hit-Test-Fix: waehrend eines aktiven Drags die .sf-tab
-   pointer-events:none schalten. HTML5-DnD feuert dragover/drop auf dem
-   obersten Element unter dem Cursor — das ist im Grid die .sf-tab-Card,
-   im List die .sf-tab-Row. Ohne diesen Bypass kommt der dragover nie bei
-   der Section (.sf-section mit onDragOver/onDrop) an, dropEffect bleibt
-   'none' und der Drop wird vom Browser verworfen. Mehr-/Drop-Indikator-
-   Klassen (.sf-flat-dropbar-target) bleiben pointer-events:auto, damit
-   die ListView-DropBar weiterhin anspricht. */
-:root[data-sf-drag='on'] .sf-tab{pointer-events:none}
-:root[data-sf-drag='on'] .sf-tab[data-dragging=true]{pointer-events:auto}
+.sf-tab{display:flex;align-items:center;gap:var(--sf-row-gap,6px);min-height:var(--sf-row-min-h,26px);padding:4px var(--sf-row-pad-x,8px);border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative;user-select:none;-webkit-user-select:none}
+/* v1.28.0 Pointer-Drag (ersetzt natives HTML5-DnD komplett — Begruendung:
+   docs/plans/2026-10-07-dnd-tot-list-grid.md, Nachtrag v1.28.0). user-
+   select:none bleibt noetig: ohne das wuerde mousedown+Bewegung ueber den
+   Text-Kindern (Title/Details/Meta) eine Browser-Text-Selektion ausloesen,
+   statt dass der Pointer-Controller (beginRowDrag in SessionsPane) die
+   Bewegung fuer die Drag-Schwelle sieht. Der fruehere pointer-events:none-
+   Hit-Test-Bypass (v1.27.6, fuer natives dragover/drop) ist nicht mehr
+   nötig — der Hit-Test laeuft jetzt über document.elementFromPoint() +
+   [data-sf-drop-key], das ignoriert pointer-events ohnehin korrekt. */
 .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
 .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12));color:var(--foreground)}
 .sf-tab[data-drop=true]{box-shadow:inset 0 0 0 1px var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 10%,transparent)}
@@ -6290,6 +6273,7 @@ html[data-sf-grpdensity='compact'] .sf-group-head{min-height:24px}
 .sf-tab[data-just-moved=true]{animation:sf-just-moved .6s ease-out}
 @media (prefers-reduced-motion:reduce){.sf-tab[data-just-moved=true]{animation:none;background-color:color-mix(in srgb,var(--ui-accent) 20%,transparent)}}
 html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-play-state:paused}
+.sf-drag-ghost{position:fixed;left:0;top:0;z-index:9999;pointer-events:none;max-width:16rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 8px;border-radius:6px;opacity:.85;background:var(--ui-sidebar-surface-background,var(--dt-card));color:var(--ui-text-primary);font-size:11px;font-weight:500;box-shadow:0 2px 10px rgba(0,0,0,.35);will-change:transform}
 .sf-filter-search{position:relative;display:flex;align-items:center;gap:4px;flex:1;min-width:0;height:18px;padding:0 6px;border-radius:6px;background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--ui-text-quaternary)}
 .sf-filter-search input{flex:1;min-width:0;height:100%;border:0;border-radius:0;background:transparent;color:var(--foreground);font-size:11px;padding:0;box-shadow:none;outline:none}
 .sf-filter-search input:focus,.sf-filter-search input:focus-visible,.sf-filter-search input:focus-within{box-shadow:none;border-color:transparent;outline:none}
@@ -8167,7 +8151,7 @@ function ActivityTicker({ detail, previous, t, line }) {
   })
 }
 
-function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign, dragging, setDragging, justMoved }) {
+function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign, dragging, setDragging, onRowPointerDown, justMoved }) {
   const settings = useValue($settings)
   const appDensity = useValue($appDensity)
   const activity = useValue($activity)
@@ -8178,42 +8162,15 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   const tabsCfg = settings.tabs
   const cozy = tabsCfg.density === 'cozy'
 
-  // DnD: React-Synthetic-Events kapseln das native `dataTransfer` in
-  // `onDragStart` so, dass `setData()` im Handler keine Types mehr
-  // persistiert (Hermes-Desktop / Electron 37+). Loesung: ein
-  // CAPTURE-Listener direkt am DOM, der VOR React laeuft, setzt die
-  // Typen auf der `nativeEvent.dataTransfer`. Der React-Handler macht
-  // danach nur noch State (visuelle Rueckmeldung).
+  // v1.28.0: Pointer-basiertes Drag ersetzt natives HTML5-DnD (siehe
+  // beginRowDrag() in SessionsPane — Begruendung dort). `tabBodyRef`
+  // bleibt nur noch als potenzieller DOM-Anker fuer kuenftige Zwecke,
+  // der eigentliche Drag-Einstieg laeuft ueber `onPointerDown` am Body-
+  // Div, der `onRowPointerDown` (von der Pane injiziert) aufruft.
+  // `justDraggedRef` unterdrueckt den synthetischen `click`, der nach
+  // einem echten Drag-Drop sonst sofort `onOpen` ausloesen wuerde.
   const tabBodyRef = useRef(null)
-  useEffect(() => {
-    const node = tabBodyRef.current
-    __dndStats__.effectRuns++
-    if (!node) {
-      __dndStats__.effectSkippedNoNode++
-      dndLog('effect-no-node', { rowId: row.id, view: tabsCfg.view })
-      return
-    }
-    const onDragStartCapture = (nativeEvent) => {
-      const dt = nativeEvent.dataTransfer
-      __dndStats__.dragstartFired++
-      if (!dt) return
-      try {
-        dt.setData('text/session-flow-session', row.id)
-        dt.setData('text/plain', row.id)
-        dt.setData('application/x-session-flow-session', row.id)
-        dt.effectAllowed = 'move'
-        dndLog('dragstart-capture', { rowId: row.id, types: Array.from(dt.types || []) })
-      } catch (err) {
-        dndLog('dragstart-capture-err', { rowId: row.id, err: String(err) })
-        // Browser hat den Drag-Channel bereits geschlossen
-        // (z.B. sehr schnelle aufeinanderfolgende Starts) - ignorieren.
-      }
-    }
-    node.addEventListener('dragstart', onDragStartCapture, { capture: true })
-    __dndStats__.effectAttached++
-    dndLog('effect-attached', { rowId: row.id, view: tabsCfg.view, nodeTag: node.tagName })
-    return () => node.removeEventListener('dragstart', onDragStartCapture, { capture: true })
-  }, [row.id])
+  const justDraggedRef = useRef(false)
 
   const liveEntry = Object.values(live).find(entry => entry && entry.storedId === row.id) || null
   const justDone = Boolean(doneFx && doneFx[row.id])
@@ -8516,39 +8473,29 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     'data-just-moved': justMoved ? 'true' : undefined,
     'data-done-fx': justDone ? 'true' : undefined,
     'data-density': infoDensity,
-    draggable: true,
-    onClick: () => onOpen(row, null),
-    // v1.27.5 (Fix für v1.25.1-Regression): Der pauschale
-    // pointerdown-Capture-Kill (stopImmediatePropagation bei button===0)
-    // hat das Optionsmenü (.sf-more → Radix DropdownMenuTrigger) und die
-    // native Drag-Kette mitgekilled — der pointerdown erreichte den
-    // Trigger-Button nie, Radix' pointerdown-getriebene Menü-Öffnung
-    // blieb aus. Der Handler ist deshalb ganz entfernt: Der pointerdown
-    // läuft wieder frei durch Capture und Bubble, More-Button (mit
-    // eigenem stopPropagation) und Radix-Trigger verhalten sich nativ.
-    // Der dataTransfer-Mime sitzt weiterhin im nativen Capture-Listener
-    // (tabBodyRef, dragstart-capture) — der Grid-Drag startet damit auch
-    // im oberen Kartenbereich.
-    onDragStart: event => {
-      __dndStats__.reactDragStartFired++
-      dndLog('react-dragstart', { rowId: row.id, types: event.dataTransfer ? Array.from(event.dataTransfer.types || []) : [] })
-      // setData() passiert bereits im nativen Capture-Listener oben
-      // (tabBodyRef). Hier nur State + effectAllowed-Sync.
-      setDragging(row.id)
-      $dragActive.set(true)
-      try {
-        if (event.dataTransfer) {
-          // Effect nochmal setzen, falls die native Capture-Listener-
-          // Phase bereits geschlossen ist - schadet nicht.
-          event.dataTransfer.effectAllowed = 'move'
-        }
-      } catch {
-        // ignore
+    onClick: () => {
+      // v1.28.0: nach einem echten Pointer-Drag (Schwelle ueberschritten)
+      // unterdrueckt justDraggedRef den synthetischen Click, den der
+      // Browser nach pointerup ohnehin feuert — sonst oeffnet jeder
+      // erfolgreiche Drop die Session zusaetzlich (onOpen).
+      if (justDraggedRef.current) {
+        justDraggedRef.current = false
+        return
       }
+      onOpen(row, null)
     },
-    onDragEnd: () => {
-      setDragging(null)
-      $dragActive.set(false)
+    // v1.28.0 (ersetzt natives HTML5-DnD, siehe beginRowDrag() in
+    // SessionsPane): Hermes Desktop selbst ist aus denselben Gruenden
+    // (unzuverlaessiges dragstart/dragover/drop je nach Plattform,
+    // u.a. Wayland) auf ein Pointer-basiertes Drag umgestiegen
+    // (apps/desktop/src/app/chat/session-drag.ts). `onRowPointerDown`
+    // uebernimmt Schwellenwert-Erkennung, Ghost-Chip und Hit-Test —
+    // kein `draggable`/`onDragStart`/`onDragEnd` mehr nötig.
+    onPointerDown: event => {
+      if (event.button !== 0) return
+      if (typeof onRowPointerDown === 'function') {
+        onRowPointerDown(row, event, { setDragging, justDraggedRef })
+      }
     },
     children: [
       lead,
@@ -9681,7 +9628,15 @@ function NavAppsBar({ t, onNewSession }) {
 
 function SessionsPane() {
   const t = usePluginI18n(ID)
+  // v1.28.0 "latest ref"-Paar fuer den Pointer-Drag-Controller (siehe
+  // beginRowDrag): der Controller lebt zwischen pointerdown und pointerup
+  // (document-Listener, kein React-Lifecycle) und muss beim Commit immer
+  // den AKTUELLEN rows/flatSections-Stand sehen, nicht den vom Render, in
+  // dem der Drag gestartet wurde. Deklaration VOR dem ersten Zuweisen.
+  const rowsRef = useRef([])
+  const flatSectionsRef = useRef([])
   const rows = useValue($sessions)
+  rowsRef.current = rows
   const error = useValue($sessionsError)
   const groupsState = useValue($groupsState)
   const settings = useValue($settings)
@@ -9713,22 +9668,6 @@ function SessionsPane() {
   const sections = useMemo(() => buildSections(), [rows, groupsState, settings, projectsList, liveForSort, dragActive])
   const totalCount = sections.reduce((sum, section) => sum + section.items.length, 0)
   const maxVisible = Math.floor(clampNumber(settings.tabs.maxVisible, 0, 200, 0))
-
-  // v1.27.6 DnD-Tot-Fix: während eines aktiven Drags die .sf-tab-Karten
-  // pointer-events:none schalten — sonst trifft HTML5-DnD den dragover
-  // auf der Karte (List-Row / Grid-Card) statt auf der Section, der
-  // Section-Handler ruft kein preventDefault, dropEffect bleibt 'none'
-  // und der Drop wird abgelehnt. CSS-Selector :root[data-sf-drag=on]
-  // .sf-tab{pointer-events:none}. Attribut wird auf documentElement
-  // gesetzt — kein Re-Render, nur Style-Inversion.
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    if (dragActive) {
-      document.documentElement.setAttribute('data-sf-drag', 'on')
-    } else {
-      document.documentElement.removeAttribute('data-sf-drag')
-    }
-  }, [dragActive])
 
   // Filter-Leiste (wie die Hermes-Sessionliste): Textsuche über Titel/Branch/
   // Vorschau + Schnellfilter (alle/angepinnt/aktiv). Rein clientseitig, nichts
@@ -9966,124 +9905,192 @@ function SessionsPane() {
   // Zieht bei einem Projekt-Header die echte Projekt-Verschiebung
   // (session.cwd.set für die live Session) — sichtbar UND wirksam, kein reines
   // Anzeige-Umhängen. Manuelle/ungruppierte Header weisen weiterhin nur die
-  // Firefox-artige Gruppe zu. Hover-Tracking (dragenter/dragleave mit
-  // Containment-Check) treibt die Hervorhebung + den Zielhinweis im Header,
-  // damit beim Ziehen sofort klar ist, was ein Loslassen bewirkt.
-  const sectionHandlers = section => {
-    const canDrop =
-      section.kind === 'manual' ||
-      section.kind === 'ungrouped' ||
-      section.kind === 'pinned' ||
-      (section.kind === 'project' && section.cwd)
+  // Firefox-artige Gruppe zu.
+  //
+  // v1.28.0: HTML5-DnD (dragstart/dragover/drop) ist komplett entfernt.
+  // Grund: Hermes Desktop selbst hat die eigene Sidebar aus genau diesem
+  // Mechanismus herausgezogen (apps/desktop/src/app/chat/session-drag.ts,
+  // Kommentar dort: "riding the native DnD layer meant ... failure modes
+  // ... A pointer session has none of those failure modes.") — nach
+  // sechs Fix-Versuchen (v1.25.1–v1.27.7) auf dem nativen Pfad bestätigt
+  // das 1:1 das Symptombild hier (ListView: dragstart feuert, aber nie ein
+  // dragover/drop — Browser/Compositor schluckt die Drag-Session nach dem
+  // Start). `beginRowDrag()` unten ist die Plugin-Variante derselben
+  // Pointer-Architektur: Schwellenwert, Ghost-Chip, Hit-Test gegen
+  // `[data-sf-drop-key]`-Marker statt dragover/drop-Events.
+  const canSectionDrop = section =>
+    section.kind === 'manual' ||
+    section.kind === 'ungrouped' ||
+    section.kind === 'pinned' ||
+    (section.kind === 'project' && Boolean(section.cwd))
 
-    if (!canDrop) {
-      dndLog('section-handlers-skip', { kind: section.kind, cwd: section.cwd || null, key: section.key })
-      return {}
+  const commitDropOnSection = (section, sessionId) => {
+    if (!sessionId) {
+      return
     }
 
-    return {
-      onDragEnter: event => {
-        __dndStats__.dropTargetsTouched++
-        event.preventDefault()
-        dndLog('dragenter-target', { kind: section.kind, key: section.key, types: event.dataTransfer ? Array.from(event.dataTransfer.types || []) : [] })
-        setDragOverKey(section.key)
-      },
-      onDragOver: event => {
-        event.preventDefault()
+    if (section.kind === 'pinned') {
+      const targetRow = rows.find(entry => entry.id === sessionId)
 
-        if (event.dataTransfer) {
-          event.dataTransfer.dropEffect = 'move'
+      if (targetRow && !targetRow.pinned) {
+        try {
+          host.sessions.pin(sessionId, true)
+        } catch {
+          /* SDK-Pin fehlgeschlagen — Refresh zieht den Rest nach */
         }
-
-        if (dragOverKey !== section.key) {
-          setDragOverKey(section.key)
-        }
-      },
-      onDragLeave: event => {
-        // relatedTarget innerhalb der Section (z. B. eine Zeile) ist kein
-        // echtes Verlassen — sonst flackert die Hervorhebung beim Überfahren.
-        if (event.currentTarget.contains(event.relatedTarget)) {
-          return
-        }
-
-        setDragOverKey(current => (current === section.key ? null : current))
-      },
-      onDrop: event => {
-        event.preventDefault()
-        setDragOverKey(null)
-
-        const sessionId =
-          event.dataTransfer?.getData('text/session-flow-session') || event.dataTransfer?.getData('text/plain')
-
-        const dropInfo = {
-          kind: section.kind,
-          key: section.key,
-          sessionId: sessionId || null,
-          types: event.dataTransfer ? Array.from(event.dataTransfer.types || []) : [],
-          effect: event.dataTransfer ? event.dataTransfer.dropEffect : null
-        }
-        __dndStats__.drops.push(dropInfo)
-        if (__dndStats__.drops.length > 5) __dndStats__.drops.shift()
-        dndLog('drop', dropInfo)
-
-        if (!sessionId) {
-          return
-        }
-
-        if (section.kind === 'pinned') {
-          const targetRow = rows.find(entry => entry.id === sessionId)
-
-          if (targetRow && !targetRow.pinned) {
-            try {
-              host.sessions.pin(sessionId, true)
-            } catch {
-              /* SDK-Pin fehlgeschlagen — Refresh zieht den Rest nach */
-            }
-            pinnedSucceededAt = 0
-            void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
-            flashJustMoved(sessionId)
-          }
-
-          return
-        }
-
-        if (section.kind === 'project') {
-          const targetRow = rows.find(entry => entry.id === sessionId)
-
-          if (targetRow && targetRow.cwd !== section.cwd) {
-            void moveSessionRow(targetRow, { path: section.cwd, name: section.title || '' })
-            flashJustMoved(sessionId)
-          }
-
-          return
-        }
-
-        // v1.26.0 Hybrid-DnD auf eine manuelle Gruppe (siehe oben).
-        if (section.kind === 'manual' && section.groupId) {
-          const targetRow = rows.find(entry => entry.id === sessionId)
-          if (targetRow) {
-            const resolved = resolveSessionProject(targetRow)
-            if (resolved && resolved.id && !resolved.isNoProject) {
-              addProjectToGroup(section.groupId, resolved.id)
-              flashJustMoved(sessionId)
-              host.notify({
-                kind: 'info',
-                message: t('groupAddProject', { group: section.title || '', project: resolved.name || resolved.id })
-              })
-              return
-            }
-          }
-          // Kein Projekt → alte assign-Semantik.
-          assign(sessionId, section.groupId)
-          flashJustMoved(sessionId)
-          return
-        }
-
-        // Rest (ungrouped): Session aus jeder Gruppe rausnehmen.
-        assign(sessionId, null)
+        pinnedSucceededAt = 0
+        void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
         flashJustMoved(sessionId)
       }
+
+      return
     }
+
+    if (section.kind === 'project') {
+      const targetRow = rows.find(entry => entry.id === sessionId)
+
+      if (targetRow && targetRow.cwd !== section.cwd) {
+        void moveSessionRow(targetRow, { path: section.cwd, name: section.title || '' })
+        flashJustMoved(sessionId)
+      }
+
+      return
+    }
+
+    // v1.26.0 Hybrid-DnD auf eine manuelle Gruppe (siehe oben).
+    if (section.kind === 'manual' && section.groupId) {
+      const targetRow = rows.find(entry => entry.id === sessionId)
+      if (targetRow) {
+        const resolved = resolveSessionProject(targetRow)
+        if (resolved && resolved.id && !resolved.isNoProject) {
+          addProjectToGroup(section.groupId, resolved.id)
+          flashJustMoved(sessionId)
+          host.notify({
+            kind: 'info',
+            message: t('groupAddProject', { group: section.title || '', project: resolved.name || resolved.id })
+          })
+          return
+        }
+      }
+      // Kein Projekt → alte assign-Semantik.
+      assign(sessionId, section.groupId)
+      flashJustMoved(sessionId)
+      return
+    }
+
+    // Rest (ungrouped): Session aus jeder Gruppe rausnehmen.
+    assign(sessionId, null)
+    flashJustMoved(sessionId)
+  }
+
+  // Pointer-Drag-Controller. `flatSectionsRef`/`rowsRef` werden weiter unten
+  // bei jedem Render aktualisiert ("latest ref"-Pattern) — der Controller
+  // lebt laenger als ein einzelner Render (Listener bleiben zwischen
+  // pointerdown und pointerup aktiv), darf aber nie mit einem veralteten
+  // Sections-Snapshot committen.
+  const beginRowDrag = (row, pointerEvent, { setDragging: setDraggingProp, justDraggedRef }) => {
+    const startX = pointerEvent.clientX
+    const startY = pointerEvent.clientY
+    const THRESHOLD = 6
+    let engaged = false
+    let ghost = null
+
+    const resolveDropKey = (x, y) => {
+      const el = typeof document !== 'undefined' ? document.elementFromPoint(x, y) : null
+      const target = el && el.closest ? el.closest('[data-sf-drop-key]') : null
+      return target ? target.getAttribute('data-sf-drop-key') : null
+    }
+
+    const commit = key => {
+      if (!key) return
+      if (key === 'flat-pin') {
+        const targetRow = rowsRef.current.find(entry => entry.id === row.id)
+        if (targetRow && !targetRow.pinned) {
+          try {
+            host.sessions.pin(row.id, true)
+          } catch {
+            /* SDK-Pin fehlgeschlagen — Refresh zieht den Rest nach */
+          }
+          pinnedSucceededAt = 0
+          void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
+          flashJustMoved(row.id)
+        }
+        return
+      }
+      if (key === 'flat-ungrouped') {
+        assign(row.id, null)
+        flashJustMoved(row.id)
+        return
+      }
+      const section = flatSectionsRef.current.find(entry => entry.key === key)
+      if (section) {
+        commitDropOnSection(section, row.id)
+      }
+    }
+
+    const engage = () => {
+      engaged = true
+      justDraggedRef.current = true
+      setDraggingProp(row.id)
+      $dragActive.set(true)
+      ghost = createDragGhost(row.title || row.id)
+      ghost.moveTo(startX, startY)
+    }
+
+    const cleanup = () => {
+      document.removeEventListener('pointermove', onMove, true)
+      document.removeEventListener('pointerup', onUp, true)
+      document.removeEventListener('keydown', onKeyDown, true)
+      if (ghost) {
+        ghost.destroy()
+        ghost = null
+      }
+      setDraggingProp(null)
+      $dragActive.set(false)
+      setDragOverKey(null)
+    }
+
+    const onMove = moveEvent => {
+      const x = moveEvent.clientX
+      const y = moveEvent.clientY
+
+      if (!engaged) {
+        if (Math.hypot(x - startX, y - startY) < THRESHOLD) return
+        engage()
+      }
+
+      if (ghost) ghost.moveTo(x, y)
+      const key = resolveDropKey(x, y)
+      setDragOverKey(current => (current === key ? current : key))
+    }
+
+    const onUp = upEvent => {
+      try {
+        if (engaged) {
+          const key = resolveDropKey(upEvent.clientX, upEvent.clientY)
+          commit(key)
+        } else {
+          // Schwelle nie erreicht → ganz normaler Klick, kein Drag.
+          justDraggedRef.current = false
+        }
+      } finally {
+        // finally: ein Fehler in commit() (z.B. host.sessions.pin wirft)
+        // darf $dragActive/dragging nicht fuer immer auf "aktiv" stehen
+        // lassen — sonst bleibt die Pinned-Placeholder-Sektion kleben.
+        cleanup()
+      }
+    }
+
+    const onKeyDown = keyEvent => {
+      if (keyEvent.key === 'Escape') {
+        justDraggedRef.current = false
+        cleanup()
+      }
+    }
+
+    document.addEventListener('pointermove', onMove, true)
+    document.addEventListener('pointerup', onUp, true)
+    document.addEventListener('keydown', onKeyDown, true)
   }
 
   const flatLimit = activeMode && maxVisible > 0 && activeFlatRows.length > maxVisible
@@ -10102,62 +10109,14 @@ function SessionsPane() {
             className: cn('sf-flat-dropbar-target', dragOverKey === 'flat-pin' && 'sf-flat-dropbar-target--hot'),
             'data-drop-ready': 'true',
             'data-drop': dragOverKey === 'flat-pin' ? 'true' : undefined,
-            onDragEnter: event => {
-              event.preventDefault()
-              setDragOverKey('flat-pin')
-            },
-            onDragOver: event => {
-              event.preventDefault()
-              if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-              if (dragOverKey !== 'flat-pin') setDragOverKey('flat-pin')
-            },
-            onDragLeave: event => {
-              if (event.currentTarget.contains(event.relatedTarget)) return
-              setDragOverKey(current => (current === 'flat-pin' ? null : current))
-            },
-            onDrop: event => {
-              event.preventDefault()
-              setDragOverKey(null)
-              const sessionId = event.dataTransfer?.getData('text/session-flow-session')
-                || event.dataTransfer?.getData('text/plain')
-              if (!sessionId) return
-              const targetRow = rows.find(entry => entry.id === sessionId)
-              if (targetRow && !targetRow.pinned) {
-                try { host.sessions.pin(sessionId, true) } catch { /* ignore */ }
-                pinnedSucceededAt = 0
-                void refreshPinnedIds().then(() => scheduleSessionsRefresh(400))
-                flashJustMoved(sessionId)
-              }
-            },
+            'data-sf-drop-key': 'flat-pin',
             children: jsxs('span', { className: 'sf-flat-dropbar-label', children: [jsx(Codicon, { name: 'pin', size: '0.85rem' }), ' ' , t('pinnedSection')] })
           }),
           jsx('div', {
             className: cn('sf-flat-dropbar-target', dragOverKey === 'flat-ungrouped' && 'sf-flat-dropbar-target--hot'),
             'data-drop-ready': 'true',
             'data-drop': dragOverKey === 'flat-ungrouped' ? 'true' : undefined,
-            onDragEnter: event => {
-              event.preventDefault()
-              setDragOverKey('flat-ungrouped')
-            },
-            onDragOver: event => {
-              event.preventDefault()
-              if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-              if (dragOverKey !== 'flat-ungrouped') setDragOverKey('flat-ungrouped')
-            },
-            onDragLeave: event => {
-              if (event.currentTarget.contains(event.relatedTarget)) return
-              setDragOverKey(current => (current === 'flat-ungrouped' ? null : current))
-            },
-            onDrop: event => {
-              event.preventDefault()
-              setDragOverKey(null)
-              const sessionId = event.dataTransfer?.getData('text/session-flow-session')
-                || event.dataTransfer?.getData('text/plain')
-              if (!sessionId) return
-              // ListView-Ungrouped-Drop: Pin loesen, falls noetig.
-              assign(sessionId, null)
-              flashJustMoved(sessionId)
-            },
+            'data-sf-drop-key': 'flat-ungrouped',
             children: jsxs('span', { className: 'sf-flat-dropbar-label', children: [jsx(Codicon, { name: 'list-unordered', size: '0.85rem' }), ' ', t('ungrouped') || 'Ungrouped'] })
           })
         ]
@@ -10187,6 +10146,7 @@ function SessionsPane() {
                   onAssign: assign,
                   dragging,
                   setDragging,
+                  onRowPointerDown: beginRowDrag,
                   justMoved: row.id === justMovedId
                 })
               ),
@@ -10218,6 +10178,7 @@ function SessionsPane() {
       flatSections.push(...section.subSections)
     }
   }
+  flatSectionsRef.current = flatSections
   const list = jsx('div', {
     className: 'sf-list',
     children: flatSections.map(section => {
@@ -10232,12 +10193,7 @@ function SessionsPane() {
       // akzeptieren, bekommen einen zusätzlichen Zustand, der im CSS die
       // pulsierende Ziel-Umrandung anschaltet — besonders wichtig für die
       // leere Pinned-Placeholder-Sektion, die sonst visuell untergeht.
-      const dropReady = dragActive && (
-        section.kind === 'pinned' ||
-        section.kind === 'manual' ||
-        section.kind === 'ungrouped' ||
-        (section.kind === 'project' && section.cwd)
-      )
+      const dropReady = dragActive && canSectionDrop(section)
 
       return jsxs('div', {
         className: cn('sf-section', isSub && 'sf-section-nested'),
@@ -10246,7 +10202,7 @@ function SessionsPane() {
         'data-drop-ready': dropReady ? 'true' : undefined,
         'data-pinned-placeholder': section.isDropPlaceholder ? 'true' : undefined,
         'data-parent-group': isSub ? section.parentGroupId : undefined,
-        ...sectionHandlers(section),
+        'data-sf-drop-key': canSectionDrop(section) ? section.key : undefined,
         children: [
           jsx(SectionHeader, {
             key: 'head',
@@ -10301,6 +10257,7 @@ function SessionsPane() {
                       onAssign: assign,
                       dragging,
                       setDragging,
+                      onRowPointerDown: beginRowDrag,
                       justMoved: row.id === justMovedId
                     })
                   ),

@@ -1,9 +1,20 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.27.7 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.28.0 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **DnD komplett auf Pointer-Events umgestellt** (v1.28.0, live
+  verifiziert): natives HTML5-DnD (`draggable`/`dragstart`/`dragover`/
+  `drop`) restlos entfernt — Hermes Desktop selbst ist aus denselben
+  Gründen (unzuverlässiges Verhalten je nach Plattform, u.a. Wayland) auf
+  Pointer-Events umgestiegen. `beginRowDrag()` in SessionsPane: 6px-
+  Schwelle, Ghost-Chip, Hit-Test via `elementFromPoint` +
+  `[data-sf-drop-key]`, Esc bricht sofort ab. Funktioniert jetzt auf der
+  GESAMTEN Karten-/Zeilenfläche in List UND Grid (nicht mehr nur am
+  Kartenrand). Ersetzt v1.27.7 (user-select-Fix, löste nur den Drag-
+  Start, nicht den Drop-Abbruch danach).
 
 - **DnD-Drag-Start-Fix (echte Ursache)** (v1.27.7): `.sf-tab` fehlte
   `user-select:none` — Chromium priorisiert bei `mousedown`+Bewegung über
