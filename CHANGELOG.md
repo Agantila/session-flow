@@ -3,6 +3,46 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.27.1] — 2026-10-07
+
+### Added
+- **Textgröße für Liste & Grid** (`tabs.textSize`, Default 100 %):
+  skaliert Titel UND Detail-/Meta-Zeilen der Session-Einträge in beiden
+  Ansichten über `--sf-row-label-size` / `--sf-row-detail-size`.
+  Bereich 80–160 % (Step 5), Einstellung in „Session-Tabs" vor den
+  Grid-Optionen. Die Info-Dichte-Stufen (Komfortabel/Detailreich)
+  folgen derselben Skalierung statt fixer 13px.
+
+### Changed
+- **Collapse-Caret immer sichtbar**: der Ein-/Ausklapp-Pfeil auf
+  Projekt- und Gruppen-Kopfzeilen ist nicht mehr hover-only — die
+  Affordanz ist ohne Maus-Hover erkennbar, identisch für Projekte und
+  manuelle Gruppen.
+
+## [1.27.0] — 2026-10-07
+
+### Changed
+- **Zeilen-Geometrie auf die native Sidebar-Zeile abgestimmt**
+  (`hermes-agent` `row-geometry.ts`): Session-Zeilen nutzen jetzt 8 px
+  Padding-X (statt 4/6 px), eine 14×14-Lead-Cell (statt 16 px), ein
+  13-px-Label mit weight 500 (statt 12 px) und einen 16×16-Add-Button
+  (statt 20 px). Die Tokens liegen als `--sf-row-*`-Custom-Properties
+  auf `:root` und werden in `applyRows()` gespiegelt — Abstände und
+  Einzug gleichen damit exakt der App-Sidebar.
+- **Add-Button-Hover nutzt `--ui-control-hover-background`** statt des
+  Zeilen-Hovers — gleiche Hover-Optik wie der native `+`-Button.
+
+### Added
+- **„Projekt nicht verfügbar\"-Hinweiszeile**: referenziert eine manuelle
+  Gruppe eine tote Projekt-ID, zeigt die Kind-Projekt-Section jetzt eine
+  Hinweis-Zeile (Warn-Icon + Erklärung) mit „Aus Gruppe entfernen\"-Button
+  (`removeProjectFromGroup`) statt eines leeren Bodys; der Header trägt
+  kein `+` mehr.
+- **Einmaliger Migrations-Toast**: beim ersten Laden nach der
+  v1.25.0→v1.26.0-Migration (cwd→projectIds) erscheint pro umgestellter
+  Gruppe ein Toast (Erfolg mit Ziel-Projekt bzw. „konnte nicht migriert
+  werden\"). Einmal-Semantik über ein persistiertes `migrationNotified`-Flag.
+
 ## [1.26.1] — 2026-10-07
 
 ### Fixed

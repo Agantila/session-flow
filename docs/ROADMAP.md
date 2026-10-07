@@ -1,9 +1,30 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.26.1 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.27.1 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Textgröße einstellbar + Caret immer sichtbar** (v1.27.1):
+  `tabs.textSize` (80–160 %, Default 100) skaliert Titel und
+  Detail-/Meta-Zeilen in Liste UND Grid über
+  `--sf-row-label-size`/`--sf-row-detail-size`; die Density-Stufen
+  folgen derselben Skalierung. Der Collapse-Caret auf Projekt- und
+  Gruppen-Kopfzeilen ist nicht mehr hover-only, sondern dauerhaft
+  sichtbar (v1.27.0 hat die Geometrie bereits auf die nativen
+  Sidebar-Tokens gehoben — die Affordanz war dadurch ohne Hover nicht
+  mehr erkennbar).
+
+- **Zeilen-Geometrie-Parität + „Projekt nicht verfügbar" + Migrations-Toast**
+  (v1.27.0): Session-Zeilen (Liste) nutzen jetzt die exakten
+  `row-geometry.ts`-Tokens — 8 px Padding-X, 14×14-Lead-Cell,
+  13-px-Label/500, 16×16-Add-Button — als `--sf-row-*`-Custom-Properties auf
+  `:root`, gespiegelt in `applyRows()`; Add-Button-Hover auf
+  `--ui-control-hover-background`. Referenziert eine manuelle Gruppe eine tote
+  Projekt-ID, erscheint eine „Projekt nicht verfügbar"-Hinweiszeile mit
+  „Aus Gruppe entfernen" statt eines leeren Bodys (Header ohne `+`). Nach der
+  cwd→projectIds-Migration toastet das Plugin einmalig pro Gruppe (Erfolg bzw.
+  Fehlschlag) über ein persistiertes `migrationNotified`-Flag.
 
 - **„Fertig, aber ungesehen" im Status-Indikator** (v1.26.1):
   `activityFor()` wertet jetzt `row.unread` aus — ruhige Sessions mit

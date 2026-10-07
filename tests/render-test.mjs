@@ -82,7 +82,7 @@ const hostStub = {
   },
   sessions: { pin() {}, setColor() {} },
   onEvent: () => () => {},
-  notify: () => {},
+  notify: (...args) => { globalThis.__SF__.notifyCalls.push(args) },
   notifyError: () => {},
   navigate: () => {},
   openSession: async () => {},
@@ -97,6 +97,7 @@ globalThis.__SF__ = {
   rpcCalls,
   tCalls: [],
   haptics: [],
+  notifyCalls: [],
   bundles: null
 }
 
@@ -360,7 +361,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, $groupsState, activityFor }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -3612,6 +3613,85 @@ try {
   check('v1.26.1: stUnread im Bundle', bundleKeys2.includes('stUnread'))
 } catch (error) {
   check('v1.26.1-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── 35) v1.27.0 — Geometrie-Mirror, Migrations-Toast, „Projekt nicht
+//            verfügbar"-Hinweiszeile ──────────────────────────────────────────
+try {
+  // 35a) applyRows spiegelt die nativen Zeilen-Tokens als --sf-row-*.
+  mod.applyRows()
+  const rootProps = globalThis.__SF__.rootEl.style.props
+  check('v1.27.0 Geometrie: applyRows setzt --sf-row-min-h=26px', rootProps['--sf-row-min-h'] === '26px', rootProps['--sf-row-min-h'])
+  check('v1.27.0 Geometrie: applyRows setzt --sf-row-pad-x=8px', rootProps['--sf-row-pad-x'] === '8px', rootProps['--sf-row-pad-x'])
+  check('v1.27.0 Geometrie: applyRows setzt --sf-row-lead=14px', rootProps['--sf-row-lead'] === '14px', rootProps['--sf-row-lead'])
+  check('v1.27.0 Geometrie: applyRows setzt --sf-row-add-size=16px', rootProps['--sf-row-add-size'] === '16px', rootProps['--sf-row-add-size'])
+
+  // 35b) Migration: v1.25.0-cwd-Gruppe → projectIds + einmaliger Toast.
+  globalThis.__SF__.notifyCalls.length = 0
+  const migProjects = [
+    { id: 'pr-mig', label: 'MigProjekt', color: null, icon: 'folder', isNoProject: false, isAuto: false, path: '/tmp/mig', sessionIds: new Set() }
+  ]
+  mod.$projectsList.set(migProjects)
+  storage.set('groups.v1', {
+    groups: [
+      { id: 'g-mig-ok', name: 'Mig OK', color: null, cwd: '/tmp/mig', createdAt: Date.now() },
+      { id: 'g-mig-dead', name: 'Mig Dead', color: null, cwd: '/tmp/weg', createdAt: Date.now() }
+    ],
+    assign: {},
+    collapsed: {}
+  })
+  mod.loadGroups()
+  const migState = mod.$groupsState.get()
+  check('v1.27.0 Migration: cwd→projectIds gemappt', migState.groups.find(g => g.id === 'g-mig-ok')?.projectIds[0] === 'pr-mig', JSON.stringify(migState.groups))
+  check('v1.27.0 Migration: toter Pfad → leere projectIds', migState.groups.find(g => g.id === 'g-mig-dead')?.projectIds.length === 0, JSON.stringify(migState.groups))
+  check('v1.27.0 Migration: migrationNotified-Flag gesetzt', migState.migrationNotified === true, String(migState.migrationNotified))
+  check('v1.27.0 Migration: Erfolgs- + Fehlschlag-Toast', globalThis.__SF__.notifyCalls.length === 2, `notifyCalls=${globalThis.__SF__.notifyCalls.length}`)
+
+  // 35c) Einmal-Semantik: bereits benachrichtigt → kein weiterer Toast.
+  globalThis.__SF__.notifyCalls.length = 0
+  storage.set('groups.v1', { ...migState, migrationNotified: true })
+  mod.loadGroups()
+  check('v1.27.0 Migration: Einmal-Semantik (kein zweiter Toast)', globalThis.__SF__.notifyCalls.length === 0, `notifyCalls=${globalThis.__SF__.notifyCalls.length}`)
+
+  // 35d) „Projekt nicht verfügbar": Hinweis-Zeile + Entfernen, kein `+`.
+  const deadRows = [
+    { id: 'st-dead-1', title: 'S1', source: 'desktop', startedAt: 1000, messageCount: 2, cwd: '', pinned: false, unread: false }
+  ]
+  mod.$groupsState.set({
+    groups: [
+      { id: 'g-miss', name: 'Gruppe mit totem Projekt', color: null, projectIds: ['pr-dead'], createdAt: Date.now() }
+    ],
+    assign: {},
+    collapsed: {}
+  })
+  mod.$sessions.set(deadRows)
+  mod.$projectsList.set([
+    { id: 'pr-live', label: 'Live', color: '#0af', icon: 'folder', isNoProject: false, isAuto: false, path: '/tmp/live', sessionIds: new Set(['st-dead-1']) }
+  ])
+  mod.$liveMap.set({})
+  mod.$activity.set({})
+  mod.patchSettings('groups', { enabled: true, autoMode: 'off', showUngrouped: true })
+  const missOut = { el: [], text: [] }
+  walk(pane.render(), missOut)
+  const missingEl = missOut.el.find(e => e.cls.includes('sf-group-missing'))
+  const removeBtn = missOut.el.find(e => e.cls.includes('sf-group-missing-remove'))
+  const missingAdd = missOut.el.find(e => e.cls.includes('sf-group-actions') && e.props && e.props['data-sf-action'] === 'new')
+  check('v1.27.0 Missing: Hinweis-Zeile gerendert', Boolean(missingEl), 'absent')
+  check('v1.27.0 Missing: Entfernen-Button vorhanden', Boolean(removeBtn), 'absent')
+  check('v1.27.0 Missing: kein `+` auf dem Header', !missingAdd, 'add present')
+  if (removeBtn) removeBtn.props.onClick()
+  const afterRemove = mod.$groupsState.get()
+  check('v1.27.0 Missing: Entfernen löscht die tote ID', !afterRemove.groups.find(g => g.id === 'g-miss')?.projectIds.includes('pr-dead'), JSON.stringify(afterRemove.groups))
+
+  // Neue Bundle-Keys in beiden Bundles.
+  const bundles35 = globalThis.__SF__.bundles || {}
+  const bundleKeys35 = Object.values(bundles35).flatMap(b => b && typeof b === 'object' ? Object.keys(b) : [])
+  check('v1.27.0: groupProjectMissing im Bundle', bundleKeys35.includes('groupProjectMissing'))
+  check('v1.27.0: groupProjectMissingRemove im Bundle', bundleKeys35.includes('groupProjectMissingRemove'))
+  check('v1.27.0: groupMigrated im Bundle', bundleKeys35.includes('groupMigrated'))
+  check('v1.27.0: groupMigrateFailed im Bundle', bundleKeys35.includes('groupMigrateFailed'))
+} catch (error) {
+  check('v1.27.0-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

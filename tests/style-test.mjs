@@ -411,6 +411,24 @@ const probeExpr = `(() => {
   // v1.26.0: Einrückung der Kind-Projekt-Section.
   const nestedEl = document.getElementById('nested1')
   out.nested1 = nestedEl ? { marginLeft: getComputedStyle(nestedEl).marginLeft } : null
+  // v1.26.2: TextSize-Skalierung — Variable wie applyRows() setzen und den
+  // berechneten Titel-Font messen (Fixture hängt am l1-Row). Danach restoren.
+  const textSizeProbe = (() => {
+    const rootEl = document.documentElement
+    const rowEl = document.getElementById('l1')
+    if (!rowEl) return null
+    const titleEl = rowEl.querySelector('.sf-tab-title')
+    const labelDefault = parseFloat(getComputedStyle(titleEl).fontSize)
+    rootEl.style.setProperty('--sf-row-label-size', '16.25px') // 125 %
+    rootEl.style.setProperty('--sf-row-detail-size', '13.13px') // 125 %
+    const labelScaled = parseFloat(getComputedStyle(titleEl).fontSize)
+    const detailsEl = rowEl.querySelector('.sf-tab-preview')
+    const detailScaled = parseFloat(getComputedStyle(detailsEl).fontSize)
+    rootEl.style.setProperty('--sf-row-label-size', '13px')
+    rootEl.style.setProperty('--sf-row-detail-size', '10.5px')
+    return { labelDefault, labelScaled, detailScaled }
+  })()
+  out.textSize = textSizeProbe
   return out
 })()`
 
@@ -548,29 +566,38 @@ try {
   }
 
   // ── 0c) Manuelle Gruppe (v1.25.0) — Caret-Hover-only, + für ohne-cwd ─────
-  // v1.26.0: Manuelle Gruppen sind Container (projectIds[]), das `+`-Icon
-  // lebt NUR auf den Kind-Projekt-Headern. Die gebliebenen Style-Fakten:
-  // Caret bleibt hover-only (opacity 0 → hover 1). Neu: Kind-Projekt-
-  // Sections werden eingerückt (sf-section-nested → margin-left 14px).
+  // v1.26.2: Caret ist JEDERZEIT sichtbar (opacity 1, keine Hover-Regel
+  // mehr) — der Nutzer vermisste die Ein-/Ausklapp-Affordanz ohne Hover.
   check(
-    'Manuelle Gruppe mgh1: Caret Default opacity=0 (hover-only)',
-    P.mgh1 && P.mgh1.caretOpacity === 0,
+    'Manuelle Gruppe mgh1: Caret immer sichtbar (opacity=1)',
+    P.mgh1 && P.mgh1.caretOpacity === 1,
     P.mgh1 ? `got=${P.mgh1.caretOpacity}` : 'null'
   )
   check(
-    'Manuelle Gruppe mgh1: :hover/focus-within → opacity:1 Regel existiert',
-    P.mgh1 && P.mgh1.hasHoverRule,
+    'Manuelle Gruppe mgh1: KEINE Hover-only-Regel mehr (opacity:0 entfernt)',
+    P.mgh1 && !P.mgh1.hasHoverRule,
     P.mgh1 ? `hasHoverRule=${P.mgh1.hasHoverRule}` : 'null'
   )
   check(
-    'Manuelle Gruppe mgh2: Caret ebenfalls opacity=0',
-    P.mgh2 && P.mgh2.caretOpacity === 0,
+    'Manuelle Gruppe mgh2: Caret ebenfalls immer sichtbar',
+    P.mgh2 && P.mgh2.caretOpacity === 1,
     P.mgh2 ? `got=${P.mgh2.caretOpacity}` : 'null'
   )
   check(
     'Kind-Projekt-Section nested1: eingerückt (margin-left 14px)',
     P.nested1 && Math.round(parseFloat(P.nested1.marginLeft || '0')) === 14,
     P.nested1 ? `marginLeft=${P.nested1.marginLeft}` : 'null'
+  )
+  // ── v1.26.2: TextSize-Skalierung (Liste + Grid über dieselben Variablen)
+  check(
+    'TextSize: Titel folgt --sf-row-label-size (125 % → ~16.25px)',
+    P.textSize && Math.abs(P.textSize.labelScaled - 16.25) <= 0.5,
+    P.textSize ? `default=${P.textSize.labelDefault} scaled=${P.textSize.labelScaled}` : 'null'
+  )
+  check(
+    'TextSize: Detail-/Preview-Zeile folgt --sf-row-detail-size (125 % → ~13.13px)',
+    P.textSize && Math.abs(P.textSize.detailScaled - 13.13) <= 0.5,
+    P.textSize ? `detailScaled=${P.textSize.detailScaled}` : 'null'
   )
 
   // ── 1) Design AN: Grid übernimmt Verlauf + Alpha (Kern-Bugfix) ────────────
@@ -1128,6 +1155,57 @@ try {
   })
 } catch (error) {
   check('Titel-solid-Test ohne Exception', false, error && error.message)
+}
+
+// ── 18) v1.27.0: Zeilen-Geometrie — native Sidebar-Parität (row-geometry.ts) ─
+// Referenz: SIDEBAR_ROW_MIN_H=26px, SIDEBAR_ROW_PAD_X=8px, SIDEBAR_ROW_GAP=6px,
+// SIDEBAR_ROW_LEAD=14px, Label=13px/500, Add-Button=16px. Gemessen wird die
+// tatsächlich gerenderte Geometrie (computed styles), nicht die Roh-Regel.
+try {
+  const GEO = await page.evaluate(() => {
+    const tab = document.getElementById('l1')
+    const tcs = getComputedStyle(tab)
+    const lead = tab.querySelector('.sf-tab-lead')
+    const title = tab.querySelector('.sf-tab-title')
+    const lcs = lead ? getComputedStyle(lead) : null
+    const ttcs = title ? getComputedStyle(title) : null
+    const actions = document.getElementById('gh1-actions')
+    const acs = actions ? getComputedStyle(actions) : null
+    let addHoverRule = ''
+    try {
+      for (const sheet of document.styleSheets) {
+        let rules
+        try { rules = sheet.cssRules || [] } catch { continue }
+        for (const rule of rules) {
+          const text = String(rule.cssText || '')
+          if (text.includes('.sf-group-head:hover .sf-group-actions:hover')) { addHoverRule = text; break }
+        }
+        if (addHoverRule) break
+      }
+    } catch {}
+    return {
+      tabMinH: tcs.minHeight,
+      padLeft: tcs.paddingLeft,
+      padRight: tcs.paddingRight,
+      gap: tcs.gap,
+      leadW: lcs ? lcs.width : '',
+      titleSize: ttcs ? ttcs.fontSize : '',
+      titleWeight: ttcs ? ttcs.fontWeight : '',
+      addMinW: acs ? acs.minWidth : '',
+      addMinH: acs ? acs.minHeight : '',
+      addHoverRule
+    }
+  })
+  check('v1.27.0 Geometrie: Zeilen-Min-Höhe 26px', GEO.tabMinH === '26px', GEO.tabMinH)
+  check('v1.27.0 Geometrie: Padding-X 8px links+rechts', GEO.padLeft === '8px' && GEO.padRight === '8px', `${GEO.padLeft}/${GEO.padRight}`)
+  check('v1.27.0 Geometrie: Spalten-Gap 6px', GEO.gap === '6px', GEO.gap)
+  check('v1.27.0 Geometrie: Lead-Cell 14px', GEO.leadW === '14px', GEO.leadW)
+  check('v1.27.0 Geometrie: Label 13px', GEO.titleSize === '13px', GEO.titleSize)
+  check('v1.27.0 Geometrie: Label weight 500', GEO.titleWeight === '500', GEO.titleWeight)
+  check('v1.27.0 Geometrie: Add-Button 16px (min-width/height)', GEO.addMinW === '16px' && GEO.addMinH === '16px', `${GEO.addMinW}/${GEO.addMinH}`)
+  check('v1.27.0 Geometrie: Add-Button hover-BG = --ui-control-hover-background', GEO.addHoverRule.includes('ui-control-hover-background'), GEO.addHoverRule.slice(0, 140))
+} catch (error) {
+  check('v1.27.0 Geometrie-Test ohne Exception', false, error && error.message)
 }
 
 // ── Optional: Screenshots für die Sichtprüfung ──────────────────────────────

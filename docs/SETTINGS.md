@@ -49,6 +49,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.gridMin` | `150` | Grid: Mindest-Kartenbreite in px (nur bei Spalten = Auto). |
 | `tabs.gridCols` | `auto` | Grid-Spalten: `auto` (nach Kartenbreite) oder fest `1`–`4`. |
 | `tabs.gridGap` | `6` | Grid: Abstand zwischen den Karten in px. |
+| `tabs.textSize` | `100` | **Textgröße (%)** für Session-Zeilen in Liste UND Grid: skaliert Titel (13px-Basis) und Detail-/Meta-Zeilen (10.5px-Basis) proportional. Bereich 80–160 %, die Info-Dichte-Stufen folgen derselben Skalierung. |
 | `tabs.gridLines` | `2` | Grid: max. Zeilen für den Kartentitel (1–4). |
 | `tabs.gridPreview` | `true` | Grid: Vorschau der letzten Nachricht auf den Karten. |
 | `tabs.infoDensity` | `auto` | Info-Dichte: `auto` (wie Hermes), `compact`, `comfortable`, `detailed`. Komfortabel = größerer Titel (13 px), lockerere Abstände, Detail-Zeile (Modell · Nachrichten · zuletzt aktiv) und einspaltig in der Liste (Zähler/Zeit/Kontext als Fußzeile unter dem Text), Detailreich = zusätzlich Vorschau + Kontext-Auslastung als Text (wenn der Donut aus ist), zweizeilige Detail-/Vorschau-Zeilen und eine animierte Aktivitäts-Zeile (aktueller Tool Call / Status, Wechsel mit Slide-up) — in `comfortable`/`compact` belegt sie die ZWEITE Zeile und blendet die Detail-Zeile aus, solange die Aktion läuft, in `detailed` erscheint sie als eigene dritte Zeile; gilt für Liste und Grid. |

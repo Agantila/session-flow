@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.26.1'
+const VERSION = '1.27.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -179,6 +179,9 @@ const DEFAULT_SETTINGS = {
     gridGap: 6,
     gridLines: 2,
     gridPreview: true,
+    // Textgröße der Session-Zeilen (Liste + Grid): 100% = Sidebar-Standard
+    // (13px Titel). Skaliert Titel + Detail-/Meta-Zeilen proportional.
+    textSize: 100,
     infoDensity: 'auto',
     alignTop: true,
     showContext: false,
@@ -952,6 +955,22 @@ function applyRows() {
   try {
     const root = document.documentElement
     root.setAttribute('data-sf-theme', theme)
+    // 0) Zeilen-Geometrie — native Sidebar-Parität (row-geometry.ts): 26px
+    //    Höhe, 8px Padding-X, 6px Gap, 14×14 Lead, 13px/500 Label, 16×16
+    //    Add-Button. Als Custom-Properties gespiegelt (CSS-`:root`-Default
+    //    existiert zusätzlich), damit die Werte programmatisch les-/setzbar
+    //    bleiben und die Style-Tests sie messen können.
+    root.style.setProperty('--sf-row-min-h', '26px')
+    root.style.setProperty('--sf-row-pad-x', '8px')
+    root.style.setProperty('--sf-row-gap', '6px')
+    root.style.setProperty('--sf-row-lead', '14px')
+    // Textgröße (tabs.textSize, %): 100 = Sidebar-Standard. Titel skaliert
+    // direkt über --sf-row-label-size; Detail-/Meta-Zeilen über --sf-row-detail-size
+    // (Proportional-Faktor 10.5/13 ≈ 0.8), min. 9px für Lesbarkeit.
+    const textSizePct = clampNumber(Number(tabs.textSize ?? 100), 80, 160, 100)
+    root.style.setProperty('--sf-row-label-size', `${(13 * textSizePct / 100).toFixed(2)}px`)
+    root.style.setProperty('--sf-row-detail-size', `${Math.max(9, 10.5 * textSizePct / 100).toFixed(2)}px`)
+    root.style.setProperty('--sf-row-add-size', '16px')
     // Hex-Farben: #RGB, #RRGGBB oder #RRGGBBAA (Alpha → Verläufe mit Transparenz).
     const safeColor = (value, fallback) => (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(value || '').trim()) ? String(value).trim() : fallback)
 
@@ -1498,12 +1517,16 @@ function loadGroups() {
   // unangetastet; alte `cwd` werden stillschweigend verworfen, sobald
   // die Migration gelaufen ist.
   const liveProjects = $projectsList.get()
-  const projectIdByPath = new Map()
+  const projectByPath = new Map()
   for (const node of liveProjects) {
     if (!node || !node.id || !node.path) continue
-    projectIdByPath.set(node.path, node.id)
+    projectByPath.set(node.path, node)
   }
   const rawGroups = Array.isArray(saved?.groups) ? saved.groups : []
+  // v1.25.0→v1.26.0-Migrationsreport: welche `cwd`-Gruppen umgestellt
+  // wurden und ob der Pfad noch zu einem Projekt passt. Für den einmaligen
+  // Toast unten — gehört NICHT in den persistierten State.
+  const migrationReport = []
   const migratedGroups = rawGroups.map(entry => {
     if (!entry || typeof entry !== 'object') return entry
     // Bereits v1.26.0 — Liste normalisieren (Set-Semantik, Duplikate raus).
@@ -1516,18 +1539,52 @@ function loadGroups() {
     // falsch (Header würde sonst + zeigen) und erzeugt Müll in der
     // Persistenz.
     if (typeof entry.cwd === 'string' && entry.cwd) {
-      const projectId = projectIdByPath.get(entry.cwd)
-      const next = { id: entry.id, name: entry.name, color: entry.color || null, projectIds: projectId ? [projectId] : [], createdAt: entry.createdAt || Date.now() }
-      return next
+      const node = projectByPath.get(entry.cwd)
+      const projectId = node ? node.id : null
+      migrationReport.push({ group: entry.name || 'Gruppe', project: node ? (node.label || node.name) : null, ok: Boolean(node) })
+      return { id: entry.id, name: entry.name, color: entry.color || null, projectIds: projectId ? [projectId] : [], createdAt: entry.createdAt || Date.now() }
     }
     return { id: entry.id, name: entry.name, color: entry.color || null, projectIds: [], createdAt: entry.createdAt || Date.now() }
   })
 
+  // Einmal-Semantik (v1.27.0): der Migrations-Toast erscheint nur beim
+  // ERSTEN Laden nach der Umstellung. Das Flag wird mit dem State
+  // persistiert (scheduleGroupsSave schreibt $groupsState komplett).
+  const alreadyNotified = Boolean(saved?.migrationNotified)
+  const shouldNotify = migrationReport.length > 0 && !alreadyNotified
+
   $groupsState.set({
     groups: migratedGroups,
     assign: isPlainObject(saved?.assign) ? saved.assign : {},
-    collapsed: isPlainObject(saved?.collapsed) ? saved.collapsed : {}
+    collapsed: isPlainObject(saved?.collapsed) ? saved.collapsed : {},
+    migrationNotified: alreadyNotified || shouldNotify
   })
+
+  if (shouldNotify) {
+    scheduleGroupsSave()
+    showMigrationToasts(migrationReport)
+  }
+}
+
+/**
+ * Einmaliger Hinweis nach der v1.25.0→v1.26.0-Migration: pro umgestellter
+ * Gruppe ein Toast — Erfolg mit Ziel-Projekt, sonst „konnte nicht migriert
+ * werden". Rein informativ; Fehler werden geschluckt (Toast ist kein
+ * kritischer Pfad).
+ */
+function showMigrationToasts(report) {
+  if (!Array.isArray(report) || report.length === 0) return
+  try {
+    for (const item of report) {
+      if (item.ok && item.project) {
+        host.notify({ kind: 'info', message: CTX?.i18n?.t('groupMigrated', { group: item.group, project: item.project }) || `Gruppe „${item.group}" auf Projekt „${item.project}" umgestellt` })
+      } else {
+        host.notify({ kind: 'info', message: CTX?.i18n?.t('groupMigrateFailed', { group: item.group }) || `Gruppe „${item.group}" konnte nicht migriert werden` })
+      }
+    }
+  } catch {
+    /* Toast ist nicht kritisch */
+  }
 }
 
 let groupSeq = 0
@@ -4497,8 +4554,8 @@ function buildSections() {
           kind: 'project',
           parentGroupId: group.id,
           projectId: node ? node.id : projectId,
-          title: node ? node.label : '(Projekt nicht verfügbar)',
-          titleKey: null,
+          title: node ? node.label : null,
+          titleKey: node ? null : 'groupProjectMissing',
           color: node ? node.color || null : null,
           icon: node ? node.icon || null : null,
           cwd: node ? node.path || '' : '',
@@ -5009,6 +5066,11 @@ const EN = {
   groupProjectInOtherGroup: ({ name }) => `Currently in group „${name}" — moving it here removes it from there.`,
   groupEmpty: 'Empty group — drop a session here to add its project, or edit the group to pick projects.',
   dropHereHint: label => `→ Move to "${label}"`,
+  groupProjectMissing: 'Project not available',
+  groupProjectMissingHint: 'This project no longer exists — it was removed or renamed.',
+  groupProjectMissingRemove: 'Remove from group',
+  groupMigrated: ({ group, project }) => `Group „${group}" converted to project „${project}"`,
+  groupMigrateFailed: ({ group }) => `Group „${group}" could not be migrated`,
   pinnedSection: 'Pinned',
   pinnedSectionTip: 'Pinned sessions — drop here to pin',
   pinnedDropHint: 'Drop here to pin',
@@ -5265,6 +5327,8 @@ const EN = {
   tabsGridMinDesc: 'Minimum width of a grid card; columns fill the pane automatically.',
   tabsGridGap: 'Grid: gap (px)',
   tabsGridGapDesc: 'Space between grid cards.',
+  tabsTextSize: 'Text size (%)',
+  tabsTextSizeDesc: 'Scales session row text in list and grid. 100% = sidebar default.',
   tabsGridLines: 'Grid: title lines',
   tabsGridLinesDesc: 'How many lines a card title may use before it is clipped.',
   tabsGridPreview: 'Grid: preview text',
@@ -5629,6 +5693,11 @@ const DE = {
   groupProjectInOtherGroup: ({ name }) => `Aktuell in Gruppe „${name}" — beim Hinzufügen hier wird es dort entfernt.`,
   groupEmpty: 'Leere Gruppe — Session hier ablegen, um ihr Projekt hinzuzufügen, oder Gruppe bearbeiten.',
   dropHereHint: label => `→ Nach „${label}" verschieben`,
+  groupProjectMissing: 'Projekt nicht verfügbar',
+  groupProjectMissingHint: 'Dieses Projekt existiert nicht mehr — es wurde entfernt oder umbenannt.',
+  groupProjectMissingRemove: 'Aus Gruppe entfernen',
+  groupMigrated: ({ group, project }) => `Gruppe „${group}" auf Projekt „${project}" umgestellt`,
+  groupMigrateFailed: ({ group }) => `Gruppe „${group}" konnte nicht migriert werden`,
   pinnedSection: 'Angepinnt',
   pinnedSectionTip: 'Angepinnte Sessions — hier ablegen zum Anpinnen',
   pinnedDropHint: 'Hier ablegen zum Anpinnen',
@@ -5884,6 +5953,8 @@ const DE = {
   tabsGridMinDesc: 'Mindestbreite einer Karte; die Spalten füllen die Pane automatisch.',
   tabsGridGap: 'Grid: Abstand (px)',
   tabsGridGapDesc: 'Abstand zwischen den Karten.',
+  tabsTextSize: 'Textgröße (%)',
+  tabsTextSizeDesc: 'Skaliert den Text der Session-Zeilen in Liste und Grid. 100 % = Sidebar-Standard.',
   tabsGridLines: 'Grid: Titel-Zeilen',
   tabsGridLinesDesc: 'Wie viele Zeilen ein Kartentitel nutzen darf, bevor er abgeschnitten wird.',
   tabsGridPreview: 'Grid: Vorschautext',
@@ -5973,6 +6044,11 @@ const LOCALES = { en: EN, de: DE }
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CSS = `
+/* Zeilen-Geometrie — native Sidebar-Parität (hermes-agent row-geometry.ts):
+   SIDEBAR_ROW_MIN_H=26px, SIDEBAR_ROW_PAD_X=8px, SIDEBAR_ROW_GAP=6px,
+   SIDEBAR_ROW_LEAD=14px, Label=13px/500, Add-Button=16px. Als Custom-Properties
+   gespiegelt in applyRows() — programmatisch überschreibbar, dokumentiert. */
+:root{--sf-row-min-h:26px;--sf-row-pad-x:8px;--sf-row-gap:6px;--sf-row-lead:14px;--sf-row-label-size:13px;--sf-row-add-size:16px}
 .sf-pane{display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px}
 /* Pane-Fläche (v1.20): 'native' malt exakt die Variable, die auch die native
    Sessions-Sidebar der App füllt (inkl. Theme-/Glass-Varianten), 'chat' den
@@ -6038,18 +6114,13 @@ const CSS = `
 .sf-group-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:500;line-height:1.25;color:var(--ui-text-quaternary)}
 .sf-group-count{flex-shrink:0;font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-group-drophint{flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:600;color:var(--ui-accent)}
-.sf-group-actions{display:flex;align-items:center;justify-content:center;align-self:stretch;min-width:20px;min-height:20px;margin-left:2px;padding:0 2px;border-radius:5px;opacity:0;flex-shrink:0;transition:opacity .12s ease,background-color .12s ease}
-.sf-group-head:hover .sf-group-actions:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.1))}
+.sf-group-actions{display:flex;align-items:center;justify-content:center;align-self:stretch;min-width:var(--sf-row-add-size,16px);min-height:var(--sf-row-add-size,16px);margin-left:2px;padding:0 2px;border-radius:5px;opacity:0;flex-shrink:0;transition:opacity .12s ease,background-color .12s ease}
+.sf-group-head:hover .sf-group-actions:hover{background:var(--ui-control-hover-background,rgba(127,127,127,.14))}
 .sf-group-head:hover .sf-group-actions,.sf-group-head:focus-within .sf-group-actions{opacity:1}
 .sf-group-unassigned .sf-group-name{font-weight:600;color:var(--ui-text-tertiary)}
-/* Projekt-Ordner-Header (wie "Projekte" in Hermes Desktop) und manuelle
-   Gruppen: Caret erst beim Überfahren sichtbar — der Icon-Kopf bleibt
-   sonst ruhig. Manuelle Gruppen teilen damit das gleiche Verhalten wie
-   Projekt-Header (v1.25.0 — manuelle Gruppen unterstützen jetzt auch
-   Session-Erzeugen via +). Der Name trägt dasselbe Gewicht wie
-   Typ-Header (CLI/Desktop/…) — keine Sonderrolle. */
-.sf-group-project .sf-group-caret,.sf-group-manual .sf-group-caret{opacity:0;transition:opacity .12s ease}
-.sf-group-project:hover .sf-group-caret,.sf-group-project:focus-within .sf-group-caret,.sf-group-manual:hover .sf-group-caret,.sf-group-manual:focus-within .sf-group-caret{opacity:1}
+/* v1.26.2: Caret (Collapse-Pfeil) ist IMMER sichtbar — Projekt-Header und
+   manuelle Gruppen gleich. Früher hover-only (opacity:0 → :hover 1); der
+   Nutzer vermisste die Ein-/Ausklapp-Affordanz ohne Maus-Hover. */
 /* Manuelle Gruppen (v1.26.0) — Container, kein eigenes `+` mehr. Die
    `+`-Affordanz wandert komplett auf die Kind-Projekt-Header. */
 .sf-group-manual-no-cwd .sf-group-actions[data-sf-action=new]{display:none}
@@ -6084,6 +6155,14 @@ html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 .sf-pin-placeholder{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 10px;margin:2px 4px 4px;min-height:40px;border-radius:6px;border:1px dashed color-mix(in srgb,var(--ui-accent) 40%,transparent);color:color-mix(in srgb,var(--foreground) 70%,transparent);font-size:11px;font-weight:500;text-align:center;background:color-mix(in srgb,var(--ui-accent) 5%,transparent)}
 .sf-section[data-drop=true] .sf-pin-placeholder{border-color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 14%,transparent);color:var(--foreground)}
 .sf-pin-placeholder-text{line-height:1.2}
+/* „Projekt nicht verfügbar" (v1.27.0): Kind-Projekt-Section unter einer
+   manuellen Gruppe referenziert eine tote ProjectTreeNode.id. Hinweis-Zeile
+   mit Warn-Icon + Entfernen-Aktion statt leerem Body. */
+.sf-group-missing{display:flex;align-items:center;gap:6px;padding:4px 6px;margin:2px 0;border-radius:6px;color:var(--ui-text-quaternary);font-size:11px;background:color-mix(in srgb,var(--ui-text-primary) 4%,transparent)}
+.sf-group-missing [class*=codicon]{color:#f59e0b;flex-shrink:0}
+.sf-group-missing-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sf-group-missing-remove{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border:1px solid var(--ui-stroke-tertiary);border-radius:5px;background:transparent;color:var(--ui-text-secondary);font-size:10px;cursor:pointer;flex-shrink:0}
+.sf-group-missing-remove:hover{background:var(--ui-control-hover-background,rgba(127,127,127,.14));color:var(--foreground)}
 /* v1.25.1: ListView-DnD-DropBar — schmale Leiste am Listenanfang, die
    waehrend eines aktiven Drags zwei Ziele (Pin + Ungrouped) anbietet.
    Ohne sie hatte der Flat-List-Modus keine sichtbare Drop-Area. */
@@ -6105,7 +6184,7 @@ html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 .sf-stack[data-style=pill] i:nth-child(1){left:0;right:0;opacity:.8}
 .sf-stack[data-style=pill] i:nth-child(2){left:2px;right:2px;top:3px;opacity:.45}
 .sf-stack[data-style=pill] i:nth-child(3){left:4px;right:4px;top:5px;opacity:.2}
-.sf-tab{display:flex;align-items:center;gap:6px;min-height:26px;padding:2px 6px 2px 4px;border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative}
+.sf-tab{display:flex;align-items:center;gap:var(--sf-row-gap,6px);min-height:var(--sf-row-min-h,26px);padding:2px var(--sf-row-pad-x,8px);border-radius:6px;cursor:pointer;color:var(--ui-text-secondary);position:relative}
 .sf-tab:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
 .sf-tab[data-active=true]{background:var(--ui-row-active-background,rgba(127,127,127,.12));color:var(--foreground)}
 .sf-tab[data-drop=true]{box-shadow:inset 0 0 0 1px var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 10%,transparent)}
@@ -6126,7 +6205,7 @@ html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-pl
 .sf-quickfilter>.sf-seg button{width:100%;min-width:0}
 .sf-quickfilter :is([data-segmented-control],[role=group],[data-segmented]){width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
 .sf-quickfilter :is([data-segmented-control],[role=group],[data-segmented]) :is(button,[role=radio]){width:100%;min-width:0}
-.sf-tab-lead{display:flex;align-items:center;justify-content:center;width:16px;flex-shrink:0;color:var(--ui-text-tertiary)}
+.sf-tab-lead{display:flex;align-items:center;justify-content:center;width:var(--sf-row-lead,14px);flex-shrink:0;color:var(--ui-text-tertiary)}
 .sf-tab-lead[data-kind=thinking],.sf-tab-lead[data-kind=streaming],.sf-tab-lead[data-kind=working]{color:var(--ui-accent)}
 .sf-tab-lead[data-kind=tool]{color:var(--ui-accent)}
 .sf-tab-lead[data-kind=waiting]{color:#f59e0b}
@@ -6134,9 +6213,9 @@ html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-pl
 .sf-tab-lead[data-kind=unread]{color:var(--ui-success,var(--ui-accent))}
 .sf-tab-lead[data-kind=error]{color:var(--destructive,#ef4444)}
 .sf-tab-main{min-width:0;flex:1}
-.sf-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:16px;color:inherit}
+.sf-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-label-size,13px);line-height:16px;font-weight:500;color:inherit}
 .sf-tab[data-active=true] .sf-tab-title{font-weight:600}
-.sf-tab-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:14px;color:var(--ui-text-quaternary)}
+.sf-tab-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,10.5px);line-height:1.3;color:var(--ui-text-quaternary)}
 .sf-tab-meta{display:flex;align-items:center;gap:4px;flex-shrink:0}
 /* Komfortabel-Dichte (Liste): einspaltig — Meta-Infos als letzte Zeile unter dem Text. */
 .sf-tab-meta-inline{margin-top:3px;flex-wrap:wrap;row-gap:2px}
@@ -6178,11 +6257,11 @@ html[data-sf-ctxpie~=on][data-sf-ctxstyle=bar] .sf-tab-ctx[data-level=high]{--sf
 .sf-items[data-view=grid] .sf-tab-main{flex:1 1 auto;width:100%}
 .sf-items[data-view=grid] .sf-tab-title{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--sf-grid-lines,2);overflow:hidden;overflow-wrap:anywhere}
 .sf-items[data-view=grid] .sf-tab-preview{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-.sf-tab-details{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:14px;color:var(--ui-text-tertiary)}
+.sf-tab-details{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-detail-size,10.5px);line-height:1.3;color:var(--ui-text-tertiary)}
 /* Info-Dichte-Abstufung: Komfortabel+ zeigt den größeren Titel; in der Liste
    werden die Abstände lockerer, Detailreich ergänzt die Stats-Zeile. Die
    Grid-Karten behalten ihren eigenen Rhythmus (gap) ohne Extra-Margins. */
-.sf-tab[data-density=comfortable] .sf-tab-title,.sf-tab[data-density=detailed] .sf-tab-title{font-size:13px;line-height:18px}
+.sf-tab[data-density=comfortable] .sf-tab-title,.sf-tab[data-density=detailed] .sf-tab-title{font-size:var(--sf-row-label-size,13px);line-height:1.3}
 .sf-items[data-view=list] .sf-tab[data-density=comfortable] .sf-tab-details,.sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-details{margin-top:4px}
 .sf-items[data-view=list] .sf-tab[data-density=detailed] .sf-tab-preview{margin-top:3px}
 /* Detailreich: die Beschreibungen (Detail- und Vorschau-Zeile) brechen auf
@@ -7687,8 +7766,10 @@ function SectionHeader({ section, t, onToggle, onEdit, onNewHere, onPinToggle, d
   // v1.26.0: manuelle Gruppen sind Container — sie tragen kein eigenes
   // `+`-Aktion-Icon mehr. Die `+`-Affordanz wandert komplett auf die
   // Kind-Projekt-Header (kind:'project'), wo sie semantisch korrekt
-  // sitzt (neue Session in genau diesem Projektordner).
-  const canNewHere = isProject ? Boolean(onNewHere) : false
+  // sitzt (neue Session in genau diesem Projektordner). v1.27.0: ein
+  // fehlendes Projekt (isProjectMissing) bekommt KEIN `+` — in einem
+  // nicht mehr existierenden Ordner lässt sich keine Session anlegen.
+  const canNewHere = isProject && !section.isProjectMissing ? Boolean(onNewHere) : false
   const showDetail = section.kind !== 'ungrouped' && density !== 'compact'
   const liveMap = useValue($liveMap)
   const ctxInfo = useValue($ctxInfo)
@@ -10111,6 +10192,26 @@ function SessionsPane() {
                         children: t('groupEmpty')
                       })
                     : null,
+                  // v1.27.0: „Projekt nicht verfügbar" — Kind-Projekt-Section
+                  // referenziert eine tote Projekt-ID (buildSections setzt
+                  // isProjectMissing). Hinweis-Zeile mit Warn-Icon + Entfernen-
+                  // Aktion statt leerem Body; der Header trägt kein `+`.
+                  section.isProjectMissing
+                    ? jsx('div', {
+                        key: 'sf-group-missing',
+                        className: 'sf-group-missing',
+                        children: [
+                          jsx(Codicon, { name: 'warning', size: '0.875rem' }),
+                          jsx('span', { className: 'sf-group-missing-text', children: t('groupProjectMissingHint') }),
+                          jsx('button', {
+                            type: 'button',
+                            className: 'sf-group-missing-remove',
+                            onClick: () => removeProjectFromGroup(section.parentGroupId, section.projectId),
+                            children: t('groupProjectMissingRemove')
+                          })
+                        ]
+                      })
+                    : null,
                   overLimit
                     ? jsx(ShowMoreRow, {
                         key: 'sf-showmore',
@@ -11185,6 +11286,17 @@ function SettingsPage() {
               ],
               value: tabs.gridCols,
               onChange: value => patch('tabs', 'gridCols', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('tabsTextSize'),
+            description: t('tabsTextSizeDesc'),
+            action: jsx(NumberInput, {
+              min: 80,
+              max: 160,
+              step: 5,
+              value: tabs.textSize,
+              onChange: value => patch('tabs', 'textSize', clampNumber(value, 80, 160, 100))
             })
           }),
           jsx(Row, {
@@ -12284,10 +12396,12 @@ export default {
   register(ctx) {
     CTX = ctx
 
-    // 1) Einstellungen + Gruppen laden, i18n + Styles registrieren.
+    // 1) i18n + Einstellungen + Gruppen laden, Styles registrieren.
+    //    i18n VOR loadGroups: die Migrations-Toasts (showMigrationToasts)
+    //    brauchen die Bundles bereits registriert.
+    ctx.i18n.register(LOCALES)
     loadSettings()
     loadGroups()
-    ctx.i18n.register(LOCALES)
     const removeCss = injectCss()
 
     // 2) Controller starten (Animation, Strg+Scroll).
