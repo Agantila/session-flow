@@ -429,6 +429,26 @@ const probeExpr = `(() => {
     return { labelDefault, labelScaled, detailScaled }
   })()
   out.textSize = textSizeProbe
+  // v1.27.2: Kopfzeilen-Titel-Typografie — Variable + Kapitälchen-Gate.
+  const groupNameProbe = (() => {
+    const headEl = document.getElementById('gh1')
+    if (!headEl) return null
+    const nameEl = headEl.querySelector('.sf-group-name')
+    const rootEl = document.documentElement
+    const read = () => {
+      const cs = getComputedStyle(nameEl)
+      return { size: parseFloat(cs.fontSize), transform: cs.textTransform, spacing: cs.letterSpacing }
+    }
+    const off = read()
+    rootEl.style.setProperty('--sf-group-name-size', '16px')
+    rootEl.setAttribute('data-sf-groupcaps', 'on')
+    const on = read()
+    rootEl.setAttribute('data-sf-groupcaps', 'off')
+    const capsOff = read()
+    rootEl.style.removeProperty('--sf-group-name-size')
+    return { off, on, capsOff }
+  })()
+  out.groupName = groupNameProbe
   return out
 })()`
 
@@ -598,6 +618,22 @@ try {
     'TextSize: Detail-/Preview-Zeile folgt --sf-row-detail-size (125 % → ~13.13px)',
     P.textSize && Math.abs(P.textSize.detailScaled - 13.13) <= 0.5,
     P.textSize ? `detailScaled=${P.textSize.detailScaled}` : 'null'
+  )
+  // ── v1.27.2: Kopfzeilen-Titel (Projekte/Gruppen) — px-Größe + Kapitälchen
+  check(
+    'Gruppen-Titel: Default 14px (größer als Session-Titel 13px)',
+    P.groupName && P.groupName.off.size === 14,
+    P.groupName ? `got=${P.groupName.off.size}` : 'null'
+  )
+  check(
+    'Gruppen-Titel: folgt --sf-group-name-size (16px gesetzt → 16px)',
+    P.groupName && P.groupName.on.size === 16,
+    P.groupName ? `got=${P.groupName.on.size}` : 'null'
+  )
+  check(
+    'Gruppen-Titel: Kapitälchen-Gate — on → uppercase, off → none',
+    P.groupName && P.groupName.on.transform === 'uppercase' && P.groupName.capsOff.transform === 'none',
+    P.groupName ? `on=${P.groupName.on.transform} off=${P.groupName.capsOff.transform}` : 'null'
   )
 
   // ── 1) Design AN: Grid übernimmt Verlauf + Alpha (Kern-Bugfix) ────────────

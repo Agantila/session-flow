@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.27.1'
+const VERSION = '1.27.2'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -241,6 +241,10 @@ const DEFAULT_SETTINGS = {
     enabled: true,
     autoMode: 'off',
     headerDensity: 'comfortable',
+    // Projekt-/Gruppen-Kopfzeilen-Titel: px-Größe (Default 14 — etwas
+    // größer als die 13px der Session-Titel) + Kapitälchen-Toggle.
+    nameSize: 14,
+    nameCaps: true,
     stackStyle: 'spine',
     showUngrouped: true
   },
@@ -1413,6 +1417,9 @@ function applyTabSelectorMode() {
 /** Räumt die Gruppen-Kopfzeilen-Dichte ab (groups.headerDensity). */
 function clearGroupsDensity() {
   document.documentElement.removeAttribute('data-sf-grpdensity')
+  // v1.27.2: Titel-Typografie ebenfalls restlos (Dispose-Zustand).
+  document.documentElement.removeAttribute('data-sf-groupcaps')
+  document.documentElement.style.removeProperty('--sf-group-name-size')
 }
 
 /**
@@ -1431,6 +1438,13 @@ function applyGroupsDensity() {
       : 'comfortable'
 
     document.documentElement.setAttribute('data-sf-grpdensity', density)
+
+    // v1.27.2: Kopfzeilen-Titel-Typografie (Projekt-/Gruppen-Header) —
+    // px-Größe + Kapitälchen. Als Variablen gespiegelt; die Density-Stufen
+    // steuern nur noch Gewicht/Höhe, nicht mehr die Font-Größe.
+    const namePx = clampNumber(Number(groups.nameSize ?? 14), 10, 24, 14)
+    document.documentElement.style.setProperty('--sf-group-name-size', `${namePx}px`)
+    document.documentElement.setAttribute('data-sf-groupcaps', groups.nameCaps ? 'on' : 'off')
   } catch (error) {
     console.warn(`[${ID}] groups-density apply failed`, error)
     clearGroupsDensity()
@@ -5037,6 +5051,10 @@ const EN = {
   groupsAutoProject: 'By project folder',
   groupsHeaderDensity: 'Header density',
   groupsHeaderDensityDesc: 'How much a collapsible section header shows: Comfortable is bigger & bolder with the project folder as a subtext line; Detailed adds pinned/active counts too.',
+  groupsNameSize: 'Header title size (px)',
+  groupsNameSizeDesc: 'Font size of project and group header titles. Default 14px — slightly larger than the 13px session titles.',
+  groupsNameCaps: 'Header titles in capitals',
+  groupsNameCapsDesc: 'Renders project and group header titles in uppercase letters.',
   headerDensityCompact: 'Compact',
   headerDensityComfortable: 'Comfortable',
   headerDensityDetailed: 'Detailed',
@@ -5664,6 +5682,10 @@ const DE = {
   groupsAutoProject: 'Nach Projekt-Ordner',
   groupsHeaderDensity: 'Kopfzeilen-Dichte',
   groupsHeaderDensityDesc: 'Wie viel eine einklappbare Sektions-Kopfzeile zeigt: Komfortabel ist größer & stärker mit dem Projekt-Ordner als Subzeile; Detailreich ergänzt außerdem angepinnt/aktiv-Kennzahlen.',
+  groupsNameSize: 'Kopfzeilen-Titelgröße (px)',
+  groupsNameSizeDesc: 'Schriftgröße der Projekt- und Gruppen-Kopfzeilen-Titel. Standard 14px — etwas größer als die 13px der Session-Titel.',
+  groupsNameCaps: 'Kopfzeilen in Großbuchstaben',
+  groupsNameCapsDesc: 'Stellt Projekt- und Gruppen-Kopfzeilen-Titel in Großbuchstaben dar.',
   headerDensityCompact: 'Kompakt',
   headerDensityComfortable: 'Komfortabel',
   headerDensityDetailed: 'Detailreich',
@@ -6110,7 +6132,12 @@ const CSS = `
    Projekt-/Gruppen-Header von Hermes Desktop, nur hier IMMER sichtbar statt
    per Hover-Tooltip, weil "Detaildichte" das ausdrücklich verlangt. */
 .sf-group-text{display:flex;flex-direction:column;justify-content:center;min-width:0;flex:1;gap:1px}
-.sf-group-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:700;letter-spacing:.01em}
+/* v1.27.2: Kopfzeilen-Titel-Typografie einstellbar — px-Größe über
+   --sf-group-name-size (Default 14, etwas größer als die 13px der
+   Session-Titel), Kapitälchen per data-sf-groupcaps-Toggle (echte
+   Großbuchstaben via uppercase + leicht weiterem Letter-Spacing). */
+.sf-group-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-group-name-size,14px);font-weight:700;letter-spacing:.01em}
+html[data-sf-groupcaps=on] .sf-group-name{text-transform:uppercase;letter-spacing:.04em}
 .sf-group-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:500;line-height:1.25;color:var(--ui-text-quaternary)}
 .sf-group-count{flex-shrink:0;font-size:10px;color:var(--ui-text-quaternary);font-variant-numeric:tabular-nums}
 .sf-group-drophint{flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:600;color:var(--ui-accent)}
@@ -6131,11 +6158,11 @@ const CSS = `
 .sf-group-head.sf-group-threeline{min-height:50px;padding-top:3px;padding-bottom:3px}
 .sf-group-stats-2{display:flex;flex-wrap:wrap;gap:0 6px;min-width:0;overflow:hidden;font-size:9.5px;font-weight:500;line-height:1.25;color:var(--ui-text-quaternary)}
 .sf-group-stats-2>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Kopfzeilen-Dichte (groups.headerDensity) — steuert nur die Typografie; WAS
-   angezeigt wird (Subzeile/Kennzahlen) entscheidet React in SectionHeader. */
-html[data-sf-grpdensity='compact'] .sf-group-name{font-size:11px;font-weight:600}
+/* Kopfzeilen-Dichte (groups.headerDensity) — steuert seit v1.27.2 nur noch
+   Gewicht/Höhe; die Font-Größe kommt aus --sf-group-name-size (tabs seit
+   1.27.2 eigenes Setting). */
+html[data-sf-grpdensity='compact'] .sf-group-name{font-weight:600}
 html[data-sf-grpdensity='compact'] .sf-group-head{min-height:24px}
-html[data-sf-grpdensity='detailed'] .sf-group-name{font-size:13px}
 /* Section-Rahmen beim Drag-over — klarer Hinweis, was ein Loslassen bewirkt. */
 .sf-section{margin-bottom:6px;border-radius:8px;transition:background-color .12s ease}
 /* v1.26.0: Kind-Projekt-Sections unter einer manuellen Gruppe — eine
@@ -11792,6 +11819,23 @@ function SettingsPage() {
               disabled: !groups.enabled,
               onChange: value => patch('groups', 'headerDensity', value)
             })
+          }),
+          jsx(Row, {
+            title: t('groupsNameSize'),
+            description: t('groupsNameSizeDesc'),
+            action: jsx(NumberInput, {
+              min: 10,
+              max: 24,
+              step: 1,
+              value: groups.nameSize,
+              onChange: value => patch('groups', 'nameSize', clampNumber(value, 10, 24, 14))
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('groupsNameCaps'),
+            description: t('groupsNameCapsDesc'),
+            checked: groups.nameCaps,
+            onChange: value => patch('groups', 'nameCaps', value)
           }),
           jsx(Row, {
             title: t('groupsStackStyle'),

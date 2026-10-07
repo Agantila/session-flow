@@ -3,6 +3,18 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.27.2] — 2026-10-07
+
+### Added
+- **Kopfzeilen-Titel-Typografie einstellbar** (`groups.nameSize`,
+  `groups.nameCaps`): Projekt- und Gruppen-Kopfzeilen-Titel in px
+  (10–24, Default **14** — initial etwas größer als die 13px der
+  Session-Titel) und als Toggle für Großbuchstaben (Default **an**,
+  uppercase + Letter-Spacing .04em). Gespiegelt über
+  `--sf-group-name-size` + `data-sf-groupcaps`; die Kopfzeilen-Dichte
+  (Kompakt/Komfortabel/Detailreich) steuert nur noch Gewicht/Höhe,
+  nicht mehr die Font-Größe.
+
 ## [1.27.1] — 2026-10-07
 
 ### Added

@@ -135,7 +135,9 @@ Pane-Besuch startet die Filter immer frisch):
 |---|---|---|
 | `groups.enabled` | `true` | Manuelle Gruppen aktiv. |
 | `groups.autoMode` | `off` | `off`, `date` (Heute/Gestern/Woche/Älter), `source` oder `project` (Projekt-Ordner — siehe unten). |
-| `groups.headerDensity` | `comfortable` | Typografie & Infotiefe der Kopfzeilen — siehe unten. |
+| `groups.headerDensity` | `comfortable` | Typografie & Infotiefe der Kopfzeilen — siehe unten. Seit v1.27.2 steuert die Stufe nur noch Gewicht/Höhe; die Font-Größe kommt aus `groups.nameSize`. |
+| `groups.nameSize` | `14` | **Kopfzeilen-Titelgröße (px)** für Projekt- und Gruppen-Header (10–24). Default 14px — initial etwas größer als die 13px der Session-Titel. |
+| `groups.nameCaps` | `true` | **Kopfzeilen-Titel in Großbuchstaben**: rendert Projekt- und Gruppen-Header-Titel uppercase (+ Letter-Spacing .04em). |
 | `groups.stackStyle` | `spine` | Optik eingeklappter Gruppen: `spine`, `fanned`, `pill`. |
 | `groups.showUngrouped` | `true` | „Nicht gruppiert"-Bereich zeigen, wenn Auto-Modus aus ist. |
 

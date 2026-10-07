@@ -1,9 +1,16 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.27.1 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.27.2 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Kopfzeilen-Titel-Typografie einstellbar** (v1.27.2):
+  `groups.nameSize` (10–24px, Default 14 — initial größer als die
+  13px-Session-Titel) und `groups.nameCaps` (Großbuchstaben, Default
+  an) steuern Projekt-/Gruppen-Kopfzeilen über
+  `--sf-group-name-size`/`data-sf-groupcaps`; die Density-Stufen
+  regeln nur noch Gewicht/Höhe.
 
 - **Textgröße einstellbar + Caret immer sichtbar** (v1.27.1):
   `tabs.textSize` (80–160 %, Default 100) skaliert Titel und
