@@ -121,6 +121,30 @@ const VERSION = '1.27.5'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
+// v1.27.5-regression-Diagnose (DnD-Tot in List/Grid): Modul-globale Counter +
+// Logger, die per Hot-Reload NICHT zurückgesetzt werden. Probe-Output geht
+// via console.error in ~/.hermes/logs/desktop.log. Per `globalThis.__SF_DND_PROBE__=false`
+// (z. B. in DevTools-Konsole) deaktivierbar; Default: an, bis der Fix kommt.
+const __DND_PROBE__ = globalThis.__SF_DND_PROBE__ !== false
+const __dndStats__ = globalThis.__dndStats__ || (globalThis.__dndStats__ = {
+  effectRuns: 0,         // wie oft der tabBodyRef-Effect gelaufen ist
+  effectAttached: 0,     // wie oft der native dragstart-Capture-Listener attached wurde
+  effectSkippedNoNode: 0,// wie oft der Effect ohne tabBodyRef.current früh raus ist
+  dragstartFired: 0,     // wie oft der native dragstart-Listener gefeuert hat
+  reactDragStartFired: 0,// wie oft der React onDragStart-Handler lief
+  dropTargetsTouched: 0, // wie oft ein sectionHandlers-onDragEnter getriggert wurde
+  drops: [],             // letzte 5 Drops: id, types, sectionKind
+  bootLogSent: false
+})
+function dndLog(tag, payload) {
+  if (!__DND_PROBE__) return
+  console.error(`[${ID}/dnd-probe] ${tag}`, JSON.stringify(payload || {}))
+}
+if (__DND_PROBE__ && !__dndStats__.bootLogSent) {
+  __dndStats__.bootLogSent = true
+  dndLog('boot', { effectRuns: 0, hint: 'probe active — drag a .sf-tab to log events' })
+}
+
 /** Modul-globaler Kontext; in register() gesetzt, von Komponenten benutzt. */
 let CTX = null
 
@@ -8142,21 +8166,31 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   const tabBodyRef = useRef(null)
   useEffect(() => {
     const node = tabBodyRef.current
-    if (!node) return
+    __dndStats__.effectRuns++
+    if (!node) {
+      __dndStats__.effectSkippedNoNode++
+      dndLog('effect-no-node', { rowId: row.id, view: tabsCfg.view })
+      return
+    }
     const onDragStartCapture = (nativeEvent) => {
       const dt = nativeEvent.dataTransfer
+      __dndStats__.dragstartFired++
       if (!dt) return
       try {
         dt.setData('text/session-flow-session', row.id)
         dt.setData('text/plain', row.id)
         dt.setData('application/x-session-flow-session', row.id)
         dt.effectAllowed = 'move'
-      } catch {
+        dndLog('dragstart-capture', { rowId: row.id, types: Array.from(dt.types || []) })
+      } catch (err) {
+        dndLog('dragstart-capture-err', { rowId: row.id, err: String(err) })
         // Browser hat den Drag-Channel bereits geschlossen
         // (z.B. sehr schnelle aufeinanderfolgende Starts) - ignorieren.
       }
     }
     node.addEventListener('dragstart', onDragStartCapture, { capture: true })
+    __dndStats__.effectAttached++
+    dndLog('effect-attached', { rowId: row.id, view: tabsCfg.view, nodeTag: node.tagName })
     return () => node.removeEventListener('dragstart', onDragStartCapture, { capture: true })
   }, [row.id])
 
@@ -8475,6 +8509,8 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
     // (tabBodyRef, dragstart-capture) — der Grid-Drag startet damit auch
     // im oberen Kartenbereich.
     onDragStart: event => {
+      __dndStats__.reactDragStartFired++
+      dndLog('react-dragstart', { rowId: row.id, types: event.dataTransfer ? Array.from(event.dataTransfer.types || []) : [] })
       // setData() passiert bereits im nativen Capture-Listener oben
       // (tabBodyRef). Hier nur State + effectAllowed-Sync.
       setDragging(row.id)
@@ -9904,12 +9940,15 @@ function SessionsPane() {
       (section.kind === 'project' && section.cwd)
 
     if (!canDrop) {
+      dndLog('section-handlers-skip', { kind: section.kind, cwd: section.cwd || null, key: section.key })
       return {}
     }
 
     return {
       onDragEnter: event => {
+        __dndStats__.dropTargetsTouched++
         event.preventDefault()
+        dndLog('dragenter-target', { kind: section.kind, key: section.key, types: event.dataTransfer ? Array.from(event.dataTransfer.types || []) : [] })
         setDragOverKey(section.key)
       },
       onDragOver: event => {
@@ -9938,6 +9977,17 @@ function SessionsPane() {
 
         const sessionId =
           event.dataTransfer?.getData('text/session-flow-session') || event.dataTransfer?.getData('text/plain')
+
+        const dropInfo = {
+          kind: section.kind,
+          key: section.key,
+          sessionId: sessionId || null,
+          types: event.dataTransfer ? Array.from(event.dataTransfer.types || []) : [],
+          effect: event.dataTransfer ? event.dataTransfer.dropEffect : null
+        }
+        __dndStats__.drops.push(dropInfo)
+        if (__dndStats__.drops.length > 5) __dndStats__.drops.shift()
+        dndLog('drop', dropInfo)
 
         if (!sessionId) {
           return
