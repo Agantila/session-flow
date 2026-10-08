@@ -13,7 +13,7 @@
 # Writes, session.title/session.branch_stored, /api/cron/jobs + Kanban-Reads).
 name: session-flow
 repo: https://github.com/agantila/session-flow
-sha: PIN_SHA_HERE # 40-hex — vor dem PR setzen
+sha: 6d6fbfa78237a19f4200bedca563b330d031cb36 # 40-hex — vor dem PR setzen
 description: >-
   Smooth line-by-line chat animation, Ctrl+Scroll session cycling,
   Firefox-style session groups with project grouping, a session pane with
@@ -48,14 +48,14 @@ category: desktop
 requires_hermes: ">=0.21.5"
 docs_url: https://github.com/agantila/session-flow#readme
 version: "1.29.0"
-image: https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/sf-catalog-banner-2x1.png
+image: https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/sf-catalog-banner-2x1.png
 screenshots:
-  - https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg
-  - https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a4-composer-glass-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a7-settings-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg
+  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a4-composer-glass-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a7-settings-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png
 readme: true
 platforms: []
 capabilities:

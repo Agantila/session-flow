@@ -2,7 +2,7 @@
 
 This PR adds a single file, `plugin-catalog/session-flow.yaml`, listing
 [`agantila/session-flow`](https://github.com/agantila/session-flow) at the
-pinned commit `PIN_SHA_HERE` (**v1.29.0**).
+pinned commit `6d6fbfa78237a19f4200bedca563b330d031cb36` (**v1.29.0**).
 
 **Resubmission of #134760** (review by @teknium1). Every point of the review
 is addressed; see "Review response" below. Contact for this submission:
