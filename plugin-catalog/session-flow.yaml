@@ -4,6 +4,9 @@
 # WICHTIG beim Submission-Commit:
 #   1) `sha` auf den vollständigen 40-Hex-Commit des Fix-Stands setzen.
 #   2) `image`/`screenshots`-URLs auf denselben SHA pinnen.
+# `image` ist laut Catalog-README 2:1 (Beispiel 1200x600) — dafür gibt es
+# docs/marketing/sf-catalog-banner-2x1.png (1200x600, echter Crop aus dem
+# a1-Hero, kein 16:9-Screenshot in einen falschen Slot gequetscht).
 # Die Beschreibung trägt die volle Rule-13-Disclosure und muss mit dem Code
 # am Pin übereinstimmen (Review von #134760: Disclosure-Mismatch war ein
 # Ablehnungsgrund — Write-Behauptung ohne Code, nicht genannte projects.*-
@@ -45,7 +48,7 @@ category: desktop
 requires_hermes: ">=0.21.5"
 docs_url: https://github.com/agantila/session-flow#readme
 version: "1.29.0"
-image: https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a1-sessionpane-liste-16x9.png
+image: https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/sf-catalog-banner-2x1.png
 screenshots:
   - https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg
   - https://raw.githubusercontent.com/agantila/session-flow/PIN_SHA_HERE/docs/marketing/heroes/sf-hero-a4-composer-glass-16x9.png

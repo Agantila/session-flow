@@ -27,6 +27,12 @@ Feature-Verlust**:
 - **`scripts/check.mjs`** prüft jetzt BEIDE Builds (Syntax, i18n EN/DE,
   Hook-Reihenfolge) plus Surface-Check; **`npm test`** rendert gegen beide
   Builds (`test:full`/`test:catalog` einzeln).
+- **`docs/marketing/sf-catalog-banner-2x1.png`** (1200×600, 2:1): das
+  Catalog-README verlangt für `image:` explizit ein 2:1-Seitenverhältnis —
+  vorher zeigte der Eintrag auf einen 16:9-Hero und ließ den Marketplace-
+  Bildslot ungenutzt/falsch zugeschnitten. Echter Crop aus dem a1-Hero
+  (Content-Bounding-Box ermittelt, kein Beschnitt von Fenster oder Caption),
+  kein Upscaling.
 
 ### Changed
 - **Composer-Projekt-Chip, Glass (Composer/Chips/Statusleiste), UI-Tabs-

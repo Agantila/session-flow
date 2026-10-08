@@ -8,6 +8,11 @@ pinned commit `PIN_SHA_HERE` (**v1.29.0**).
 is addressed; see "Review response" below. Contact for this submission:
 **info@agantila.com** (also in the entry, plugin.yaml and marketplace.json).
 
+The entry's `image:` is a dedicated 2:1 banner (`docs/marketing/sf-catalog-banner-2x1.png`,
+1200×600, per the catalog README's "optional https image on a GitHub host,
+2:1 (e.g. 1200x600)") instead of a 16:9 hero screenshot stretched/cropped
+into that slot.
+
 ## What it does
 
 Six UX features for the Hermes Desktop session sidebar in one plain-ESM
