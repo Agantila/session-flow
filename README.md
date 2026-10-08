@@ -15,7 +15,8 @@ built-in settings page.
 Developed and used on Linux (Wayland/KDE) with Hermes Desktop and its plugin
 SDK (`~/.hermes/desktop-plugins/`). No build step, no dependencies, one file.
 
-A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)**.
+A project by **[AGANTILA — Deniz Yilmaz](https://agantila.com)** ·
+Contact: **info@agantila.com**.
 
 ## Showcase
 
@@ -112,21 +113,79 @@ Groups · UI tabs · Glass · Personal · About) and one-click presets for the U
 
 > `docs/overview.png` is optional — drop your own screenshot there.
 
+## Two builds — catalog (`plugin.js`) and full (`full/plugin.js`)
+
+Both builds come from **one source** (`full/plugin.js`), like the
+catalog-listed `pinned-folders` plugin:
+
+| | Catalog build `plugin.js` | Full build `full/plugin.js` |
+|---|---|---|
+| Session pane, groups, DnD, search, list/grid | ✓ | ✓ |
+| Session actions (rename/branch/pin/move/archive/delete) | ✓ | ✓ |
+| Project management (`projects.*` RPCs) | ✓ | ✓ |
+| Ctrl+Scroll + HUD | ✓ | ✓ |
+| Status pips (Cron; Kanban via endpoint answer) | – (waits for SDK REST door, #116305) | ✓ (Desktop-Bridge REST) |
+| Settings page, palette, keybinds, EN/DE | ✓ | ✓ |
+| Chat line animation | – (waits for SDK message-render hook) | ✓ |
+| Composer project chip | – (waits for SDK composer-accessory slot) | ✓ |
+| Glass & readability (composer/chips/status bar) | – (waits for SDK theme door) | ✓ |
+| UI-tab restyle + "as tab selector" strip hiding | – (waits for SDK tab-decoration slot) | ✓ |
+| Chat background image/video | – (waits for SDK workspace-background door) | ✓ |
+| Pinned/archived quick-filters | – (waits for SDK REST door, #116305) | ✓ (Desktop-Bridge REST) |
+| Native file picker, reveal-in-file-manager, open-in-terminal | – (menu entries hidden, honest degrade) | ✓ (Desktop-Bridge doors) |
+
+The **catalog build is SDK-only** (Hermes Plugin Catalog rule 8: no app-markup
+access, no `document.body` observers, no core-CSS overrides, no
+`window.hermesDesktop` doors). It is what the marketplace lists and loads at
+the pinned SHA. The **full build** keeps every feature for standalone use and
+discloses its extra surfaces below; the missing SDK slots are requested
+upstream ([hermes-agent #116305](https://github.com/NousResearch/hermes-agent/issues/116305)),
+and the features migrate onto the SDK as the slots land.
+
+Regenerate the catalog build after changing the source:
+`node scripts/build-catalog.mjs` (CI fails on a stale `plugin.js`).
+
+### Disclosure (catalog build)
+
+Reads the local Hermes gateway via public RPCs (`projects.*`, `session.*`,
+`session.active_list`, `session.context_breakdown`, state atoms) and, where
+the host exposes them, the local REST mirror `GET /api/sessions` (pinned
+state — not on the RPC wire), `GET /api/plugins/kanban/board` and
+`GET /api/cron/jobs` (status pips). Writes only via user-initiated public
+RPCs. Own settings under `~/.hermes/cache/desktop-plugins/session-flow/`.
+**No** app-markup access, no DOM observers on app containers, no core-CSS
+overrides, no `window.hermesDesktop` doors, no outbound network calls, no
+telemetry, no shell commands, no stored credentials, no self-update.
+
+### Disclosure (full build — extras beyond the catalog build)
+
+Uses the documented Desktop-Bridge doors of a standalone install:
+`hermesDesktop.api` (local REST mirror for pinned/unread/costs and folder
+sizes), `hermesDesktop.selectPaths` / `revealPath` /
+`openSessionInTerminal` (native file picker, file manager, terminal), and —
+like the catalog build — public gateway RPCs. The UI decorations above
+restyle or annotate core surfaces (composer, chips, status bar, content
+tabs, chat surfaces) and inject their own background layer into chat
+panes. No prototype patching, no `eval`, no dynamic imports beyond
+SDK/react, no telemetry, no stored credentials.
+
 ## Installation
 
 Requirement: Hermes Desktop recent enough to support the plugin SDK and the
 `~/.hermes/desktop-plugins/` directory.
 
 ```bash
-# From the repo directory:
-./install.sh            # copies plugin.js to ~/.hermes/desktop-plugins/session-flow/
-./install.sh --link     # dev mode: symlink instead of a copy (hot reload on save)
+# From the repo directory (full build — every feature):
+./install.sh            # copies full/plugin.js to ~/.hermes/desktop-plugins/session-flow/
+./install.sh --link     # dev mode: symlink to full/ (hot reload on save)
+./install.sh --variant catalog   # the SDK-only catalog build instead
 ```
 
 Then in the app: **⌘K / Ctrl+K → “Reload desktop plugins”** — or simply restart
 the app once. After that the plugin loads automatically on every start.
 
-**Manual:** copy `plugin.js` to `~/.hermes/desktop-plugins/session-flow/plugin.js`.
+**Manual:** copy the wanted build to
+`~/.hermes/desktop-plugins/session-flow/plugin.js`.
 The folder name **must** be `session-flow` (= the plugin id).
 
 **Uninstall:** `./uninstall.sh` (removes the installed copy, not the repo).
@@ -191,44 +250,40 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
 
 ```
 session-flow/
-├── plugin.js                    # THE plugin (single file, loaded as-is)
-├── install.sh                   # Installer (copy or --link for dev)
+├── plugin.js                    # Catalog build (SDK-only, generated — what the marketplace loads)
+├── full/plugin.js               # SOURCE OF TRUTH (full build, all features, standalone)
+├── plugin.yaml                  # Package manifest (name/version/requires_hermes)
+├── scripts/
+│   ├── build-catalog.mjs        # full/plugin.js -> plugin.js (strips #full regions)
+│   └── check.mjs                # Syntax + i18n + hook audit (both builds) + surface tripwire
+├── tests/
+│   ├── surface-test.mjs         # Catalog rule-8 tripwire (root plugin.js)
+│   ├── render-test.mjs          # Headless render smoke test (both builds)
+│   └── style-test.mjs           # Computed-style test (Playwright, optional)
+├── install.sh                   # Installer (full default; --variant catalog; --link dev)
 ├── uninstall.sh                 # Removes the installed copy
 ├── package.json                 # npm scripts only — no dependencies
-├── scripts/
-│   └── check.mjs                # Syntax check + i18n key audit (stdlib only)
-├── tests/
-│   └── render-test.mjs          # Headless render smoke test (pane + settings)
-├── docs/
-│   ├── README.md                # Docs index
-│   ├── AGENT-GUIDE.md           # Entry point for contributors/agents (German)
-│   ├── PLANNING.md              # Plan process: lifecycle, template, checklist (German)
-│   ├── plans/                   # One doc per non-trivial feature (TEMPLATE.md = template)
-│   ├── SETTINGS.md              # Every option explained (German)
-│   ├── DEVELOPMENT.md           # Architecture & dev workflow (German)
-│   ├── APP-INTEGRATION.md       # App hooks we depend on + verification recipes
-│   └── ROADMAP.md               # Ideas & known limits
-├── .github/
-│   ├── workflows/check.yml      # CI: npm run check on push/PR
-│   ├── ISSUE_TEMPLATE/          # Bug report & feature request forms
-│   └── PULL_REQUEST_TEMPLATE.md
+├── plugin-catalog/              # Mirror of the upstream catalog entry (NousResearch/hermes-agent)
+├── marketplace.json             # Marketplace listing manifest
+├── docs/                        # Guides, plans, integration notes (German)
 ├── CHANGELOG.md                 # Keep-a-Changelog style (German)
-├── CONTRIBUTING.md              # Contribution guide (German)
-├── SECURITY.md                  # Security notes (German)
-├── CODE_OF_CONDUCT.md
 └── LICENSE (MIT)
 ```
 
 ## Development
 
-Everything lives in **one** file: [`plugin.js`](plugin.js). No build, no
-`npm install` — desktop plugins are loaded as plain ESM at runtime and
-hot-reloaded on every save.
+Everything lives in **one** source file: [`full/plugin.js`](full/plugin.js).
+No JSX, no `npm install` — desktop plugins are loaded as plain ESM at runtime
+and hot-reloaded on every save. Full-only regions are wrapped in
+`/* #full */ … /* #end */` markers; the catalog build is generated from them.
 
 ```bash
-npm run check          # syntax check + locale key audit (Node only)
-npm test               # headless render smoke test (pane + settings)
-./install.sh --link    # set up once; then: save -> the app reloads the plugin
+npm run check          # syntax + locale audit + hook audit (both builds) + surface tripwire
+npm test               # render smoke test against BOTH builds
+npm run test:full      # render smoke test, full build only
+npm run test:catalog   # render smoke test, catalog build only
+npm run build:catalog  # regenerate root plugin.js from full/plugin.js
+./install.sh --link    # set up once (symlinks full/); then: save -> the app reloads
 ```
 
 House rules that must not be broken (otherwise the plugin refuses to load):
@@ -242,6 +297,10 @@ House rules that must not be broken (otherwise the plugin refuses to load):
   catches it).
 - Clean up timers/listeners via `ctx`, DOM observers + injected `<style>` tags
   via `ctx.onDispose`.
+- **Catalog rule 8 (only enforced for `plugin.js`):** no app-markup queries,
+  no `document.body` observers, no core-CSS overrides, no
+  `window.hermesDesktop` — `npm run check` trips on violations in the catalog
+  build; keep such code inside `#full` regions or behind SDK doors.
 
 Architecture (controllers, animation dedupe, stores, verification recipes):
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) ·
@@ -268,19 +327,19 @@ checklist and how to publish the repo to GitHub.
 
 ## Listing in the Hermes Plugin Catalog
 
-For inclusion in `hermes plugins catalog` / `hermes plugins search`:
-
+- **Status:** submitted — v1.28.1 was reviewed and declined in
+  [hermes-agent #134760](https://github.com/NousResearch/hermes-agent/pull/134760)
+  (catalog rule 8); v1.29.0 is the compliance resubmission. All review points
+  are addressed — see
+  [docs/PLUGIN-CATALOG-PR.md](docs/PLUGIN-CATALOG-PR.md) for the full
+  response and the SDK-slot requests on upstream #116305.
 - The catalog entry lives in
   [`plugin-catalog/session-flow.yaml`](plugin-catalog/session-flow.yaml) in
   the upstream `NousResearch/hermes-agent` repo (PR only — human-merged).
-- `sha` must be an exact 40-hex commit pin. Bumping the pin is a new PR
-  whose diff reviewers re-review.
-- The full PR-description template (capabilities, disclosure under Rule 13,
-  verification steps) lives in
-  [docs/PLUGIN-CATALOG-PR.md](docs/PLUGIN-CATALOG-PR.md) — copy it into the
-  catalog PR and edit the SHA + version.
+  `sha` must be an exact 40-hex commit pin of this repo; bumping the pin is a
+  new PR whose diff reviewers re-review.
 - `requires_hermes` is a SemVer floor (`">=0.21.5"`), `version` matches the
-  pinned code.
+  pinned code. Contact for the submission: **info@agantila.com**.
 
 ## Security
 
@@ -290,4 +349,4 @@ issues via GitHub.
 ## License
 
 MIT (open source) — © 2026 **AGANTILA — Deniz Yilmaz**
-([agantila.com](https://agantila.com)). See [LICENSE](LICENSE).
+([agantila.com](https://agantila.com)) · info@agantila.com. See [LICENSE](LICENSE).

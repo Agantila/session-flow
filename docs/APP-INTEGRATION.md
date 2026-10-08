@@ -5,6 +5,14 @@ Oberfläche stützt: DOM-Anker, Theme-Tokens, Animations-Techniken — inklusive
 Risiko-Einschätzung und der Rezepte, mit denen man live verifiziert, dass ein
 Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 
+> **Seit v1.29.0 gilt: Zwei Builds.** Alles in diesem Dokument beschreibt den
+> **Full-Build** (`full/plugin.js`, Standalone). Der **Catalog-Build**
+> (Root-`plugin.js`, SDK-only, Katalog-Regel 8) enthält **keinen** der
+> DOM-Anker/Marquer-Zugriffe dieser Datei — er nutzt ausschließlich SDK-Doors
+> + öffentliche RPCs/REST. Full-only-Regionen sind im Quellcode mit
+> `/* #full */ … /* #end */` markiert; welchen Anker welches Feature nutzt,
+> steht je Zeile in der Tabelle unten.
+
 > Faustregel: Anker mit `data-slot` sind die stabilste Ebene, Tailwind-Klassen
 > die fragilste. Wo wir Klassen matchen, steht hier WARUM und was die Alternative ist.
 

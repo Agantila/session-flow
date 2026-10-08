@@ -398,6 +398,17 @@ function applyAllSettings() {
   }
 }
 
+/* #full */
+applyAllSettings = function applyAllSettings() {
+  for (const apply of [applyGlass, applyPersonal, applyRows, applyUiTabs, applyGrid]) {
+    try {
+      apply()
+    } catch (error) {
+      console.warn(`[${ID}] apply failed`, error)
+    }
+  }
+}
+/* #end */
 
 function loadSettings() {
   let saved = null
@@ -508,13 +519,122 @@ function readSetting(section, key) {
   return value ? value[key] : undefined
 }
 
+/* #full */
+// ─────────────────────────────────────────────────────────────────────────────
+// Glass & Lesbarkeit — Frost + Akzent-Verlauf für Eingabefeld und UI-Chips
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Rein deklarativ: die Einstellungen werden als Attribute + Custom Properties
+// auf <html> gespiegelt (data-sf-glass="composer chips …"), das Stylesheet
+// reagiert ausschließlich per CSS-Selektor darauf. Es wird also nie CSS neu
+// gebaut — nur Variablen gesetzt. Kein backdrop-filter mit !important, damit
+// der app-weite „Transparenz reduzieren"-Gate unangetastet bleibt.
+
+const SF_GLASS_VARS = [
+  '--sf-glass-blur',
+  '--sf-glass-sat',
+  '--sf-glass-tint',
+  '--sf-glass-fill',
+  '--sf-glass-angle',
+  '--sf-glass-grad',
+  '--sf-glass-reach',
+  '--sf-arc-width',
+  '--sf-arc-duration',
+  '--sf-arc-radius'
+]
+/* #end */
 
 function clampNumber(value, min, max, fallback) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback
 }
 
+/* #full */
+/** Entfernt Attribut + Variablen wieder vollständig (Dispose / deaktiviert). */
+function clearGlass() {
+  const root = document.documentElement
+  root.removeAttribute('data-sf-glass')
+  root.removeAttribute('data-sf-arc')
+  for (const name of SF_GLASS_VARS) root.style.removeProperty(name)
+}
 
+function applyGlass() {
+  const glass = $settings.get().glass || {}
+
+  try {
+    if (!glass.enabled) {
+      clearGlass()
+      return
+    }
+
+    const root = document.documentElement
+    const tokens = []
+
+    if (glass.scopes?.composer) tokens.push('composer')
+    if (glass.scopes?.chips) tokens.push('chips')
+    if (glass.scopes?.statusbar) tokens.push('statusbar')
+    if (!glass.gradient) tokens.push('nograd')
+    if (!glass.ring) tokens.push('noring')
+
+    root.setAttribute('data-sf-glass', tokens.join(' ') || 'none')
+    root.style.setProperty('--sf-glass-blur', `${clampNumber(glass.blurPx, 0, 40, 10)}px`)
+    root.style.setProperty('--sf-glass-sat', `${clampNumber(glass.saturate, 100, 200, 115)}%`)
+    root.style.setProperty('--sf-glass-tint', `${clampNumber(glass.tint, 0, 40, 8)}%`)
+    root.style.setProperty('--sf-glass-fill', `${clampNumber(glass.fill, 50, 94, 86)}%`)
+    root.style.setProperty('--sf-glass-angle', `${clampNumber(glass.angle, 0, 360, 165)}deg`)
+    root.style.setProperty('--sf-glass-grad', `${clampNumber(glass.gradOpacity, 0, 60, 12)}%`)
+    root.style.setProperty('--sf-glass-reach', `${clampNumber(glass.reach, 20, 100, 72)}%`)
+    root.style.setProperty('--sf-arc-width', `${clampNumber(glass.arcWidth, 0.5, 4, 1.5)}px`)
+    root.style.setProperty('--sf-arc-duration', `${clampNumber(glass.arcDuration, 1, 12, 3.2)}s`)
+    measureComposerRadius()
+    syncArc()
+  } catch (error) {
+    console.warn(`[${ID}] glass apply failed`, error)
+    clearGlass()
+  }
+}
+
+/* #end */
+/* #full */
+// ─────────────────────────────────────────────────────────────────────────────
+// Individualisierung — Akzent-Tönung, Chat-Hintergrund, Content-Abgrenzung
+// ─────────────────────────────────────────────────────────────────────────────
+//
+//  • Akzent: überschreibt --ui-accent (Quelle der Fills/Strokes/Hover/aktiver
+//    Zustände der App). Das Plugin-<style> ist unlayered und gewinnt damit
+//    gegen die @layer-base-Definition — kein !important nötig.
+//  • Hintergrund: lokale Dateien laufen über das App-Protokoll
+//    hermes-media://stream/<encodeURIComponent(pfad)> (Range-fähig, auch für
+//    Videos). Das Plugin setzt nur Variablen; ein JS-Sync legt pro Pane-Host
+//    einen .sf-bg-layer an (Bild als background-image, Video als <video>-Kind).
+//  • Shell: runde Ecken + Schlagschatten auf [data-pane-host] (ohne Overlays).
+//    Nichts an overflow/Geometrie ändern — die Panes werden per Anchor
+//    positioniert (Inline-Styles), ein Eingriff dort bricht das Layout.
+
+const SF_PERSONAL_VARS = [
+  '--sf-accent-color',
+  '--sf-bg-url',
+  '--sf-bg-fit',
+  '--sf-bg-dim',
+  '--sf-bg-blur'
+]
+
+/** URL für lokale Dateien über das App-Protokoll (Range-fähig, Video-tauglich). */
+function mediaStreamUrl(filePath) {
+  return `hermes-media://stream/${encodeURIComponent(filePath)}`
+}
+/* #end */
+
+/* #full */
+/** Entfernt alle injizierten Hintergrund-Layer (Dispose / deaktiviert). */
+function removePaneBackgrounds() {
+  try {
+    document.querySelectorAll('[data-sf-bg-layer]').forEach(layer => layer.remove())
+  } catch {
+    /* DOM evtl. schon weg — egal */
+  }
+}
+/* #end */
 
 function clearPersonal() {
   const root = document.documentElement
@@ -522,6 +642,19 @@ function clearPersonal() {
   // Pane-Fläche ist eigenes Pane-UI — in beiden Builds aufräumen.
   root.removeAttribute('data-sf-panesurface')
 
+  /* #full */
+  for (const attr of [
+    'data-sf-accent',
+    'data-sf-bg',
+    'data-sf-bg-kind',
+    'data-sf-bg-scope'
+  ]) {
+    root.removeAttribute(attr)
+  }
+
+  for (const name of SF_PERSONAL_VARS) root.style.removeProperty(name)
+  removePaneBackgrounds()
+  /* #end */
 }
 
 function applyPersonal() {
@@ -542,6 +675,40 @@ function applyPersonal() {
     //    (Layer-Injektion in App-Panes) greifen in App-eigenes UI ein —
     //    Catalog-Regel 8: nur im Full-Build (SDK-Themes-Door steht aus,
     //    see #116305).
+    /* #full */
+    const accent = String(p.accentColor || '').trim()
+
+    if (p.accentOn && /^#[0-9a-f]{6}$/i.test(accent)) {
+      root.setAttribute('data-sf-accent', 'on')
+      root.style.setProperty('--sf-accent-color', accent)
+    } else {
+      root.removeAttribute('data-sf-accent')
+      root.style.removeProperty('--sf-accent-color')
+    }
+
+    const bgPath = String(p.bgPath || '').trim()
+    const hasBg = Boolean(p.bgOn) && bgPath.length > 0
+
+    if (hasBg) {
+      root.setAttribute('data-sf-bg', 'on')
+      root.setAttribute('data-sf-bg-kind', p.bgKind === 'video' ? 'video' : 'image')
+      root.setAttribute('data-sf-bg-scope', p.bgScope === 'all' ? 'all' : 'chat')
+      root.style.setProperty('--sf-bg-url', `url("${mediaStreamUrl(bgPath)}")`)
+      root.style.setProperty('--sf-bg-fit', p.bgFit === 'contain' ? 'contain' : 'cover')
+      root.style.setProperty('--sf-bg-dim', `${clampNumber(p.bgDim, 0, 85, 35)}%`)
+      root.style.setProperty('--sf-bg-blur', `${clampNumber(p.bgBlur, 0, 24, 0)}px`)
+    } else {
+      for (const attr of ['data-sf-bg', 'data-sf-bg-kind', 'data-sf-bg-scope']) {
+        root.removeAttribute(attr)
+      }
+
+      for (const name of ['--sf-bg-url', '--sf-bg-fit', '--sf-bg-dim', '--sf-bg-blur']) {
+        root.style.removeProperty(name)
+      }
+    }
+
+    syncPaneBackgrounds()
+    /* #end */
   } catch (error) {
     console.warn(`[${ID}] personal apply failed`, error)
     clearPersonal()
@@ -769,6 +936,25 @@ function watchAppTheme(onChange) {
 
   let observer = null
 
+  /* #full */
+  try {
+    if (typeof MutationObserver === 'function' && document.documentElement) {
+      observer = new MutationObserver(fire)
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme', 'data-color-scheme', 'data-appearance', 'data-mode']
+      })
+      if (document.body) {
+        observer.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'data-appearance', 'data-mode']
+        })
+      }
+    }
+  } catch {
+    /* egal */
+  }
+  /* #end */
 
   let mql = null
   const onMql = () => fire()
@@ -940,7 +1126,373 @@ function applyRows() {
   }
 }
 
+/* #full */
+/**
+ * Legt je Pane-Host einen .sf-bg-layer an bzw. aktualisiert ihn. Video nur auf
+ * SICHTBAREN Panes — Keep-Alive-Panes bleiben sonst dekodierend im Hintergrund
+ * (data-pane-hidden markiert inaktive Tab-Layer). Läuft im 2,5-s-Takt, damit
+ * neu gemountete Panes versorgt werden; React lässt fremde Kinder in Ruhe.
+ */
+function syncPaneBackgrounds() {
+  try {
+    const p = $settings.get().personal || {}
+    const bgPath = String(p.bgPath || '').trim()
+    const active = Boolean(p.bgOn) && bgPath.length > 0
+    const kind = p.bgKind === 'video' ? 'video' : 'image'
+    const scopeAll = p.bgScope === 'all'
 
+    // Ziele: immer die sichtbaren Chat-Surfaces (stabiler Marker `data-chat-surface`;
+    // sie sind `isolate`, darum zeichnet ein z-index:-1-Layer über ihrer Fläche und
+    // unter ihrem Inhalt). Bei Geltungsbereich „alle" zusätzlich jede Zone OHNE
+    // Chat-Surface — dort wird die Zonenfläche per Variablen-Override transparent,
+    // weil ein Negativ-Layer sonst hinter ihr läge.
+    const inHiddenPane = element => Boolean(element.closest('[data-pane-hidden]'))
+    const targets = [...document.querySelectorAll('[data-chat-surface]')]
+
+    if (scopeAll) {
+      targets.push(
+        ...[...document.querySelectorAll('[data-tree-group]')].filter(zone => !zone.querySelector('[data-chat-surface]'))
+      )
+    }
+
+    const wanted = new Set(targets.filter(target => !inHiddenPane(target)))
+
+    // Layer entfernen, die nicht mehr gebraucht werden (Option aus, Target weg, Scope gewechselt).
+    for (const layer of [...document.querySelectorAll('[data-sf-bg-layer]')]) {
+      if (!active || !wanted.has(layer.parentElement)) {
+        layer.remove()
+      }
+    }
+
+    if (!active) {
+      return
+    }
+
+    for (const target of wanted) {
+      const existing = target.querySelector(':scope > [data-sf-bg-layer]')
+      const visible = !inHiddenPane(target)
+      const sig = `${kind}|${bgPath}|${p.bgFit}|${visible ? 'v' : 'h'}`
+
+      if (existing && existing.getAttribute('data-sf-bg-sig') === sig) {
+        continue
+      }
+
+      const layer = existing || document.createElement('div')
+
+      if (!existing) {
+        layer.className = 'sf-bg-layer'
+        layer.setAttribute('data-sf-bg-layer', '')
+        // Als ERSTES Kind einsetzen: DOM-Ordnung gewinnt vor z-index unter
+        // Geschwistern ohne eigenen z-index, und der Layer ist absolut, also
+        // fließt er nicht in den Layout-Flow. Damit landet er zuverlässig
+        // hinter positionierten Geschwistern (Chat-Inhalt), aber ÜBER der
+        // eigenen Hintergrund-Farbe des Parents — vorher mit z-index:-1
+        // verschwand er hinter der Chat-Surface-Background (`bg-(--ui-chat-
+        // surface-background)`, opaque in den meisten Themes).
+        if (target.firstChild) {
+          target.insertBefore(layer, target.firstChild)
+        } else {
+          target.appendChild(layer)
+        }
+      }
+
+      layer.setAttribute('data-sf-bg-sig', sig)
+
+      const oldVideo = layer.querySelector('[data-sf-bg-video]')
+
+      if (oldVideo) {
+        oldVideo.remove()
+      }
+
+      if (kind === 'video' && visible) {
+        const video = document.createElement('video')
+        video.setAttribute('data-sf-bg-video', '')
+        video.setAttribute('aria-hidden', 'true')
+        // Attribute und Property gleichsetzen — autoplay als HTML-Attribut ist
+        // auf manchen Chromium-Versionen die Voraussetzung dafür, dass ein
+        // absolut positioniertes, gemutetes <video> ohne User-Gesture startet
+        // (nur die Property reicht in manchen Builds nicht). `muted` ist
+        // Pflicht: nur gemutete Videos sind von der Autoplay-Policy
+        // ausgenommen.
+        video.muted = true
+        video.setAttribute('muted', '')
+        video.loop = true
+        video.setAttribute('loop', '')
+        video.autoplay = true
+        video.setAttribute('autoplay', '')
+        video.playsInline = true
+        video.setAttribute('playsinline', '')
+        video.src = mediaStreamUrl(bgPath)
+        // Ebenfalls als HTML-Attribut setzen — manche Build-Pfade (auch der
+        // Plugin-Test-Stub) spiegeln Property-Setter nicht in `attrs`. Im
+        // echten DOM ist das Attribut ohnehin durch die Property gesetzt,
+        // schadet also nicht.
+        video.setAttribute('src', video.src)
+        layer.appendChild(video)
+
+        // play() sofort anstoßen UND nach `loadeddata` erneut versuchen: das
+        // erste play() fällt oft in den Lade-Puffer und zeigt nur das erste
+        // Frame als „Standbild". Mit dem Retry auf `loadeddata` springt die
+        // Wiedergabe an, sobald genug Daten da sind.
+        const start = () => {
+          const result = video.play()
+          if (result && typeof result.catch === 'function') {
+            result.catch(() => {})
+          }
+        }
+        start()
+        if (typeof video.addEventListener === 'function') {
+          video.addEventListener('loadeddata', start, { once: true })
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`[${ID}] pane background sync failed`, error)
+  }
+}
+
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'mkv', 'm4v', 'avi']
+
+/** Nativer Datei-Picker (App-IPC selectPaths) + Auto-Erkennung Bild/Video. */
+function pickBackgroundFile() {
+  try {
+    const desktop = window.hermesDesktop
+
+    if (!desktop || typeof desktop.selectPaths !== 'function') {
+      console.warn(`[${ID}] selectPaths nicht verfügbar`)
+      return
+    }
+
+    desktop
+      .selectPaths({
+        multiple: false,
+        title: 'Hintergrund-Bild oder -Video wählen',
+        filters: [
+          {
+            name: 'Bilder & Videos',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'mp4', 'webm', 'mov', 'mkv', 'm4v']
+          }
+        ]
+      })
+      .then(paths => {
+        const first = Array.isArray(paths) && paths.length ? String(paths[0]) : ''
+
+        if (!first) {
+          return
+        }
+
+        const ext = (first.split('.').pop() || '').toLowerCase()
+        patchSettings('personal', {
+          bgPath: first,
+          bgOn: true,
+          bgKind: VIDEO_EXTENSIONS.includes(ext) ? 'video' : 'image'
+        })
+      })
+      .catch(error => console.warn(`[${ID}] background picker failed`, error))
+  } catch (error) {
+    console.warn(`[${ID}] background picker failed`, error)
+  }
+}
+
+/** Arbeitet diese gespeicherte Session gerade (denkt/schreibt/Tool/arbeitet)? */
+function isSessionBusy(storedId) {
+  if (!storedId) {
+    return false
+  }
+
+  const detail = $activity.get()[storedId]
+
+  if (detail && ['thinking', 'streaming', 'tool', 'working'].includes(detail.kind)) {
+    return true
+  }
+
+  const live = Object.values($liveMap.get()).find(entry => entry.storedId === storedId)
+
+  return Boolean(live && ['working', 'starting', 'resuming', 'streaming'].includes(live.status))
+}
+
+/** Arbeitet die gerade fokussierte Session? (für den Composer-Glow) */
+function currentSessionBusy() {
+  try {
+    return isSessionBusy(host.state.focusedStoredSessionId.get() || null)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Misst den ECHTEN Radius des Composer-Surfaces und leitet daraus den
+ * konzentrischen Innenradius des Glow-Rings ab (r − 1px Border).
+ *
+ * Warum messen statt rechnen? Der Radius folgt dem Theme-Skalar
+ * (`rounded-2xl` = calc(--radius-scalar × 1.5rem)) — Tailwind v4 inlined die
+ * Theme-Variablen aber, `--radius-2xl` existiert zur Laufzeit nicht. Nur der
+ * gemessene Wert trifft die vorhandene Kontur exakt (Theme-unabhängig).
+ */
+function measureComposerRadius() {
+  try {
+    const surface = document.querySelector("[data-slot='composer-surface']")
+
+    if (!surface) {
+      return
+    }
+
+    const raw = getComputedStyle(surface).borderTopLeftRadius || ''
+    const value = raw.split(' ')[0].trim()
+
+    if (!value || value.endsWith('%')) {
+      return
+    }
+
+    // Nur schreiben, wenn sich der Wert geändert hat (v1.24.0): der 4-s-Takt
+    // kostet sonst bei jedem Tick einen Style-Invalidierungsschub, obwohl die
+    // Kontur sich selten ändert.
+    const next = `max(0px, calc(${value} - 1px))`
+
+    if (document.documentElement.style.getPropertyValue('--sf-arc-radius') === next) {
+      return
+    }
+
+    document.documentElement.style.setProperty('--sf-arc-radius', next)
+  } catch (error) {
+    console.warn(`[${ID}] radius measure failed`, error)
+  }
+}
+
+/**
+ * Umlaufender Glow-Ring (derselbe Effekt, den Hermes bei laufenden Sessions
+ * zeigt): im Modus „busy" nur, solange die aktive Session arbeitet.
+ */
+function syncArc() {
+  const root = document.documentElement
+  const glass = $settings.get().glass || {}
+
+  try {
+    if (!glass.enabled || !glass.arc) {
+      root.removeAttribute('data-sf-arc')
+      return
+    }
+
+    if (glass.arcMode === 'busy' && !currentSessionBusy()) {
+      root.removeAttribute('data-sf-arc')
+      return
+    }
+
+    root.setAttribute('data-sf-arc', 'on')
+  } catch (error) {
+    console.warn(`[${ID}] arc sync failed`, error)
+    root.removeAttribute('data-sf-arc')
+  }
+}
+/* #end */
+
+/* #full */
+// ─────────────────────────────────────────────────────────────────────────────
+// UI-Tabs — Content-Tab-Leiste im Sidebar-Look (+ Live-Info aus der Engine)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SF_UITABS_VARS = [
+  '--sf-ui-tab-radius',
+  '--sf-ui-tab-gap',
+  '--sf-ui-tab-inset-y',
+  '--sf-ui-tab-label-size',
+  '--sf-ui-tab-close-w'
+]
+
+/** Räumt Tokens/Variablen + Tab-Markierungen restlos ab. */
+function clearUiTabs() {
+  const root = document.documentElement
+  root.removeAttribute('data-sf-ui-tabs')
+
+  for (const name of SF_UITABS_VARS) {
+    root.style.removeProperty(name)
+  }
+
+  try {
+    document.querySelectorAll('[data-sf-tab-busy],[data-sf-ui-tab]').forEach(tab => {
+      tab.removeAttribute('data-sf-tab-busy')
+      tab.removeAttribute('data-sf-ui-tab')
+    })
+  } catch {
+    /* DOM evtl. schon weg — egal */
+  }
+}
+
+/**
+ * Spiegelt die UI-Tabs-Einstellungen als Tokens + Variablen auf <html>.
+ * (Rein deklarativ: das Stylesheet reagiert per Selektor — nie CSS-Rebuild.)
+ */
+function applyUiTabs() {
+  const cfg = $settings.get().uiTabs || {}
+
+  try {
+    if (!cfg.enabled) {
+      clearUiTabs()
+      return
+    }
+
+    const root = document.documentElement
+    const tokens = ['on']
+
+    if (cfg.separators) tokens.push('sep')
+    if (!cfg.showLead) tokens.push('nolead')
+    tokens.push(
+      cfg.activeStyle === 'underline'
+        ? 'active-underline'
+        : cfg.activeStyle === 'both'
+          ? 'active-both'
+          : 'active-sidebar'
+    )
+    tokens.push(cfg.labelCase === 'upper' ? 'case-upper' : 'case-normal')
+    if (cfg.closeMode === 'always') tokens.push('close-always')
+    else if (cfg.closeMode === 'active') tokens.push('close-active')
+    if (!cfg.closeHover) tokens.push('noclosehover')
+    if (!cfg.arc) tokens.push('noarc')
+
+    root.setAttribute('data-sf-ui-tabs', tokens.join(' '))
+    root.style.setProperty('--sf-ui-tab-radius', `${clampNumber(cfg.radius, 0, 12, 4)}px`)
+    root.style.setProperty('--sf-ui-tab-gap', `${clampNumber(cfg.gap, 0, 10, 2)}px`)
+    root.style.setProperty('--sf-ui-tab-inset-y', `${clampNumber(cfg.insetY, 0, 8, 2)}px`)
+    root.style.setProperty('--sf-ui-tab-label-size', `${clampNumber(cfg.labelSize, 9, 14, 11)}px`)
+    root.style.setProperty('--sf-ui-tab-close-w', `${clampNumber(cfg.closeWidth, 14, 32, 22)}px`)
+    syncTabBusy()
+  } catch (error) {
+    console.warn(`[${ID}] ui tabs apply failed`, error)
+    clearUiTabs()
+  }
+}
+
+/**
+ * Räumt die "Liste/Grid als Tab-Selektor"-Markierung ab (tabs.asTabSelector).
+ */
+function clearTabSelectorMode() {
+  document.documentElement.removeAttribute('data-sf-hide-tabstrip')
+}
+
+/**
+ * Blendet die native Content-Tab-Leiste für Session-Tabs aus, wenn die
+ * List/Grid-Pane dieselbe Funktion schon abdeckt (tabs.asTabSelector).
+ * Zielt strukturell auf den Streifen, der mindestens einen Session-Tile-Tab
+ * trägt (":has()" — im Plugin bereits an anderer Stelle in Gebrauch, siehe
+ * `data-sf-ui-tabs~='nolead'`-Regel) — Terminal-/Dateien-/sonstige
+ * Pane-Tab-Leisten ohne Session-Tabs bleiben unberührt.
+ */
+function applyTabSelectorMode() {
+  const cfg = $settings.get().tabs || {}
+
+  try {
+    if (!cfg.asTabSelector) {
+      clearTabSelectorMode()
+      return
+    }
+
+    document.documentElement.setAttribute('data-sf-hide-tabstrip', 'on')
+  } catch (error) {
+    console.warn(`[${ID}] tab-selector apply failed`, error)
+    clearTabSelectorMode()
+  }
+}
+/* #end */
 
 // ── Gruppen-Kopfzeilen-Dichte (KEEP): eigenes Pane-Feature, kein App-UI-Griff.
 /** Räumt die Gruppen-Kopfzeilen-Dichte ab (groups.headerDensity). */
@@ -979,6 +1531,44 @@ function applyGroupsDensity() {
   }
 }
 
+/* #full */
+/**
+ * Markiert Session-Tabs arbeitender Sessions (denkt/schreibt/Tool/arbeitet) —
+ * dieselbe Live-Info, die auch die Sidebar (Status-Punkt/Arc) zeigt. Das CSS
+ * zeichnet darauf den umlaufenden Glow-Ring.
+ */
+function syncTabBusy() {
+  try {
+    // Styling-Marke: strukurell über role=tab + .pane-tab-content — die in
+    // Kontextmenüs gewrappten Session-Tabs im Content-Bereich tragen NICHT
+    // data-slot='pane-tab' (der Trigger überschreibt das Attribut).
+    const roleTabs = document.querySelectorAll("[role='tab']")
+
+    for (const tab of roleTabs) {
+      if (tab.querySelector('[class~="pane-tab-content"]') && tab.getAttribute('data-sf-ui-tab') !== 'true') {
+        tab.setAttribute('data-sf-ui-tab', 'true')
+      }
+    }
+
+    // Live-Busy (Glow) für Session-Tabs — Selektor ohne data-slot, damit auch
+    // die gewrappten Tabs erfasst werden.
+    const sessionTabs = document.querySelectorAll("[data-tree-tab^='session-tile:']")
+
+    for (const tab of sessionTabs) {
+      const paneId = tab.getAttribute('data-tree-tab') || ''
+      const busy = isSessionBusy(paneId.slice('session-tile:'.length))
+
+      if (busy && tab.getAttribute('data-sf-tab-busy') !== 'true') {
+        tab.setAttribute('data-sf-tab-busy', 'true')
+      } else if (!busy && tab.hasAttribute('data-sf-tab-busy')) {
+        tab.removeAttribute('data-sf-tab-busy')
+      }
+    }
+  } catch (error) {
+    console.warn(`[${ID}] tab sync failed`, error)
+  }
+}
+/* #end */
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Gruppen-Store (manuelle Firefox-artige Tab-Gruppen + Collapse-Zustände)
@@ -1307,6 +1897,42 @@ const ARCHIVED_TTL_MS = 60_000
 
 /** Archivierte Sessions über REST nachziehen (nur im Archiv-Modus sichtbar). */
 function refreshArchivedSessions() {
+  /* #full */
+  if (archivedInFlight) {
+    return archivedInFlight
+  }
+
+  archivedInFlight = (async () => {
+    try {
+      const bridge = globalThis.window?.hermesDesktop
+
+      if (!bridge || typeof bridge.api !== 'function') {
+        return
+      }
+
+      const limit = Math.max(10, Math.min(200, Number(readSetting('tabs', 'maxItems')) || 60))
+      const result = await bridge.api({
+        path: `/api/sessions?limit=${limit}&offset=0&archived=only&order=recent`,
+        timeoutMs: 10_000
+      })
+      const rows = (Array.isArray(result?.sessions) ? result.sessions : [])
+        .map(normalizeRow)
+        .filter(row => row.id && row.archived)
+        .sort((a, b) => (b.lastActiveAt || b.startedAt) - (a.lastActiveAt || a.startedAt))
+
+      $archivedRows.set(rows)
+      archivedSucceededAt = Date.now()
+      $restMirror.set(true)
+    } catch {
+      // Bridge/Netzwerk — alter Stand bleibt; der Modus zeigt dann den
+      // bestehenden Leerzustand statt zu crashen.
+    } finally {
+      archivedInFlight = null
+    }
+  })()
+
+  return archivedInFlight
+  /* #end */
   /* #catalog-only */
   // Catalog-Build: kein REST-Door im SDK (Anfrage auf #116305) — das Archiv
   // bleibt eine leere, ehrliche Liste statt einer Bridge-Anfrage.
@@ -1314,6 +1940,43 @@ function refreshArchivedSessions() {
   /* #end */
 }
 
+/* #full */
+/** Alle sichtbaren ungelesenen Sessions als gelesen markieren (Bulk-PATCH). */
+async function markAllSessionsRead(rows) {
+  const bridge = globalThis.window?.hermesDesktop
+
+  if (!bridge || typeof bridge.api !== 'function' || !Array.isArray(rows)) {
+    return 0
+  }
+
+  let done = 0
+
+  for (const row of rows) {
+    if (!row?.unread) {
+      continue
+    }
+
+    try {
+      await bridge.api({
+        path: `/api/sessions/${encodeURIComponent(row.id)}`,
+        method: 'PATCH',
+        body: { unread: false },
+        timeoutMs: 8000
+      })
+      done += 1
+    } catch {
+      // Einzelne Fehler übergehen — der Refresh zeigt den verbleibenden Stand.
+    }
+  }
+
+  if (done > 0) {
+    kickAppRefresh()
+    scheduleSessionsRefresh(400)
+  }
+
+  return done
+}
+/* #end */
 
 /**
  * Sanfter Refresh-Kick an die App: die eigene Sidebar horcht auf window-focus
@@ -1519,6 +2182,187 @@ function projectForCwd(cwd) {
  */
 function kickComposerPillSync() {}
 
+/* #full */
+/**
+ * Anker, den die App für einen Draft beim Senden auflöst — SYNCHRON gespiegelt
+ * (`use-session-actions`: Home-Scope → detached, sonst `$currentCwd`, sonst
+ * `resolveNewSessionCwd` = Projekt-Scope-Wurzel). Quelle sind genau die Atome
+ * der NATIVEN Sessions-Seitenleiste: ihr „+" am Projekt / der Projekt-Scope
+ * setzen `$currentCwd` bzw. `hermes.desktop.projectScope` (persistentAtom
+ * schreibt den Key bei jeder Änderung — Lesen ist ehrlich, Schreiben nicht;
+ * deshalb liest NUR diese Funktion den localStorage und KEIN Plugin-Pfad
+ * schreibt ihn — siehe applyComposerPick, dort der bewusste Nicht-Schreib-
+ * Kommentar). Früher rief diese Funktion die ASYNC
+ * `resolveNewProjectSessionCwd()` ohne await auf → `.cwd` eines Promise war
+ * immer undefined, der Chip lernte nie einen nativen Anker.
+ */
+function composerDraftAnchor() {
+  let scope = ''
+  let cwd = ''
+
+  try {
+    scope = String(window.localStorage?.getItem('hermes.desktop.projectScope') || '')
+  } catch {
+    scope = ''
+  }
+
+  if (scope === '__no_project__') {
+    return { cwd: '', node: null }
+  }
+
+  try {
+    cwd = String(host.state?.cwd?.get?.() || '').trim()
+  } catch {
+    cwd = ''
+  }
+
+  if (!cwd && scope && scope !== '__all_projects__') {
+    const scoped = $projectsList.get().find(entry => entry.id === scope && !entry.isNoProject)
+
+    cwd = String(scoped?.path || '').trim()
+  }
+
+  return { cwd, node: projectForCwd(cwd) }
+}
+
+/**
+ * Draft-Pick: nur den Anker in `$composerPick` merken (und den App-Scope im
+ * localStorage anpassen, damit das App-`use-session-actions` beim Senden den
+ * `cwd` auflösen kann). KEIN eager `startNewSessionInCwd` mehr — der erzeugte
+ * sofort eine leere Session, noch bevor der User tippt, und der Bug-Report
+ * 2026-10-06 (Pill zeigt Projekt, aber neue Sessions landen trotzdem unter
+ * "Kein Projekt") lag genau daran: der App-Sendepfad resolve-te seinen CWD
+ * unabhängig vom Anker. Mit dem App-Scope-Override greift `startNewProjectSession`
+ * jetzt beim tatsächlichen Enter, der Draft bleibt bis dahin offen.
+ *
+ * Session-Pick: re-home via session.workspace.move (Fallback cwd.set).
+ */
+async function applyComposerPick(node) {
+  const focusedStored = (() => {
+    try {
+      return String(host.state?.focusedStoredSessionId?.get?.() || '')
+    } catch {
+      return ''
+    }
+  })()
+
+  // 1) Anker-Atom setzen (immer) — auch in `startNewProjectSession` lesbar als
+  //    erste Quelle vor App-Scope/active_id (siehe resolveNewProjectSessionCwd).
+  $composerPick.set({ id: node.id, label: node.label, color: node.color, at: Date.now() })
+
+  // Bewusst KEIN Schreiben von `hermes.desktop.projectScope`: der App-Atom liest
+  // den Key nur beim Modul-Init — ein Write änderte nichts am laufenden Draft,
+  // ließe die App aber beim NÄCHSTEN Start ungefragt in diesem Projekt
+  // einsteigen. Der Draft-Pick wirkt über `adoptComposerPickForNewSession`.
+
+  if (focusedStored) {
+    try {
+      await rehomeFocusedSession(focusedStored, node)
+    } catch (error) {
+      host.notifyError(error, CTX?.i18n?.t('composerProject') || 'Projekt')
+    }
+  } else if (!node.path) {
+    // Draft + Home-Pick: kein Anker, nur Hinweis.
+    host.notify({
+      kind: 'info',
+      message: CTX?.i18n?.t('composerProjectNoneHint')
+        || 'Home hat keinen Arbeitsordner — für einen Draft bitte ein Projekt wählen.'
+    })
+  }
+  // Draft + Projekt-Pick: nichts weiter — der Anker reicht; der App-Sendepfad
+  // liest `$composerPick` als erste Quelle.
+
+  // Best-effort: dauerhafter Aktiv-Zeiger (Ziel zukünftiger App-Scopes/CLI).
+  try {
+    await setActiveProject(node.id && !node.isNoProject ? node.id : null)
+  } catch {
+    // Nice-to-have — kein Fehlerfall für den Pill-Flow.
+  }
+}
+
+/** Bestehende (fokussierte) Session in das Projekt re-homen. */
+async function rehomeFocusedSession(storedId, node) {
+  const cwd = String(node.path || '').trim()
+
+  if (!cwd) {
+    // Home-Pick auf bestehender Session: ein echtes Detachen unterstützt das
+    // Gateway nicht (move braucht ein existierendes cwd) — ehrlich sagen.
+    host.notify({
+      kind: 'info',
+      message: CTX?.i18n?.t('composerProjectHomeSessionHint')
+        || 'Eine bestehende Session kann nicht nach Home verschoben werden.'
+    })
+    return
+  }
+
+  let persisted = false
+
+  try {
+    await host.request('session.workspace.move', { session_key: storedId, cwd })
+    persisted = true
+  } catch (error) {
+    console.warn(`[${ID}] session.workspace.move fehlgeschlagen — Fallback cwd.set`, error)
+  }
+
+  if (!persisted) {
+    const runtimeId = await findLiveSessionIdByKey(storedId)
+
+    if (runtimeId) {
+      try {
+        await host.request('session.cwd.set', { cwd, session_id: runtimeId })
+        persisted = true
+      } catch (error) {
+        console.warn(`[${ID}] session.cwd.set (Pill-Fallback) fehlgeschlagen`, error)
+      }
+    }
+  }
+
+  // Beide Schreibwege gescheitert → sichtbar melden (v1.24.0) und Pick
+  // verwerfen, damit der Chip nicht weiter Gültigkeit suggeriert. Vorher
+  // blieb der Fehler still: kein Toast, Pick stand weiter im Atom.
+  if (!persisted) {
+    $composerPick.set({ id: '', label: '', color: null, at: 0 })
+    host.notify({
+      kind: 'error',
+      message: CTX?.i18n?.t('composerProjectRehomeFail')
+        || 'Projekt konnte nicht gesetzt werden — bitte erneut versuchen.'
+    })
+
+    return
+  }
+
+  const targetNode = $projectsList.get().find(entry => !entry.isNoProject && entry.path === cwd)
+
+  if (targetNode) {
+    const seeds = $sessionProjectSeed.get()
+    seeds[storedId] = { id: targetNode.id, name: targetNode.label, color: targetNode.color, icon: targetNode.icon, path: targetNode.path, at: Date.now() }
+    $sessionProjectSeed.set({ ...seeds })
+  }
+
+  void invalidateProjectTree()
+  scheduleSessionsRefresh(400)
+  host.notify({
+    kind: persisted ? 'success' : 'info',
+    message: `${CTX?.i18n?.t('composerProjectRehomeOk') || 'Projekt gesetzt'}${node.label ? ` · ${node.label}` : ''}`
+  })
+}
+
+/**
+ * Draft-Pick → echte Session (der native Sendeweg).
+ *
+ * Der Composer-Chip im Draft ist nur ein Merker: das App-Senden löst seinen
+ * Arbeitsordner selbst auf (`$currentCwd`/`$projectScope`, keine Plugin-
+ * Schreib-Tür). Legt die App die Session aus dem Draft an — egal ob der
+ * Draft aus der NATIVEN Sessions-Seitenleiste oder dem Plugin-Pane stammt —,
+ * wechselt der fokussierte Stored-Id-Wert von leer auf eine neue ID. In genau
+ * diesem Moment wird der gültige Pick per `session.workspace.move` auf die
+ * neue Session angewandt (Chip verhält sich damit überall gleich). Nicht
+ * eingreifen, wenn (a) die ID schon bekannt ist (bestehende Session aus der
+ * Seitenleiste geöffnet), (b) das Plugin selbst gerade eine verankerte Session
+ * erzeugt (`ownCreateUntil`) oder (c) die Session ohnehin im Pick-Projekt
+ * liegt.
+ */
+/* #end */
 
 // Gemeinsamer Create-Zustand (BEIDE Builds): `startNewSessionInCwd` markiert
 // eigene Creates über `ownCreateUntil`; der Chip-Adopt (nur Full-Build)
@@ -1526,6 +2370,494 @@ function kickComposerPillSync() {}
 let adoptPrevStored = null
 let ownCreateUntil = 0
 
+/* #full */
+function adoptComposerPickForNewSession() {
+  let next = ''
+
+  try {
+    next = String(host.state?.focusedStoredSessionId?.get?.() || '')
+  } catch {
+    next = ''
+  }
+
+  const prev = adoptPrevStored
+
+  adoptPrevStored = next
+
+  if (prev === null || prev || !next) {
+    return
+  }
+
+  const pick = activeComposerPick()
+
+  // Der Übergang gehört dem eigenen Create (einmalig verbrauchen).
+  if (Date.now() < ownCreateUntil) {
+    ownCreateUntil = 0
+
+    return
+  }
+
+  if (!pick || pick.id === '__no_project__') {
+    // Auch hier verbrauchen: ohne Clear bliebe der alte Pick im Atom und der
+    // Chip würde beim nächsten Draft weiter das ALT-Label zeigen (v1.24.0).
+    $composerPick.set({ id: '', label: '', color: null, at: 0 })
+
+    return
+  }
+
+  if ($sessions.get().some(row => row.id === next)) {
+    return
+  }
+
+  $composerPick.set({ id: '', label: '', color: null, at: 0 })
+
+  const node = $projectsList.get().find(entry => entry.id === pick.id && !entry.isNoProject)
+  const path = String(node?.path || '').trim()
+
+  if (!node || !path) {
+    return
+  }
+
+  let cwd = ''
+
+  try {
+    cwd = String(host.state?.cwd?.get?.() || '').trim()
+  } catch {
+    cwd = ''
+  }
+
+  if (cwd && (cwd === path || cwd.startsWith(`${path}/`))) {
+    return
+  }
+
+  void rehomeFocusedSession(next, node).catch(error => {
+    console.warn(`[${ID}] Draft-Pick konnte nicht angewandt werden`, error)
+  })
+}
+
+/**
+ * Draft-Anzeige: aktueller Pick (Composer-Chip) gewinnt — sonst gelernter
+ * Anker (App-Logik gespiegelt — Scope/active_id/letzte Session-CWD), sobald
+ * ein Projekt daraus ablesbar ist.
+ */
+function composerDraftLabel() {
+  const pick = activeComposerPick()
+  if (pick) {
+    // Pick-Label aus dem Tree (Live-Update: Umbenennung schlägt durch).
+    const node = $projectsList.get().find(entry => entry.id === pick.id)
+    if (node) {
+      return { id: node.id, label: node.label, color: node.color }
+    }
+    return { id: pick.id, label: pick.label, color: pick.color }
+  }
+
+  const { node } = composerDraftAnchor()
+
+  if (node) {
+    return { id: node.id, label: node.label, color: node.color }
+  }
+
+  return null
+}
+
+/** Eine Pill-Zeile bauen (imperatives DOM — kein react-dom im Plugin). */
+function buildComposerPillRow(doc) {
+  const row = doc.createElement('div')
+
+  row.className = 'sf-cproj-row'
+  row.setAttribute(CPROJ_MARKER, '')
+
+  const pill = doc.createElement('button')
+
+  pill.type = 'button'
+  pill.className = 'sf-cproj-pill'
+  pill.setAttribute('data-sf-cproj-trigger', '')
+
+  const dot = doc.createElement('span')
+
+  dot.className = 'sf-cproj-dot'
+
+  const name = doc.createElement('span')
+
+  name.className = 'sf-cproj-name'
+
+  const caret = doc.createElement('span')
+
+  caret.className = 'sf-cproj-caret'
+  caret.textContent = '▾'
+  caret.setAttribute('aria-hidden', 'true')
+
+  pill.appendChild(dot)
+  pill.appendChild(name)
+  pill.appendChild(caret)
+  row.appendChild(pill)
+
+  return row
+}
+
+/** Menü einmalig bauen und an document hängen (versteckt per [hidden]). */
+function buildComposerPillMenu(doc) {
+  const menu = doc.createElement('div')
+
+  menu.className = 'sf-cproj-menu'
+  menu.setAttribute('data-sf-cproj-menu', '')
+  menu.hidden = true
+  menu.setAttribute('role', 'menu')
+
+  const hint = doc.createElement('div')
+
+  hint.className = 'sf-cproj-menu-hint'
+  menu.appendChild(hint)
+  doc.body.appendChild(menu)
+
+  return menu
+}
+
+/** Menü-Einträge rendern (Draft: Home zuerst; Session: nur echte Projekte). */
+function renderComposerPillMenu(menu, isDraft, activeId = '') {
+  const doc = menu.ownerDocument
+
+  while (menu.firstChild) {
+    menu.removeChild(menu.firstChild)
+  }
+
+  const hint = doc.createElement('div')
+
+  hint.className = 'sf-cproj-menu-hint'
+  hint.textContent = CTX?.i18n?.t('composerProjectMenuHint') || 'Ziel-Projekt für die nächste Eingabe'
+  menu.appendChild(hint)
+
+  const entries = []
+
+  if (isDraft) {
+    entries.push({ id: '__no_project__', label: CTX?.i18n?.t('composerProjectNone') || 'Kein Projekt (Home)', color: null, path: '' })
+  }
+
+  for (const node of $projectsList.get()) {
+    if (!node.isNoProject) {
+      entries.push({ id: node.id, label: node.label, color: node.color, path: node.path, isNoProject: false })
+    }
+  }
+
+  for (const entry of entries) {
+    const item = doc.createElement('button')
+
+    item.type = 'button'
+    item.className = 'sf-cproj-item'
+    item.setAttribute('role', 'menuitem')
+    item.setAttribute('data-project', entry.id)
+    item.setAttribute('data-active', entry.id === activeId ? 'true' : 'false')
+
+    const dot = doc.createElement('span')
+
+    dot.className = 'sf-cproj-dot'
+    if (entry.color) {
+      dot.style.setProperty('--sf-cproj-color', entry.color)
+    }
+
+    const name = doc.createElement('span')
+
+    name.className = 'sf-cproj-name'
+    name.textContent = entry.label
+
+    item.appendChild(dot)
+    item.appendChild(name)
+    item.addEventListener('click', () => {
+      setComposerMenuOpen(null)
+      void applyComposerPick(entry)
+    })
+    menu.appendChild(item)
+  }
+
+  if (entries.length <= 1 && isDraft) {
+    const empty = doc.createElement('div')
+
+    empty.className = 'sf-cproj-empty'
+    empty.textContent = CTX?.i18n?.t('composerProjectPickToast') || 'Noch keine Projekte angelegt'
+    menu.appendChild(empty)
+  }
+}
+
+/** Menü-Zustand: Element-Referenz oder null; globaler Listener schließt. */
+let composerMenuEl = null
+let composerMenuOutside = null
+let composerMenuKey = null
+
+function setComposerMenuOpen(target) {
+  if (composerMenuEl && target !== composerMenuEl) {
+    composerMenuEl.hidden = true
+  }
+
+  composerMenuEl = target
+
+  if (composerMenuOutside) {
+    composerMenuOutside()
+    composerMenuOutside = null
+  }
+
+  if (!composerMenuEl) {
+    composerMenuKey = null
+    return
+  }
+
+  const onKey = event => {
+    if (event.key === 'Escape') {
+      setComposerMenuOpen(null)
+    }
+  }
+
+  const onDown = event => {
+    if (composerMenuEl && !composerMenuEl.contains(event.target) && !event.target.closest?.('[data-sf-cproj-trigger]')) {
+      setComposerMenuOpen(null)
+    }
+  }
+
+  document.addEventListener('keydown', onKey, true)
+  document.addEventListener('pointerdown', onDown, true)
+  composerMenuOutside = () => {
+    document.removeEventListener('keydown', onKey, true)
+    document.removeEventListener('pointerdown', onDown, true)
+  }
+}
+
+/**
+ * Pill-Zustand je DOM-Sync aktualisieren: Label/Color aus Fokus/Seed/Baum,
+ * Draft-Anzeige aus gelerntem Anker. Data-Marker steuern CSS-Zustände.
+ */
+function refreshComposerPillState(row) {
+  const pill = row.querySelector('.sf-cproj-pill')
+
+  if (!pill) {
+    return
+  }
+
+  let focusedStored = ''
+
+  try {
+    focusedStored = String(host.state?.focusedStoredSessionId?.get?.() || '')
+  } catch {
+    focusedStored = ''
+  }
+
+  let label = ''
+  let color = null
+  let projectId = ''
+  const isDraft = !focusedStored
+
+  if (focusedStored) {
+    // Baum/Seed zuerst; steht die Session (noch) in keinem Baum-Knoten — frisch
+    // aus der NATIVEN Seitenleiste, 0 Turns —, trägt ihr Arbeitsordner die
+    // Zuordnung (der Baum gruppiert genau nach cwd).
+    let proj = projectForStoredSession(focusedStored)
+
+    if (!proj) {
+      const known = $projectsList.get().some(entry => entry.sessionIds.has(focusedStored))
+      let cwd = ''
+
+      try {
+        cwd = String(host.state?.cwd?.get?.() || '')
+      } catch {
+        cwd = ''
+      }
+
+      const byCwd = known ? null : projectForCwd(cwd)
+
+      proj = byCwd ? { id: byCwd.id, label: byCwd.label, color: byCwd.color, path: byCwd.path } : null
+    }
+
+    if (proj) {
+      label = proj.label
+      color = proj.color
+      projectId = proj.id
+    }
+  } else {
+    const draft = composerDraftLabel()
+
+    if (draft) {
+      label = draft.label
+      color = draft.color
+      projectId = draft.id
+    }
+  }
+
+  const name = pill.querySelector('.sf-cproj-name')
+  const dot = pill.querySelector('.sf-cproj-dot')
+
+  if (name) {
+    name.textContent = label || (CTX?.i18n?.t('composerProjectNone') || 'Kein Projekt')
+  }
+
+  if (dot) {
+    if (color) {
+      dot.style.setProperty('--sf-cproj-color', color)
+    } else {
+      dot.style.removeProperty('--sf-cproj-color')
+    }
+  }
+
+  row.setAttribute('data-sf-cproj-draft', isDraft ? 'true' : 'false')
+  row.setAttribute('data-sf-cproj-id', projectId)
+  row.setAttribute('data-sf-cproj-empty', label ? 'false' : 'true')
+  row.setAttribute('data-sf-cproj-focus', focusedStored ? 'session' : 'draft')
+}
+
+/**
+ * Sync-Loop: findet den „+"-Button des fokussierten, sichtbaren Composers und
+ * hängt den Chip als erstes Kind in dessen Wrapper (direkt VOR dem „+", selbe
+ * Zeile wie die Eingabe). Entfernt die Zeile wieder, wenn die Einstellung aus
+ * geht — nichts bleibt nach Dispose übrig.
+ */
+function syncComposerProjectPills() {
+  const doc = document
+
+  if (!doc || !doc.body) {
+    return
+  }
+
+  if (!composerPillEnabled()) {
+    doc.querySelectorAll(`[${CPROJ_MARKER}]`).forEach(el => el.remove())
+    setComposerMenuOpen(null)
+    return
+  }
+
+  // Composer-Roots: sichtbar (nicht overlayt), Fokus-Vorrang (Keep-Alive-Tiles
+  // sind [data-pane-hidden] und bekommen bewusst keinen Chip).
+  const roots = Array.from(doc.querySelectorAll("[data-slot='composer-root']"))
+  const focusedRuntime = (() => {
+    try {
+      return String(host.state?.focusedSessionId?.get?.() || '')
+    } catch {
+      return ''
+    }
+  })()
+
+  let hostRoot = null
+
+  for (const root of roots) {
+    // data-popped-out ist bei Pop-out PRESENT (leerer String), sonst ABSENT
+    // (null) — getAttribute liefert nie undefined. Der bisherige Vergleich
+    // gegen undefined war immer wahr und übersprang ALLE Roots (Probe:
+    // chips=0 roots=2 plusIcons=2).
+    if (root.closest('[data-pane-overlay]') || root.hasAttribute('data-popped-out')) {
+      continue
+    }
+
+    const pane = root.closest('[data-pane-host], [data-chat-surface], body')
+
+    if (!pane || pane.getAttribute('data-pane-hidden') === '') {
+      continue
+    }
+
+    if (pane !== doc.body && pane.offsetParent === null) {
+      continue
+    }
+
+    const isFocused = focusedRuntime
+      ? Array.from(pane.querySelectorAll('[data-session-id]')).some(el => el.getAttribute('data-session-id') === focusedRuntime)
+      : false
+
+    if (!hostRoot || isFocused) {
+      hostRoot = { root, pane, isFocused }
+    }
+
+    if (hostRoot.isFocused) {
+      break
+    }
+  }
+
+  if (!hostRoot) {
+    doc.querySelectorAll(`[${CPROJ_MARKER}]`).forEach(el => el.remove())
+    return
+  }
+
+  // „+"-Button: Codicon "add" ist eindeutig innerhalb des Composer-Roots
+  // (Add-Attach-Button). Sein Wrapper ist der menu-Grid-Bereich.
+  const plusBtn = hostRoot.root.querySelector('.codicon-add')?.closest('button')
+
+  if (!plusBtn) {
+    return
+  }
+
+  const row = plusBtn.parentElement
+
+  if (!row || row === hostRoot.root) {
+    return
+  }
+
+  let chip = row.querySelector(`:scope > [${CPROJ_MARKER}]`)
+
+  if (!chip) {
+    for (const existing of doc.querySelectorAll(`[${CPROJ_MARKER}]`)) {
+      existing.remove()
+    }
+    chip = buildComposerPillRow(doc)
+    row.insertBefore(chip, plusBtn)
+  }
+
+  if (chip.parentElement !== row) {
+    chip.parentElement?.removeChild(chip)
+    row.insertBefore(chip, plusBtn)
+  }
+
+  refreshComposerPillState(chip)
+
+  const pill = chip.querySelector('.sf-cproj-pill')
+
+  if (!pill) {
+    return
+  }
+
+  if (!pill.dataset.sfCprojBound) {
+    pill.dataset.sfCprojBound = '1'
+    pill.addEventListener('click', () => {
+      let menu = doc.querySelector('[data-sf-cproj-menu]')
+
+      if (!menu) {
+        menu = buildComposerPillMenu(doc)
+      }
+
+      if (menu.hidden && composerMenuKey !== pill) {
+        const isDraft = chip.getAttribute('data-sf-cproj-draft') === 'true'
+        const activeId = chip.getAttribute('data-sf-cproj-id') || ''
+
+        renderComposerPillMenu(menu, isDraft, activeId)
+
+        // Projekte in der NATIVEN Seitenleiste angelegt/umbenannt? Das Gateway
+        // sendet dazu keine Events — beim Öffnen frisch ziehen (4-s-Guard) und
+        // das offene Menü nachrendern, damit es dieselbe Liste zeigt wie dort.
+        if (Date.now() - projectsListSucceededAt > 4_000) {
+          void refreshProjectsList().then(() => {
+            if (!menu.hidden && composerMenuKey === pill) {
+              renderComposerPillMenu(menu, isDraft, chip.getAttribute('data-sf-cproj-id') || '')
+            }
+          })
+        }
+
+        const rect = pill.getBoundingClientRect()
+        menu.style.left = `${Math.max(8, Math.round(rect.left))}px`
+        menu.style.bottom = `${Math.max(8, Math.round(window.innerHeight - rect.top + 6))}px`
+        menu.hidden = false
+        composerMenuKey = pill
+        setComposerMenuOpen(menu)
+      } else {
+        setComposerMenuOpen(null)
+      }
+    })
+  }
+}
+
+/**
+ * Projekte/Baum und Pill-Zustand gemeinsam nachziehen — Listener-Kontext für
+ * register() und die Poll-Ticks (Full-Build-Override des No-Op-Defaults).
+ */
+kickComposerPillSync = function kickComposerPillSync() {
+  try {
+    syncComposerProjectPills()
+  } catch (error) {
+    console.warn(`[${ID}] composer pill sync failed`, error)
+  }
+}
+/* #end */
 
 /**
  * Zu einem stored session_key die passende Live-session_id (In-Memory-sid)
@@ -1659,6 +2991,163 @@ function watchAppDensity() {
   return () => {}
 }
 
+/* #full */
+/**
+ * App→Plugin-Instant-Sync: beobachtet den DOM-Container der Hermes-Sidebar
+ * ([data-sessions-mode] — von der App selbst als Skin-Anker deklariert).
+ * Ändert sich dort etwas (Projekt erstellt/umbenanen/gelöscht, Ordner
+ * verknüpft, Session verschoben/gepinnt/archiviert), refresht Session Flow
+ * nach kurzem Debounce nach — das Gateway feuert dafür KEINE Events (der
+ * RPC-Katalog wurde darauf geprüft), also ist der DOM die einzige sofortige
+ * Signalquelle. Zusätzlich zieht ein window-focus nach (Fensterwechsel).
+ * Der Observer ist bewusst breit (childList+attributes) und debounced —
+ * die reine DOM-Mutation ist billig, nur der nachgelagerte Refresh kostet.
+ */
+function watchSidebarSync(ctx) {
+  if (typeof MutationObserver !== 'function' || typeof document === 'undefined') {
+    return () => {}
+  }
+
+  let timer = 0
+  let queued = false
+  let lastRun = 0
+
+  const run = () => {
+    lastRun = Date.now()
+    queued = false
+
+    // Baum + Sessions nachziehen; die Inflight-/TTL-Guards in beiden
+    // Refreshes verhindern Spam, wenn die Sidebar mehrere Mutationen in
+    // Folge feuert (Reorder, Collapse-Animationen etc.).
+    if (Date.now() - projectsListSucceededAt > 4_000) {
+      void refreshProjectsList()
+    }
+
+    if (Date.now() - pinnedSucceededAt > 5_000) {
+      void refreshPinnedIds()
+    }
+
+    void refreshSessions()
+  }
+
+  const schedule = () => {
+    queued = true
+
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => {
+      if (!queued) {
+        return
+      }
+
+      // In schneller Folge: minimal 1,2 s Abstand zwischen echten Läufen.
+      const wait = Math.max(0, 1200 - (Date.now() - lastRun))
+      window.clearTimeout(timer)
+
+      if (wait === 0) {
+        run()
+      } else {
+        timer = window.setTimeout(() => queued && run(), wait)
+      }
+    }, 600)
+  }
+
+  const attach = root => {
+    if (!root || root.__sfSyncObserved) {
+      return
+    }
+
+    try {
+      root.__sfSyncObserved = true
+      const observer = new MutationObserver(schedule)
+      observer.observe(root, { attributes: true, attributeFilter: ['data-sessions-mode', 'data-sessions-project', 'data-active'], childList: true, subtree: true })
+      observers.push({ observer, root })
+    } catch {
+      /* DOM weg — beim nächsten Tick erneut versuchen */
+    }
+  }
+
+  const observers = []
+  const scan = () => {
+    try {
+      attach(document.querySelector('[data-sessions-mode]'))
+    } catch {
+      /* kein DOM */
+    }
+  }
+
+  scan()
+  const scanTimer = ctx.setInterval(scan, 5_000)
+
+  const onFocus = () => {
+    // Fenster zurück: die App hat frische Daten, wir auch — gedrosselt.
+    if (Date.now() - lastRun > 2_000) {
+      schedule()
+    }
+  }
+
+  // Tab-Visibility (Browser-Shell / zweites Fenster): visibilitychange feuert
+  // auch, wenn das Hermes-Fenster nicht den OS-Fokus hat, aber der sichtbare
+  // Tab wieder im Vordergrund steht. Ohne diesen Listener bleibt die Pane
+  // „alt", bis der User das Fenster wirklich auf den Fokus zieht — reicht
+  // in der Praxis nicht, weil er die Pane oft nur anklickt.
+  const onVisible = () => {
+    try {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+    } catch {
+      return
+    }
+
+    if (Date.now() - lastRun > 2_000) {
+      schedule()
+    }
+  }
+
+  try {
+    window.addEventListener('focus', onFocus)
+  } catch {
+    /* Tests ohne echtes window */
+  }
+
+  try {
+    document.addEventListener('visibilitychange', onVisible)
+  } catch {
+    /* Tests ohne echtes document */
+  }
+
+  return () => {
+    window.clearTimeout(timer)
+
+    try {
+      ctx.clearInterval(scanTimer)
+    } catch {
+      /* älterer Host */
+    }
+
+    try {
+      window.removeEventListener('focus', onFocus)
+    } catch {
+      /* ditto */
+    }
+
+    try {
+      document.removeEventListener('visibilitychange', onVisible)
+    } catch {
+      /* ditto */
+    }
+
+    for (const { observer, root } of observers) {
+      try {
+        observer.disconnect()
+        delete root.__sfSyncObserved
+      } catch {
+        /* schon weg */
+      }
+    }
+  }
+}
+/* #end */
 
 let refreshInFlight = null
 
@@ -1747,7 +3236,44 @@ async function deleteProject(id) {
 }
 
 /** Pfad im OS-Dateimanager zeigen (App-Preload-Door, Remote-safe). */
+/* #full */
+async function revealProjectPath(path) {
+  const desktop = globalThis.window?.hermesDesktop
 
+  if (!desktop || typeof desktop.revealPath !== 'function') {
+    host.notify({ kind: 'info', message: CTX?.i18n?.t('projRevealUnavailable') || 'Dateimanager nicht verfügbar' })
+
+    return
+  }
+
+  try {
+    await desktop.revealPath(path)
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('projReveal') || 'Im Dateimanager anzeigen')
+  }
+}
+/* #end */
+
+/* #full */
+/** Ordner über den nativen/remote-fähigen Picker wählen; null bei Abbruch. */
+async function pickProjectFolder() {
+  const desktop = globalThis.window?.hermesDesktop
+
+  if (!desktop || typeof desktop.selectPaths !== 'function') {
+    host.notify({ kind: 'info', message: CTX?.i18n?.t('projPickUnavailable') || 'Ordnerauswahl nicht verfügbar' })
+
+    return null
+  }
+
+  try {
+    const picked = await desktop.selectPaths({ directories: true, multiple: false, title: CTX?.i18n?.t('projPickFolder') || 'Ordner wählen' })
+
+    return Array.isArray(picked) && picked[0] ? String(picked[0]) : null
+  } catch {
+    return null
+  }
+}
+/* #end */
 
 /** CWD der zuletzt bekannten Session (Fallback, wenn kein Projekt bestimmt ist). */
 function lastSessionCwd() {
@@ -2055,6 +3581,24 @@ async function refreshSessions() {
       let rows = []
       let usedRpc = true
 
+      /* #full */
+      const bridge = globalThis.window?.hermesDesktop
+
+      if (bridge && typeof bridge.api === 'function') {
+        try {
+          const result = await bridge.api({
+            path: `/api/sessions?limit=${limit}&offset=0&order=recent`,
+            timeoutMs: 10_000
+          })
+          const raw = Array.isArray(result?.sessions) ? result.sessions : []
+          rows = raw.map(normalizeRow).filter(row => row.id).sort((a, b) => (b.lastActiveAt || b.startedAt) - (a.lastActiveAt || a.startedAt))
+          usedRpc = false
+          $restMirror.set(true)
+        } catch {
+          // Bridge-Fehler → RPC-Fallback unten (kein Crash, nur dünnere Daten).
+        }
+      }
+      /* #end */
 
       if (usedRpc) {
         const result = await host.request('session.list', { limit, include_hidden: false })
@@ -2118,6 +3662,39 @@ let pinnedSucceededAt = 0
 
 /** Gepinnte Session-IDs über REST `GET /api/sessions` nachziehen. */
 function refreshPinnedIds() {
+  /* #full */
+  if (pinnedRefreshInFlight) {
+    return pinnedRefreshInFlight
+  }
+
+  pinnedRefreshInFlight = (async () => {
+    try {
+      const bridge = globalThis.window?.hermesDesktop
+
+      if (!bridge || typeof bridge.api !== 'function') {
+        return
+      }
+
+      // order=created&limit=1 hält die Seite minimal; der Endpoint verdrahtet
+      // include_pinned=True serverseitig fest und fügt ALLE gepinnten Rows
+      // wieder an — genau der Trick, den auch `hermes sessions pinned` nutzt.
+      const result = await bridge.api({ path: '/api/sessions?limit=1&offset=0&order=created', timeoutMs: 8000 })
+      const rows = (Array.isArray(result?.sessions) ? result.sessions : [])
+        .filter(row => row && row.pinned === true && row.id)
+        .map(row => ({ ...row, id: String(row.id) }))
+
+      $pinnedRows.set(rows)
+      pinnedSucceededAt = Date.now()
+      $restMirror.set(true)
+    } catch {
+      // Bridge nicht da / Netzwerk — alter Stand bleibt, kein Crash.
+    } finally {
+      pinnedRefreshInFlight = null
+    }
+  })()
+
+  return pinnedRefreshInFlight
+  /* #end */
   /* #catalog-only */
   // Catalog-Build: kein REST-Door im SDK (Anfrage läuft auf #116305) —
   // der Pin-Spiegel bleibt leer, der Pinned-Filter bleibt verborgen.
@@ -2369,6 +3946,29 @@ const FOLDER_SIZE_TTL_MS = 60_000
 const folderSizeInflight = new Map() // path -> Promise<{ bytes, fetchedAt } | null>
 
 async function fetchFolderSizeOnce(path) {
+  /* #full */
+  if (!path) {
+    return null
+  }
+
+  const bridge = globalThis.window?.hermesDesktop
+
+  if (!bridge || typeof bridge.api !== 'function') {
+    return null
+  }
+
+  try {
+    const result = await bridge.api({ path: '/api/getFolderSize', body: { path }, timeoutMs: 4000 })
+
+    if (result && Number.isFinite(Number(result.bytes))) {
+      return { bytes: Number(result.bytes), fetchedAt: Date.now() }
+    }
+
+    return null
+  } catch {
+    return null
+  }
+  /* #end */
   /* #catalog-only */
   // Catalog-Build: kein REST-Door im SDK — Ordnergrößen entfallen ehrlich
   // („omitted", nicht 0; der Header lässt die Stelle weg).
@@ -4639,6 +6239,23 @@ const CSS = `
    Composer-Accessory-Slot): sitzt in der Eingabezeile des Composers, direkt
    VOR dem „+"-Add-Button (dessen Wrapper-Button als Anker). Minimalistisch:
    Farb-Dot + Name + Caret, Höhe des Ghost-Icon-Buttons, nur Theme-Variablen. */
+/* #full */
+.sf-cproj-row{display:flex;align-items:center}
+.sf-cproj-pill{display:inline-flex;align-items:center;gap:5px;max-width:200px;height:26px;padding:0 8px;border:1px solid color-mix(in srgb,var(--foreground) 10%,transparent);border-radius:999px;background:color-mix(in srgb,var(--foreground) 4%,transparent);color:var(--ui-text-secondary,var(--foreground));font-size:11px;line-height:1;cursor:pointer;transition:background-color .12s ease,border-color .12s ease,color .12s ease}
+.sf-cproj-pill:hover{background:color-mix(in srgb,var(--foreground) 8%,transparent);border-color:color-mix(in srgb,var(--foreground) 16%,transparent);color:var(--foreground)}
+.sf-cproj-pill:focus-visible{outline:1px solid var(--ui-accent);outline-offset:1px}
+.sf-cproj-dot{width:8px;height:8px;border-radius:999px;background:var(--sf-cproj-color,color-mix(in srgb,var(--foreground) 28%,transparent));flex:none}
+.sf-cproj-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sf-cproj-caret{flex:none;font-size:8px;opacity:.6}
+.sf-cproj-menu{position:fixed;z-index:60;min-width:200px;max-width:320px;max-height:40vh;overflow-y:auto;padding:4px;border:1px solid color-mix(in srgb,var(--foreground) 12%,transparent);border-radius:10px;background:var(--ui-chat-surface-background);box-shadow:0 8px 24px color-mix(in srgb,var(--foreground) 18%,transparent)}
+.sf-cproj-menu-hint{padding:4px 8px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ui-text-quaternary,var(--ui-text-tertiary))}
+.sf-cproj-item{display:flex;width:100%;align-items:center;gap:8px;padding:6px 8px;border:none;border-radius:7px;background:transparent;color:var(--foreground);font-size:12px;text-align:left;cursor:pointer}
+.sf-cproj-item:hover{background:color-mix(in srgb,var(--foreground) 7%,transparent)}
+.sf-cproj-item[data-active='true']{background:color-mix(in srgb,var(--ui-accent) 14%,transparent)}
+.sf-cproj-item:focus-visible{outline:1px solid var(--ui-accent);outline-offset:-1px}
+.sf-cproj-empty{padding:6px 8px;font-size:11px;color:var(--ui-text-tertiary)}
+@media (prefers-reduced-motion:reduce){.sf-cproj-pill{transition:none}}
+/* #end */
 .sf-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 4px 12px}
 .sf-group-head{display:flex;align-items:flex-start;gap:4px;min-height:27px;padding:2px 4px 2px 2px;border-radius:6px;color:var(--ui-text-secondary);cursor:pointer;user-select:none;transition:background-color .12s ease,box-shadow .12s ease}
 .sf-group-head:hover{background:var(--ui-row-hover-background,rgba(127,127,127,.08));color:var(--foreground)}
@@ -4922,9 +6539,293 @@ section[id^=sf-sec-]:hover .sf-section-title > svg,section[id^=sf-sec-]:hover .s
 .sf-dialog-error{font-size:11px;color:var(--ui-danger,#f87171);margin-top:4px}
 @media (prefers-reduced-motion: reduce){.sf-hud{transition:none}}
 
+/* #full */
+/* ── Glass & Lesbarkeit (optional; gesteuert über :root[data-sf-glass]-Tokens) ─
+   Rein additiv: Flächen bekommen einen weichen Frost + dezenten, akzent-
+   gefärbten Verlauf, damit Beschriftungen auch ohne eigene Fläche lesbar
+   bleiben. Kein !important auf backdrop-filter — der app-weite
+   „prefers-reduced-transparency"-Gate (styles.css) nullt dann alles global. */
 
+/* Eingabefeld — Fläche + Verlauf malt das Surface SELBST (Border-Box): exakt
+   derselbe Radius wie die Outline, also keine Haarlinien-Lücke mehr an den
+   Ecken. Der Input-Fill-Layer wird dafür transparent und trägt stattdessen
+   den umlaufenden Glow-Ring. */
+:root[data-sf-glass~='composer'] [data-slot='composer-root']{
+  --composer-fill:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) var(--sf-glass-fill,86%),transparent))
+}
+:root[data-sf-glass~='composer'] [data-slot='composer-root'][data-thread-scrolled-up]{
+  --composer-fill:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) calc(var(--sf-glass-fill,86%) + 6%),transparent))
+}
+:root[data-sf-glass~='composer'] [data-slot='composer-surface']{
+  background-color:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) var(--sf-glass-fill,86%),transparent));
+  background-origin:border-box;background-clip:border-box;
+  backdrop-filter:blur(var(--sf-glass-blur,10px)) saturate(var(--sf-glass-sat,115%));
+  -webkit-backdrop-filter:blur(var(--sf-glass-blur,10px)) saturate(var(--sf-glass-sat,115%))
+}
+:root[data-sf-glass~='composer']:not([data-sf-glass~='nograd']) [data-slot='composer-surface']{
+  background-image:linear-gradient(var(--sf-glass-angle,165deg),color-mix(in srgb,var(--ui-accent) var(--sf-glass-grad,12%),transparent),transparent var(--sf-glass-reach,72%))
+}
+/* Fill-Layer: transparent + konzentrischer Radius (r − 1px = Innenkante des
+   Borders). Der Ring-Radius wird zur Laufzeit am echten Surface gemessen
+   (Theme-unabhängig); der Fallback rechnet mit dem Theme-Skalar. */
+:root[data-sf-glass~='composer'] [data-slot='composer-surface'] > [class~='-z-10']{
+  background-color:transparent;
+  border-radius:var(--sf-arc-radius,max(0px,calc(var(--radius-scalar,1) * 1.5rem - 1px)))
+}
+/* Umlaufender Glow-Ring — gleiche Technik wie .arc-border der App (Mask-Ring
+   + per transform animierter Verlaufs-Layer, rein auf dem Compositor). */
+:root[data-sf-glass~='composer'][data-sf-arc~='on'] [data-slot='composer-surface'] > [class~='-z-10']{
+  overflow:hidden;
+  padding:var(--sf-arc-width,1.5px);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude
+}
+:root[data-sf-glass~='composer'][data-sf-arc~='on'] [data-slot='composer-surface'] > [class~='-z-10']::before{
+  content:'';position:absolute;top:0;left:0;width:240%;height:240%;
+  background:repeating-linear-gradient(var(--sf-arc-angle,160deg),transparent 0%,color-mix(in srgb,var(--ui-accent) 0%,transparent) 18.75%,var(--ui-accent) 25%,color-mix(in srgb,var(--ui-accent) 45%,transparent) 31.25%,transparent 43.75%,transparent 50%);
+  will-change:transform;
+  animation:sf-arc-ring var(--sf-arc-duration,3.2s) linear infinite
+}
+@keyframes sf-arc-ring{0%{transform:translate(0,0)}100%{transform:translate(-50%,-50%)}}
+
+/* UI-Chips: Modell- und Reasoning-Pill im Composer */
+:root[data-sf-glass~='chips'] :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
+  background-color:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) 90%,transparent));
+  backdrop-filter:blur(calc(var(--sf-glass-blur,10px) * .75)) saturate(var(--sf-glass-sat,115%));
+  -webkit-backdrop-filter:blur(calc(var(--sf-glass-blur,10px) * .75)) saturate(var(--sf-glass-sat,115%))
+}
+:root[data-sf-glass~='chips']:not([data-sf-glass~='nograd']) :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
+  background-image:linear-gradient(var(--sf-glass-angle,165deg),color-mix(in srgb,var(--ui-accent) var(--sf-glass-grad,12%),transparent),transparent var(--sf-glass-reach,72%))
+}
+:root[data-sf-glass~='chips']:not([data-sf-glass~='noring']) :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 24%,var(--ui-stroke-secondary))
+}
+:root[data-sf-glass~='chips'] :is([data-tour='model-pill'],[data-testid='reasoning-pill']):hover{
+  background-color:color-mix(in srgb,var(--ui-accent) calc(var(--sf-glass-tint,8%) * 2),color-mix(in srgb,var(--dt-card) 94%,transparent))
+}
+/* Umlaufender Glow der Chips: radialer Conic-Highlight (kleine Fläche, daher
+   als @property-Turn umgesetzt); läuft um den Chip-Rand. */
+:root[data-sf-glass~='chips'][data-sf-arc~='on'] :is([data-tour='model-pill'],[data-testid='reasoning-pill']){
+  position:relative
+}
+:root[data-sf-glass~='chips'][data-sf-arc~='on'] :is([data-tour='model-pill'],[data-testid='reasoning-pill'])::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  padding:var(--sf-arc-width,1.5px);
+  background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 232deg,color-mix(in srgb,var(--ui-accent) 40%,transparent) 285deg,var(--ui-accent) 330deg,transparent 360deg);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  animation:sf-arc-turn var(--sf-arc-duration,3.2s) linear infinite
+}
+
+/* Statusleiste: Einträge als Chips */
+:root[data-sf-glass~='statusbar'] [data-slot='statusbar'] :is(button,a){
+  background-color:color-mix(in srgb,var(--ui-accent) var(--sf-glass-tint,8%),color-mix(in srgb,var(--dt-card) 88%,transparent));
+  backdrop-filter:blur(calc(var(--sf-glass-blur,10px) * .6)) saturate(var(--sf-glass-sat,115%));
+  -webkit-backdrop-filter:blur(calc(var(--sf-glass-blur,10px) * .6)) saturate(var(--sf-glass-sat,115%))
+}
+:root[data-sf-glass~='statusbar']:not([data-sf-glass~='nograd']) [data-slot='statusbar'] :is(button,a){
+  background-image:linear-gradient(var(--sf-glass-angle,165deg),color-mix(in srgb,var(--ui-accent) var(--sf-glass-grad,12%),transparent),transparent var(--sf-glass-reach,72%))
+}
+:root[data-sf-glass~='statusbar']:not([data-sf-glass~='noring']) [data-slot='statusbar'] :is(button,a){
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 20%,var(--ui-stroke-secondary))
+}
+:root[data-sf-glass~='statusbar'] [data-slot='statusbar'] :is(button,a):hover{
+  background-color:color-mix(in srgb,var(--ui-accent) calc(var(--sf-glass-tint,8%) * 2),color-mix(in srgb,var(--dt-card) 94%,transparent))
+}
+:root[data-sf-glass~='statusbar'][data-sf-arc~='on'] [data-slot='statusbar'] :is(button,a){
+  position:relative
+}
+:root[data-sf-glass~='statusbar'][data-sf-arc~='on'] [data-slot='statusbar'] :is(button,a)::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  padding:var(--sf-arc-width,1.5px);
+  background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 232deg,color-mix(in srgb,var(--ui-accent) 40%,transparent) 285deg,var(--ui-accent) 330deg,transparent 360deg);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  animation:sf-arc-turn var(--sf-arc-duration,3.2s) linear infinite
+}
+
+/* Registrierte Winkel-Property für den Conic-Glow (Chips/Statusleiste). */
+@property --sf-arc-turn{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes sf-arc-turn{to{--sf-arc-turn:360deg}}
+
+/* Barrierearmut: reduzierter Motion stoppt den Umlauf; pausierte Renderer
+   (Fenster im Hintergrund) pausieren ihn wie die App-eigenen Arcs. */
+@media (prefers-reduced-motion: reduce){
+  :root[data-sf-arc] [data-slot='composer-surface'] > [class~='-z-10']::before,
+  :root[data-sf-arc] :is([data-tour='model-pill'],[data-testid='reasoning-pill'])::after,
+  :root[data-sf-arc] [data-slot='statusbar'] :is(button,a)::after{animation:none}
+}
+:root[data-renderer-animations-paused] [data-slot='composer-surface'] > [class~='-z-10']::before,
+:root[data-renderer-animations-paused] :is([data-tour='model-pill'],[data-testid='reasoning-pill'])::after,
+:root[data-renderer-animations-paused] [data-slot='statusbar'] :is(button,a)::after{animation-play-state:paused}
+/* #end */
+
+/* #full */
+/* ── UI-Tabs: Content-Tab-Leiste im Sidebar-Look (optional) ─────────────
+   Leicht abgerundete Chips statt eckiger Baender; Label, Close-Button und
+   aktiver Zustand einstellbar. Arbeitende Session-Tabs tragen den
+   umlaufenden Glow-Ring (Live-Info aus der Aktivitaets-Engine). */
+
+/* Grundform: leicht abgerundet, mit Abstand (Chip-Optik) */
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]){
+  height:auto;
+  min-width:0;
+  max-width:100%;
+  margin-block:var(--sf-ui-tab-inset-y,2px);
+  border-radius:var(--sf-ui-tab-radius,4px);
+  transition:background-color .1s ease
+}
+/* Label-Container schrumpfbar — Close-Button bleibt im Anschnitt erreichbar */
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content{
+  min-width:0;
+  overflow:hidden
+}
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]):not(:first-child){
+  margin-left:var(--sf-ui-tab-gap,2px)
+}
+/* Trennlinien standardmaessig aus (Token 'sep' behaelt sie) */
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='sep']) :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]):not(:first-child){
+  border-left-color:transparent
+}
+/* Hover: ruhige Flaeche statt Farbstich-Schatten */
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']):not([data-vertical]):not([data-active='true']):hover{
+  background:var(--ui-row-hover-background,color-mix(in srgb,var(--dt-foreground) 6%,transparent));
+  box-shadow:none
+}
+/* Aktiver Tab: Sidebar-Optik (gefuellte Zeile), App-Unterstrich oder beides */
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='active-sidebar'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-active='true']{
+  background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));
+  box-shadow:none;
+  color:var(--foreground)
+}
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='active-both'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-active='true']{
+  background:var(--ui-row-active-background,color-mix(in srgb,var(--ui-accent) 16%,transparent));
+  color:var(--foreground)
+}
+/* Label: Groesse & Schreibweise */
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content [class~='truncate']{
+  font-size:var(--sf-ui-tab-label-size,11px)
+}
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='case-normal'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content [class~='truncate']{
+  text-transform:none;
+  letter-spacing:normal
+}
+/* Session-Status (Punkt aus dem Sidepanel) optional ausblenden */
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='nolead'] :is([class~='group/tab'],[data-sf-ui-tab='true']) .pane-tab-content > span:first-child:has([class~='rounded-full']){
+  display:none
+}
+/* Close-Button: Klickflaeche + eigener, DECKENDER Kontrast-Chip — keine
+   gestapelten Transparenzen (Label/Flaeche darunter waeren sonst durch das
+   X sichtbar und es bliebe unklar, dass es ein Close-Button ist). */
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable]{
+  --pane-tab-close-width:var(--sf-ui-tab-close-w,22px)
+}
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'] button{
+  border-radius:var(--sf-ui-tab-radius,4px);
+  margin-block:3px;
+  margin-right:3px;
+  color:var(--foreground);
+  background-color:color-mix(in srgb,var(--foreground) 9%,var(--dt-card));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 13%,transparent)
+}
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noclosehover']) :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'] button:hover{
+  background-color:color-mix(in srgb,var(--foreground) 18%,var(--dt-card));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 24%,transparent);
+  color:var(--foreground)
+}
+/* Label-Pixel unter dem Close-Button auch im Hover-Modus entfernen — die App
+   tut das nur fuer data-slot='pane-tab'; gewrappte Session-Tabs haetten sonst
+   Text unter dem X. */
+:root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable]:hover > .pane-tab-content{
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)));
+  mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)))
+}
+/* Sichtbarkeit: bei Hover (App-Standard), immer oder nur am aktiven Tab */
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > [class~='inset-y-0'],
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-active'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable][data-active='true'] > [class~='inset-y-0']{
+  opacity:1;
+  pointer-events:auto
+}
+/* Label-Fade dauerhaft, wo der Close-Button steht */
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-always'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable] > .pane-tab-content,
+:root[data-sf-ui-tabs~='on'][data-sf-ui-tabs~='close-active'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-closeable][data-active='true'] > .pane-tab-content{
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)));
+  mask-image:linear-gradient(to right,#000 calc(100% - var(--pane-tab-close-width) - 1rem),transparent calc(100% - var(--pane-tab-close-width)))
+}
+/* Arbeitende Session-Tabs: umlaufender Glow-Ring (Session-Info aus der Sidebar-Engine) */
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noarc']) :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']{
+  position:relative
+}
+:root[data-sf-ui-tabs~='on']:not([data-sf-ui-tabs~='noarc']) :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  padding:var(--sf-arc-width,1.5px);
+  background-image:conic-gradient(from var(--sf-arc-turn,0deg),transparent 0deg,transparent 232deg,color-mix(in srgb,var(--ui-accent) 40%,transparent) 285deg,var(--ui-accent) 330deg,transparent 360deg);
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  animation:sf-arc-turn var(--sf-arc-duration,3.2s) linear infinite
+}
+@media (prefers-reduced-motion: reduce){
+  :root[data-sf-ui-tabs~='on'] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']::after{animation:none}
+}
+:root[data-renderer-animations-paused] :is([class~='group/tab'],[data-sf-ui-tab='true'])[data-sf-tab-busy='true']::after{animation-play-state:paused}
+
+/* "Liste/Grid als Tab-Selektor" (tabs.asTabSelector) — blendet NUR die
+   Streifen aus, die mindestens einen Session-Tile-Tab tragen (strukturell
+   über :has(), siehe DEVELOPMENT.md); Terminal-/Dateien-/sonstige
+   Pane-Tab-Leisten ohne Session-Tabs bleiben unberührt. Unabhängig vom
+   UI-Tabs-Master (data-sf-ui-tabs) — eigener Schalter. */
+html[data-sf-hide-tabstrip='on'] div:has(> [role='tablist'] [data-tree-tab^='session-tile:']){
+  display:none
+}
+/* #end */
 
 /* ── Einstellungs-Navigation: sticky Kategorie-Chips ─────────────────── */
+/* #full */
+/* ── Individualisierung: Akzent-Tönung · Content-Shell · Hintergrund-Layer ──
+   Der .sf-bg-layer wird per JS in die Pane-Hosts gesetzt; hier nur die
+   Darstellung. Variablen (--sf-*) kommen von applyPersonal(). Die Akzent-Regel
+   ist unlayered und sticht damit die @layer-base-Definition der App. */
+
+html[data-sf-accent~='on']{--ui-accent:var(--sf-accent-color,#7c3aed)}
+
+/* Geltungsbereich „alle": die Zonenfläche transparent schalten, damit der
+   Hintergrund-Layer (z-index:-1) hinter dem Pane-Inhalt sichtbar wird — sonst läge
+   er hinter der opaken Zonen-Fläche (--ui-editor-surface-background). */
+html[data-sf-bg~='on'][data-sf-bg-scope='all']{
+  --ui-editor-surface-background:transparent
+}
+
+.sf-bg-layer{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background-image:var(--sf-bg-url,none);
+  background-size:var(--sf-bg-fit,cover);
+  background-position:center;
+  background-repeat:no-repeat;
+  border-radius:inherit;
+  filter:blur(var(--sf-bg-blur,0px))
+}
+.sf-bg-layer::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:color-mix(in srgb,#000 var(--sf-bg-dim,35%),transparent)
+}
+.sf-bg-layer video{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:var(--sf-bg-fit,cover);
+  pointer-events:none
+}
+/* #end */
 
 .sf-nav{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:6px;margin:0 -6px 2px;padding:6px;background:color-mix(in srgb,var(--ui-editor-surface-background,var(--background)) 90%,transparent);border-bottom:1px solid var(--ui-stroke-tertiary);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .sf-nav-chips{display:flex;align-items:center;gap:3px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none}
@@ -5146,6 +7047,439 @@ function activityLabel(t, detail) {
   return label
 }
 
+/* #full */
+// ─────────────────────────────────────────────────────────────────────────────
+// Animation-Controller — Zeilen-Kaskade + Stream-Reveal über die Web
+// Animations-API. Zustand liegt PRO Element (WeakMap), Dedupe über die
+// Zeilen-Indizes — so kann ein Re-Parse der Markdown-Blöcke nichts flackern
+// lassen (jede Zeile animiert höchstens einmal).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LINE_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, table, pre, [data-slot="aui_markdown-image"], [data-streamdown="code-block"], [data-slot="code-card"]'
+const ASSISTANT_CONTENT = '[data-slot="aui_assistant-message-content"]'
+const SWITCHING_ATTR = 'data-session-switching'
+const HOT_WINDOW_MS = 2600
+
+function createAnimationController(ctx) {
+  const lineState = new WeakMap() // el -> { done:Set<number>, lastMutation:number, finalized:boolean }
+  const surfaceState = new WeakMap() // surface -> { cascadedAt:number, switching:boolean }
+  let scanScheduled = false
+  let settleTimer = 0
+  let disposed = false
+
+  const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+
+  function stateFor(el) {
+    let state = lineState.get(el)
+
+    if (!state) {
+      state = { done: new Set(), lastMutation: 0, finalized: false }
+      lineState.set(el, state)
+    }
+
+    return state
+  }
+
+  function shouldSkipReasoning(el) {
+    if (!readSetting('animation', 'skipReasoning')) {
+      return false
+    }
+
+    return Boolean(el.closest("[data-slot='aui_thinking-disclosure']"))
+  }
+
+  /** Alle "Zeilen"-Einheiten eines Markdown-Blocks, in Dokumentreihenfolge. */
+  function lineUnits(md) {
+    const includeLists = readSetting('animation', 'includeLists') !== false
+    const includeCode = readSetting('animation', 'includeCode') !== false
+    const units = []
+
+    for (const child of md.children) {
+      const tag = child.tagName
+
+      if (tag === 'UL' || tag === 'OL') {
+        if (includeLists) {
+          for (const item of child.children) {
+            if (item.tagName === 'LI') {
+              units.push(item)
+            }
+          }
+        } else {
+          units.push(child)
+        }
+
+        continue
+      }
+
+      if (!includeCode && (tag === 'PRE' || child.matches?.("[data-streamdown='code-block'], [data-slot='code-card']"))) {
+        continue
+      }
+
+      units.push(child)
+    }
+
+    return units
+  }
+
+  function animateUnit(el, delay, settings) {
+    if (!el.isConnected) {
+      return
+    }
+
+    const duration = Math.max(60, Number(settings.durationMs) || 320)
+    const travel = Math.max(0, Number(settings.travelPx) || 0)
+    const easing = EASINGS[settings.easing] || EASINGS.soft
+
+    try {
+      const animation = el.animate(
+        travel > 0
+          ? [
+              { opacity: 0, transform: `translateY(${travel}px)` },
+              { opacity: 1, transform: 'translateY(0)' }
+            ]
+          : [{ opacity: 0 }, { opacity: 1 }],
+        { duration, delay: Math.max(0, delay), easing, fill: 'backwards' }
+      )
+
+      animation.onfinish = () => {
+        try {
+          animation.cancel()
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // WAAPI nicht verfügbar — einfach sichtbar lassen.
+    }
+  }
+
+  function collectMessages(surface) {
+    const messages = []
+    const nodes = surface.querySelectorAll(`${ASSISTANT_CONTENT} .aui-md`)
+
+    for (const md of nodes) {
+      if (shouldSkipReasoning(md)) {
+        continue
+      }
+
+      const messageRoot = md.closest(ASSISTANT_CONTENT)
+
+      if (!messageRoot) {
+        continue
+      }
+
+      messages.push({ md, messageRoot })
+    }
+
+    return messages
+  }
+
+  function inViewport(el, margin = 320) {
+    try {
+      const rect = el.getBoundingClientRect()
+      return rect.bottom > -margin && rect.top < window.innerHeight + margin
+    } catch {
+      return true
+    }
+  }
+
+  /** Kaskade: alle sichtbaren Zeilen einer Fläche nacheinander einblenden. */
+  function cascadeSurface(surface, settings) {
+    if (disposed || reducedMotion() || surface.hasAttribute(SWITCHING_ATTR)) {
+      return
+    }
+
+    const messages = collectMessages(surface)
+    let order = 0
+    const stagger = Math.max(0, Number(settings.staggerMs) || 0)
+    const cap = Math.max(1, Number(settings.maxStaggerSteps) || 1)
+
+    for (const { md } of messages) {
+      if (!inViewport(md)) {
+        continue
+      }
+
+      const units = lineUnits(md)
+      const state = stateFor(md)
+      state.finalized = false
+
+      for (let index = 0; index < units.length; index += 1) {
+        const unit = units[index]
+
+        if (state.done.has(index)) {
+          order += 1
+          continue
+        }
+
+        const delay = Math.min(order, cap) * stagger
+        order += 1
+        state.done.add(index)
+
+        if (unit.getBoundingClientRect().height >= 2 || unit.tagName === 'PRE') {
+          animateUnit(unit, delay, settings)
+        }
+      }
+
+      state.lastMutation = Date.now()
+    }
+  }
+
+  /** Während des Streamens: fertig geschriebene Zeilen einmal animieren. */
+  function processHotElement(md, settings, now) {
+    const state = lineState.get(md)
+
+    if (!state || state.lastMutation === 0) {
+      return
+    }
+
+    const units = lineUnits(md)
+
+    if (!units.length) {
+      return
+    }
+
+    const hot = now - state.lastMutation < HOT_WINDOW_MS
+    const stagger = Math.max(0, Number(settings.staggerMs) || 0)
+
+    // Alle Zeilen außer der letzten gelten als "fertig", sobald die nächste
+    // erscheint. Die letzte Zeile bekommt ihre Animation beim Settle.
+    let batch = 0
+
+    for (let index = 0; index < units.length - 1; index += 1) {
+      if (state.done.has(index)) {
+        continue
+      }
+
+      state.done.add(index)
+      animateUnit(units[index], batch * Math.min(stagger, 90), settings)
+      batch += 1
+    }
+
+    if (!hot && !state.finalized) {
+      const lastIndex = units.length - 1
+
+      if (!state.done.has(lastIndex)) {
+        state.done.add(lastIndex)
+        animateUnit(units[lastIndex], batch * Math.min(stagger, 90), settings)
+      }
+
+      state.finalized = true
+    }
+  }
+
+  function scan() {
+    scanScheduled = false
+
+    if (disposed || !readSetting('animation', 'enabled')) {
+      return
+    }
+
+    const settings = $settings.get().animation
+    const now = Date.now()
+    const surfaces = document.querySelectorAll('[data-chat-surface]')
+
+    for (const surface of surfaces) {
+      if (surface.hasAttribute(SWITCHING_ATTR)) {
+        continue // Kaskade übernimmt, sobald das Attribut fällt.
+      }
+
+      if (!readSetting('animation', 'streamReveal')) {
+        continue
+      }
+
+      const messages = collectMessages(surface)
+
+      for (const { md } of messages) {
+        if (!inViewport(md, 600)) {
+          continue
+        }
+
+        const state = lineState.get(md)
+
+        if (!state) {
+          continue
+        }
+
+        // Nur Elemente mit frischen Mutationen sind "heiße" Stream-Kandidaten;
+        // state.lastMutation wird vom Observer gesetzt.
+        if (state.lastMutation > 0) {
+          processHotElement(md, settings, now)
+        }
+      }
+    }
+  }
+
+  function scheduleScan() {
+    if (scanScheduled || disposed) {
+      return
+    }
+
+    scanScheduled = true
+    window.requestAnimationFrame(() => {
+      scan()
+    })
+  }
+
+  /** Settle-Prüfung: endet der Stream, bekommt die letzte Zeile ihre Animation. */
+  function scheduleSettleCheck() {
+    window.clearTimeout(settleTimer)
+    settleTimer = window.setTimeout(() => {
+      if (disposed) {
+        return
+      }
+
+      const settings = $settings.get().animation
+      const now = Date.now()
+
+      for (const surface of document.querySelectorAll('[data-chat-surface]')) {
+        for (const { md } of collectMessages(surface)) {
+          const state = lineState.get(md)
+
+          if (state && state.lastMutation > 0 && now - state.lastMutation >= HOT_WINDOW_MS && !state.finalized) {
+            processHotElement(md, settings, now)
+          }
+        }
+      }
+
+      scheduleSettleCheck()
+    }, 1800)
+  }
+
+  const observer = new MutationObserver(records => {
+    if (disposed || !readSetting('animation', 'enabled')) {
+      return
+    }
+
+    const now = Date.now()
+    let hot = false
+
+    for (const record of records) {
+      const target = record.target instanceof Element ? record.target : record.target?.parentElement
+
+      if (!target) {
+        continue
+      }
+
+      const md = target.closest?.('.aui-md')
+
+      if (!md || !md.closest?.(ASSISTANT_CONTENT)) {
+        continue
+      }
+
+      if (md.closest(`[${SWITCHING_ATTR}]`)) {
+        continue
+      }
+
+      if (shouldSkipReasoning(md)) {
+        continue
+      }
+
+      const state = stateFor(md)
+      state.lastMutation = now
+      state.finalized = false
+      hot = true
+    }
+
+    if (hot) {
+      scheduleScan()
+      scheduleSettleCheck()
+    }
+  })
+
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+
+  // Attribut-Beobachter: Session-Wechsel-Ende => Kaskade für diese Fläche.
+  const attrObserver = new MutationObserver(records => {
+    for (const record of records) {
+      const target = record.target
+
+      if (!(target instanceof Element) || !target.matches?.('[data-chat-surface]')) {
+        continue
+      }
+
+      if (target.hasAttribute(SWITCHING_ATTR)) {
+        const info = surfaceState.get(target) || { cascadedAt: 0 }
+        surfaceState.set(target, { ...info, switching: true })
+      } else {
+        const info = surfaceState.get(target) || { cascadedAt: 0, switching: false }
+
+        if (!info.switching) {
+          continue
+        }
+
+        surfaceState.set(target, { ...info, switching: false })
+        const settings = $settings.get().animation
+
+        if (settings.enabled && settings.historyCascade) {
+          // Ein Frame warten: Rows sollen laut Kontrakt "auf dem Schirm"
+          // sein, wenn das Attribut fällt — trotzdem erst nach dem Paint.
+          window.requestAnimationFrame(() => {
+            cascadeSurface(target, $settings.get().animation)
+          })
+        }
+      }
+    }
+  })
+
+  attrObserver.observe(document.body, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: [SWITCHING_ATTR]
+  })
+
+  // Fallback: Fokuswechsel (falls ein Open das Attribut nicht setzt).
+  let focusTimer = 0
+  const stopFocus = host.state.focusedStoredSessionId.listen(() => {
+    window.clearTimeout(focusTimer)
+    focusTimer = window.setTimeout(() => {
+      const settings = $settings.get().animation
+
+      if (!settings.enabled || !settings.historyCascade || reducedMotion()) {
+        return
+      }
+
+      for (const surface of document.querySelectorAll('[data-chat-surface]')) {
+        if (surface.hasAttribute(SWITCHING_ATTR)) {
+          continue
+        }
+
+        cascadeSurface(surface, settings)
+      }
+    }, 450)
+  })
+
+  // Start-Kaskade: einmal nach dem Laden des Plugins.
+  const initialTimer = ctx.setTimeout(() => {
+    if (reducedMotion()) {
+      return
+    }
+
+    const settings = $settings.get().animation
+
+    if (settings.enabled && settings.historyCascade) {
+      for (const surface of document.querySelectorAll('[data-chat-surface]')) {
+        cascadeSurface(surface, settings)
+      }
+    }
+  }, 900)
+
+  scheduleSettleCheck()
+
+  return () => {
+    disposed = true
+    observer.disconnect()
+    attrObserver.disconnect()
+    window.clearTimeout(settleTimer)
+    window.clearTimeout(focusTimer)
+    try {
+      stopFocus()
+      initialTimer()
+    } catch {
+      // ignore
+    }
+  }
+}
+/* #end */
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Strg+Scroll-Controller + HUD
@@ -6183,6 +8517,9 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
   const moreItems = [
     { icon: 'browser', key: 'tab', label: t('openTab'), run: () => onOpen(row, 'tab') },
     { icon: 'link-external', key: 'window', label: t('openWindow'), run: () => onOpen(row, 'window') },
+    /* #full */
+    { icon: 'terminal', key: 'terminal', label: t('termOpen'), run: () => onMore('terminal', row) },
+    /* #end */
     { key: 'sep1', separator: true },
     { icon: 'edit', key: 'rename', label: t('renameMenu'), run: () => onMore('rename', row) },
     { icon: 'symbol-color', key: 'color', label: t('sessionColorAction'), run: () => onMore('color', row) },
@@ -6355,6 +8692,25 @@ function makeIdempotencyKey() {
   return `sf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+/* #full */
+async function openSessionInTerminalRow(row) {
+  try {
+    const desktop = window.hermesDesktop
+
+    if (!desktop || typeof desktop.openSessionInTerminal !== 'function') {
+      throw new Error('Desktop-API nicht verfuegbar')
+    }
+
+    const result = await desktop.openSessionInTerminal(row.id, {})
+
+    if (result && result.ok === false) {
+      throw new Error(String(result.error || 'open failed'))
+    }
+  } catch (error) {
+    host.notifyError(error, CTX?.i18n?.t('termOpen') || 'Terminal')
+  }
+}
+/* #end */
 
 async function renameSessionRow(row, title) {
   const next = String(title || '').trim()
@@ -6807,6 +9163,10 @@ let projFolderAddControl = ({ t, state, folderDraft, setFolderDraft, onTyped }) 
     ]
   })
 
+/* #full */
+projFolderAddControl = ({ t, state, onPick }) =>
+  jsx(Button, { disabled: state.busy, onClick: () => void onPick(), size: 'sm', variant: 'ghost', children: jsxs('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 }, children: [jsx(Codicon, { name: 'add', size: '0.75rem' }), t('projAddFolder')] }) })
+/* #end */
 
 function ProjectDialog({ state, setState, t }) {
   // Catalog-Build: manueller Ordnerpfad (kein nativer Picker ohne Desktop-
@@ -6838,6 +9198,11 @@ function ProjectDialog({ state, setState, t }) {
     return true
   }
 
+  /* #full */
+  const addFolder = async () => {
+    addFolderPath(await pickProjectFolder())
+  }
+  /* #end */
 
   // Catalog-Build: Ordner per Hand eintippen (SDK hat keinen Picker-Door,
   // Anfrage läuft auf #116305). Im Full-Build unbenutzt, aber harmlos.
@@ -7303,6 +9668,42 @@ function navStatusTone(status) {
 
 /** Beide Status-Quellen nachziehen (Bridge-gated, In-Flight-Guard). */
 function refreshNavStatus() {
+  /* #full */
+  if (navStatusInFlight) {
+    return navStatusInFlight
+  }
+
+  navStatusInFlight = (async () => {
+    try {
+      const bridge = globalThis.window?.hermesDesktop
+
+      if (!bridge || typeof bridge.api !== 'function') {
+        return
+      }
+
+      const [kanbanBoard, cronJobs] = await Promise.all([
+        bridge.api({ path: '/api/plugins/kanban/board', timeoutMs: 8000 }).catch(() => null),
+        bridge.api({ path: '/api/cron/jobs', timeoutMs: 8000 }).catch(() => null)
+      ])
+
+      $navStatus.set({
+        kanban: kanbanBoard ? kanbanBoardToStatus(kanbanBoard) : null,
+        cron: Array.isArray(cronJobs) ? cronJobsToStatus(cronJobs) : null,
+        // Kanban-Präsenz = Board-Endpoint hat geantwortet (404/Fehler → null).
+        // Ersetzt den alten DOM-Probe-Weg ([data-tour^=…]) — ein Signal
+        // weniger, keine Markup-Kopplung (Regel 8, sauberer in beiden Builds).
+        kanbanOk: Boolean(kanbanBoard)
+      })
+      $restMirror.set(true)
+    } catch {
+      // Bridge nicht da / Netzwerk — alter Stand bleibt, kein Crash.
+    } finally {
+      navStatusInFlight = null
+    }
+  })()
+
+  return navStatusInFlight
+  /* #end */
   /* #catalog-only */
   // Catalog-Build: kein REST-Door im SDK (Anfrage auf #116305) — kanbanOk
   // bleibt false, also bleibt der Kanban-Button in NavAppsBar ganz aus
@@ -7568,6 +9969,13 @@ function SessionsPane() {
       return
     }
 
+    /* #full */
+    if (action === 'terminal') {
+      void openSessionInTerminalRow(row)
+
+      return
+    }
+    /* #end */
 
     if (action === 'branch') {
       void branchSessionRow(row)
@@ -8304,6 +10712,30 @@ function SessionsPane() {
                   },
                   children: t('actionExpandAll')
                 }),
+                /* #full */
+                jsx(DropdownMenuItem, {
+                  className: 'sf-menu-item',
+                  disabled: !rows.some(row => row.unread),
+                  key: 'mark-read',
+                  onSelect: event => {
+                    event?.preventDefault?.()
+
+                    const unread = rows.filter(row => row.unread)
+
+                    if (!unread.length) {
+                      host.notify({ kind: 'info', message: t('actionNoUnread') })
+
+                      return
+                    }
+
+                    void markAllSessionsRead(unread).then(done => {
+                      host.notify({ kind: 'success', message: t('actionMarkAllReadDone', done) })
+                    })
+                  },
+                  children: t('actionMarkAllRead')
+                }),
+                jsx(DropdownMenuSeparator, { key: 'sep-2' }),
+                /* #end */
                 jsx('div', { className: 'sf-menu-caption', key: 'cap-density', children: t('viewOptionsDensity') }),
                 ...densityChoices.map(choice =>
                   menuChoice(settings.groups.headerDensity === choice.id, choice.label, () =>
@@ -8855,6 +11287,117 @@ function SettingsPage() {
 
       jsx(SettingsNav, {}),
 
+/* #full */
+      // ── Chat-Animation ─────────────────────────────────────────────────
+      jsxs(SettingsSection, {
+        icon: 'sparkle',
+        id: 'sf-sec-chat',
+        title: t('secAnimation'),
+        description: t('secAnimationDesc'),
+        children: [
+          jsx(ToggleRow, {
+            label: t('animEnabled'),
+            description: t('animEnabledDesc'),
+            checked: animation.enabled,
+            onChange: value => patch('animation', 'enabled', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('animHistoryCascade'),
+            description: t('animHistoryCascadeDesc'),
+            checked: animation.historyCascade,
+            disabled: !animation.enabled,
+            onChange: value => patch('animation', 'historyCascade', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('animStreamReveal'),
+            description: t('animStreamRevealDesc'),
+            checked: animation.streamReveal,
+            disabled: !animation.enabled,
+            onChange: value => patch('animation', 'streamReveal', value)
+          }),
+          jsx(Row, {
+            title: t('animDuration'),
+            description: t('animDurationDesc'),
+            action: jsx(NumberInput, {
+              min: 80,
+              max: 2000,
+              step: 20,
+              value: animation.durationMs,
+              onChange: value => patch('animation', 'durationMs', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('animStagger'),
+            description: t('animStaggerDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 500,
+              step: 5,
+              value: animation.staggerMs,
+              onChange: value => patch('animation', 'staggerMs', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('animMaxSteps'),
+            description: t('animMaxStepsDesc'),
+            action: jsx(NumberInput, {
+              min: 1,
+              max: 200,
+              step: 1,
+              value: animation.maxStaggerSteps,
+              onChange: value => patch('animation', 'maxStaggerSteps', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('animTravel'),
+            description: t('animTravelDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 64,
+              step: 1,
+              value: animation.travelPx,
+              onChange: value => patch('animation', 'travelPx', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('animEasing'),
+            description: t('animEasingDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'soft', label: t('easingSoft') },
+                { id: 'smooth', label: t('easingSmooth') },
+                { id: 'gentle', label: t('easingGentle') },
+                { id: 'back', label: t('easingBack') }
+              ],
+              value: animation.easing,
+              onChange: value => patch('animation', 'easing', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('animSkipReasoning'),
+            description: t('animSkipReasoningDesc'),
+            checked: animation.skipReasoning,
+            disabled: !animation.enabled,
+            onChange: value => patch('animation', 'skipReasoning', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('animIncludeCode'),
+            description: t('animIncludeCodeDesc'),
+            checked: animation.includeCode,
+            disabled: !animation.enabled,
+            onChange: value => patch('animation', 'includeCode', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('animIncludeLists'),
+            description: t('animIncludeListsDesc'),
+            checked: animation.includeLists,
+            disabled: !animation.enabled,
+            onChange: value => patch('animation', 'includeLists', value)
+          })
+        ]
+      }),
+
+/* #end */
       // ── Strg+Scroll ────────────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'arrow-both',
@@ -9566,6 +12109,345 @@ function SettingsPage() {
         ]
       }),
 
+/* #full */
+      // ── UI-Tabs (Content-Bereich) ─────────────────────────────────────
+      jsxs(SettingsSection, {
+        icon: 'multiple-windows',
+        id: 'sf-sec-uitabs',
+        title: t('secUiTabs'),
+        description: t('secUiTabsDesc'),
+        children: [
+          jsx(Row, {
+            title: t('uiTabsPresets'),
+            description: t('uiTabsPresetsDesc'),
+            action: jsxs('div', {
+              className: 'sf-preset-row',
+              children: [
+                jsx(Button, {
+                  onClick: () => applyUiTabsPreset('sidebar'),
+                  size: 'sm',
+                  variant: 'secondary',
+                  children: t('uiTabsPresetSidebar')
+                }),
+                jsx(Button, {
+                  onClick: () => applyUiTabsPreset('minimal'),
+                  size: 'sm',
+                  variant: 'ghost',
+                  children: t('uiTabsPresetMinimal')
+                }),
+                jsx(Button, {
+                  onClick: () => applyUiTabsPreset('stock'),
+                  size: 'sm',
+                  variant: 'ghost',
+                  children: t('uiTabsPresetStock')
+                })
+              ]
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsEnabled'),
+            description: t('uiTabsEnabledDesc'),
+            checked: uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'enabled', value)
+          }),
+          jsx(Row, {
+            title: t('uiTabsRadius'),
+            description: t('uiTabsRadiusDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 12,
+              step: 1,
+              value: uiTabs.radius,
+              onChange: value => patch('uiTabs', 'radius', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsGap'),
+            description: t('uiTabsGapDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 10,
+              step: 1,
+              value: uiTabs.gap,
+              onChange: value => patch('uiTabs', 'gap', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsInset'),
+            description: t('uiTabsInsetDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 8,
+              step: 1,
+              value: uiTabs.insetY,
+              onChange: value => patch('uiTabs', 'insetY', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsSeparators'),
+            description: t('uiTabsSeparatorsDesc'),
+            checked: uiTabs.separators,
+            disabled: !uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'separators', value)
+          }),
+          jsx(Row, {
+            title: t('uiTabsActive'),
+            description: t('uiTabsActiveDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'sidebar', label: t('uiTabsActiveSidebar') },
+                { id: 'underline', label: t('uiTabsActiveUnderline') },
+                { id: 'both', label: t('uiTabsActiveBoth') }
+              ],
+              value: uiTabs.activeStyle,
+              onChange: value => patch('uiTabs', 'activeStyle', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsLabelCase'),
+            description: t('uiTabsLabelCaseDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'normal', label: t('uiTabsCaseNormal') },
+                { id: 'upper', label: t('uiTabsCaseUpper') }
+              ],
+              value: uiTabs.labelCase,
+              onChange: value => patch('uiTabs', 'labelCase', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsLabelSize'),
+            description: t('uiTabsLabelSizeDesc'),
+            action: jsx(NumberInput, {
+              min: 10,
+              max: 13,
+              step: 1,
+              value: uiTabs.labelSize,
+              onChange: value => patch('uiTabs', 'labelSize', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsShowLead'),
+            description: t('uiTabsShowLeadDesc'),
+            checked: uiTabs.showLead,
+            disabled: !uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'showLead', value)
+          }),
+          jsx(Row, {
+            title: t('uiTabsCloseMode'),
+            description: t('uiTabsCloseModeDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'hover', label: t('uiTabsCloseOnHover') },
+                { id: 'always', label: t('uiTabsCloseAlways') },
+                { id: 'active', label: t('uiTabsCloseActive') }
+              ],
+              value: uiTabs.closeMode,
+              onChange: value => patch('uiTabs', 'closeMode', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('uiTabsCloseWidth'),
+            description: t('uiTabsCloseWidthDesc'),
+            action: jsx(NumberInput, {
+              min: 14,
+              max: 32,
+              step: 2,
+              value: uiTabs.closeWidth,
+              onChange: value => patch('uiTabs', 'closeWidth', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsCloseHoverBg'),
+            description: t('uiTabsCloseHoverBgDesc'),
+            checked: uiTabs.closeHover,
+            disabled: !uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'closeHover', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('uiTabsArc'),
+            description: t('uiTabsArcDesc'),
+            checked: uiTabs.arc,
+            disabled: !uiTabs.enabled,
+            onChange: value => patch('uiTabs', 'arc', value)
+          }),
+          jsx('p', { className: 'sf-hint', children: t('uiTabsHint') })
+        ]
+      }),
+
+/* #end */
+/* #full */
+      // ── Glass & Lesbarkeit ─────────────────────────────────────────────
+      jsxs(SettingsSection, {
+        icon: 'paintcan',
+        id: 'sf-sec-glass',
+        title: t('secGlass'),
+        description: t('secGlassDesc'),
+        children: [
+          jsx(ToggleRow, {
+            label: t('glassEnabled'),
+            description: t('glassEnabledDesc'),
+            checked: glass.enabled,
+            onChange: value => patch('glass', 'enabled', value)
+          }),
+          jsx(Row, {
+            title: t('glassBlur'),
+            description: t('glassBlurDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 40,
+              step: 1,
+              value: glass.blurPx,
+              onChange: value => patch('glass', 'blurPx', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassSaturate'),
+            description: t('glassSaturateDesc'),
+            action: jsx(NumberInput, {
+              min: 100,
+              max: 200,
+              step: 5,
+              value: glass.saturate,
+              onChange: value => patch('glass', 'saturate', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassFill'),
+            description: t('glassFillDesc'),
+            action: jsx(NumberInput, {
+              min: 50,
+              max: 94,
+              step: 2,
+              value: glass.fill,
+              onChange: value => patch('glass', 'fill', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassTint'),
+            description: t('glassTintDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 40,
+              step: 1,
+              value: glass.tint,
+              onChange: value => patch('glass', 'tint', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassGradient'),
+            description: t('glassGradientDesc'),
+            checked: glass.gradient,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'gradient', value)
+          }),
+          jsx(Row, {
+            title: t('glassAngle'),
+            description: t('glassAngleDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 360,
+              step: 5,
+              value: glass.angle,
+              onChange: value => patch('glass', 'angle', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassGradOpacity'),
+            description: t('glassGradOpacityDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 60,
+              step: 2,
+              value: glass.gradOpacity,
+              onChange: value => patch('glass', 'gradOpacity', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassReach'),
+            description: t('glassReachDesc'),
+            action: jsx(NumberInput, {
+              min: 20,
+              max: 100,
+              step: 4,
+              value: glass.reach,
+              onChange: value => patch('glass', 'reach', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassRing'),
+            description: t('glassRingDesc'),
+            checked: glass.ring,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'ring', value)
+          }),
+          jsx(ToggleRow, {
+            label: t('glassArc'),
+            description: t('glassArcDesc'),
+            checked: glass.arc,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'arc', value)
+          }),
+          jsx(Row, {
+            title: t('glassArcMode'),
+            description: t('glassArcModeDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'always', label: t('glassArcAlways') },
+                { id: 'busy', label: t('glassArcBusy') }
+              ],
+              value: glass.arcMode,
+              onChange: value => patch('glass', 'arcMode', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassArcWidth'),
+            description: t('glassArcWidthDesc'),
+            action: jsx(NumberInput, {
+              min: 0.5,
+              max: 4,
+              step: 0.5,
+              value: glass.arcWidth,
+              onChange: value => patch('glass', 'arcWidth', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('glassArcDuration'),
+            description: t('glassArcDurationDesc'),
+            action: jsx(NumberInput, {
+              min: 1,
+              max: 12,
+              step: 0.5,
+              value: glass.arcDuration,
+              onChange: value => patch('glass', 'arcDuration', value)
+            })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassScopeComposer'),
+            description: t('glassScopeComposerDesc'),
+            checked: glass.scopes.composer,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'scopes', { ...glass.scopes, composer: value })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassScopeChips'),
+            description: t('glassScopeChipsDesc'),
+            checked: glass.scopes.chips,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'scopes', { ...glass.scopes, chips: value })
+          }),
+          jsx(ToggleRow, {
+            label: t('glassScopeStatusbar'),
+            description: t('glassScopeStatusbarDesc'),
+            checked: glass.scopes.statusbar,
+            disabled: !glass.enabled,
+            onChange: value => patch('glass', 'scopes', { ...glass.scopes, statusbar: value })
+          }),
+          jsx('p', { className: 'sf-hint', children: t('glassHint') })
+        ]
+      }),
+
+/* #end */
       // ── Individualisierung ──────────────────────────────────────────────
       jsxs(SettingsSection, {
         icon: 'symbol-color',
@@ -9573,6 +12455,44 @@ function SettingsPage() {
         title: t('secPersonal'),
         description: t('secPersonalDesc'),
         children: [
+/* #full */
+          jsx(ToggleRow, {
+            label: t('personalAccentOn'),
+            description: t('personalAccentOnDesc'),
+            checked: personal.accentOn,
+            onChange: value => patch('personal', 'accentOn', value)
+          }),
+          jsx(Row, {
+            title: t('personalAccentColor'),
+            description: t('personalAccentColorDesc'),
+            action: jsxs('div', {
+              className: 'sf-row-control',
+              children: [
+                jsx(GroupSwatches, {
+                  value: personal.accentColor || null,
+                  onChange: value => patch('personal', 'accentColor', value || '#7c3aed'),
+                  clearLabel: t('personalAccentReset')
+                }),
+                jsx('input', {
+                  'aria-label': t('colorPicker'),
+                  className: 'sf-colorpick',
+                  onChange: event => patch('personal', 'accentColor', String(event.target.value || '').trim()),
+                  title: t('colorPicker'),
+                  type: 'color',
+                  value: /^#[0-9a-f]{6}$/i.test(String(personal.accentColor || '')) ? personal.accentColor : '#7c3aed'
+                }),
+                jsx(Input, {
+                  className: 'sf-num',
+                  maxLength: 7,
+                  onChange: event => patch('personal', 'accentColor', String(event.target.value || '').trim()),
+                  placeholder: '#7c3aed',
+                  value: personal.accentColor || ''
+                })
+              ]
+            })
+          }),
+          jsx('p', { className: 'sf-hint', children: t('personalAccentHint') }),
+/* #end */
           jsx(Row, {
             title: t('personalPaneSurface'),
             description: t('personalPaneSurfaceDesc'),
@@ -9586,6 +12506,93 @@ function SettingsPage() {
               onChange: value => patch('personal', 'paneSurface', value)
             })
           }),
+/* #full */
+          jsx(ToggleRow, {
+            label: t('personalBgOn'),
+            description: t('personalBgOnDesc'),
+            checked: personal.bgOn,
+            onChange: value => patch('personal', 'bgOn', value)
+          }),
+          jsx(Row, {
+            title: t('personalBgKind'),
+            description: t('personalBgKindDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'image', label: t('personalBgKindImage') },
+                { id: 'video', label: t('personalBgKindVideo') }
+              ],
+              value: personal.bgKind,
+              onChange: value => patch('personal', 'bgKind', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalBgPath'),
+            description: t('personalBgPathDesc'),
+            action: jsxs('div', {
+              className: 'sf-row-control',
+              children: [
+                jsx(Input, {
+                  onChange: event => patch('personal', 'bgPath', String(event.target.value || '').trim()),
+                  placeholder: '/home/deniz/Pictures/bg.jpg',
+                  value: personal.bgPath || ''
+                }),
+                jsx(Button, {
+                  onClick: () => pickBackgroundFile(),
+                  size: 'sm',
+                  variant: 'ghost',
+                  children: t('personalBgPathPick')
+                })
+              ]
+            })
+          }),
+          jsx('p', { className: 'sf-hint', children: t('personalBgPathHint') }),
+          jsx(Row, {
+            title: t('personalBgFit'),
+            description: t('personalBgFitDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'cover', label: t('personalBgFitCover') },
+                { id: 'contain', label: t('personalBgFitContain') }
+              ],
+              value: personal.bgFit,
+              onChange: value => patch('personal', 'bgFit', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalBgDim'),
+            description: t('personalBgDimDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 85,
+              step: 5,
+              value: personal.bgDim,
+              onChange: value => patch('personal', 'bgDim', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalBgBlur'),
+            description: t('personalBgBlurDesc'),
+            action: jsx(NumberInput, {
+              min: 0,
+              max: 24,
+              step: 2,
+              value: personal.bgBlur,
+              onChange: value => patch('personal', 'bgBlur', value)
+            })
+          }),
+          jsx(Row, {
+            title: t('personalBgScope'),
+            description: t('personalBgScopeDesc'),
+            action: jsx(Segment, {
+              options: [
+                { id: 'chat', label: t('personalBgScopeChat') },
+                { id: 'all', label: t('personalBgScopeAll') }
+              ],
+              value: personal.bgScope,
+              onChange: value => patch('personal', 'bgScope', value)
+            })
+          }),
+/* #end */
         ]
       }),
 
@@ -9715,9 +12722,25 @@ export default {
     loadGroups()
     const removeCss = injectCss()
 
+/* #full */
+    // 2) Controller starten (Animation, Strg+Scroll).
+    const disposeAnimation = createAnimationController(ctx)
+/* #end */
     const wheelController = createWheelController(ctx)
 
+/* #full */
+    // 2b) Glass-Lesbarkeit: Einstellungen als Attribute/Variablen auf <html>
+    //     spiegeln; das Stylesheet reagiert rein per CSS darauf.
+    applyGlass()
+    const stopGlassWatch = $settings.listen(() => applyGlass())
+/* #end */
 
+/* #full */
+    // 2b-3) Individualisierung: Akzent-Tönung, Chat-Hintergrund, Content-Shell.
+    applyPersonal()
+    const stopPersonalWatch = $settings.listen(() => applyPersonal())
+    ctx.setInterval(() => syncPaneBackgrounds(), 2500)
+/* #end */
 
     // 2b-4) Session-Ansicht (Liste/Grid): Layout-Variablen auf <html>.
     applyGrid()
@@ -9745,8 +12768,33 @@ export default {
       scheduleContextRefresh(2500)
     }
 
+/* #full */
+    // 2c) Umlaufender Glow-Ring folgt der Aktivität (Modus „busy").
+    const stopArcWatch = [
+      $activity.listen(() => syncArc()),
+      $liveMap.listen(() => syncArc()),
+      host.state.focusedStoredSessionId.listen(() => syncArc())
+    ]
+/* #end */
 
+/* #full */
+    // 2d) UI-Tabs: Sidebar-Optik für die Content-Tab-Leiste + Live-Status.
+    applyUiTabs()
+    const stopUiTabsWatch = $settings.listen(() => applyUiTabs())
+    const stopTabBusyWatch = [
+      $activity.listen(() => syncTabBusy()),
+      $liveMap.listen(() => syncTabBusy())
+    ]
 
+    ctx.setInterval(() => syncTabBusy(), 2000)
+/* #end */
+
+/* #full */
+    // 2e) "Liste/Grid als Tab-Selektor": Hermes-eigene Content-Tab-Leiste
+    //     ausblenden, wenn die Pane dieselbe Navigation schon abdeckt.
+    applyTabSelectorMode()
+    const stopTabSelectorWatch = $settings.listen(() => applyTabSelectorMode())
+/* #end */
 
     // 2f) Gruppen-Kopfzeilen-Dichte (compact/comfortable/detailed).
     applyGroupsDensity()
@@ -9762,6 +12810,13 @@ export default {
 
     console.info(`[${ID}] v${VERSION} loaded (glass: ${readSetting('glass', 'enabled') ? 'on' : 'off'})`)
 
+/* #full */
+    // Radius des Glow-Rings folgt live der echten Composer-Kontur (Theme-unabhängig).
+    // Idle-Drossel (v1.24.0): alle 4 s wird nur geschrieben, wenn sich der
+    // gemessene Wert geändert hat — measureComposerRadius macht den DOM-Read
+    // sowieso nur bei vorhandener Composer-Fläche und vergleicht vor dem Set.
+    ctx.setInterval(() => measureComposerRadius(), 4000)
+/* #end */
 
 
     // 3) Session-Daten: initial (via Gateway-Gate) + bei Events + Polls.
@@ -9856,11 +12911,35 @@ export default {
       void refreshNavStatus()
     }, NAV_STATUS_POLL_MS)
 
+/* #full */
+    // Composer-Projekt-Pill (v1.21): Sync-Takt fängt App-Re-Renders (Zeile weg
+    // → neu injizieren) und Pane-Wechsel; die Listener ziehen Label/Menu-
+    // Zustand sofort nach, wenn Projekte, Seed oder Fokus sich ändern.
+    adoptComposerPickForNewSession() // Baseline: aktueller Fokus, kein Übergang
+    kickComposerPillSync()
+    const stopComposerPillWatch = [
+      $projectsList.listen(() => kickComposerPillSync()),
+      $sessionProjectSeed.listen(() => kickComposerPillSync()),
+      $composerPick.listen(() => kickComposerPillSync()),
+      host.state.focusedStoredSessionId.listen(() => {
+        adoptComposerPickForNewSession()
+        kickComposerPillSync()
+      })
+    ]
+    ctx.setInterval(() => kickComposerPillSync(), CPROJ_SYNC_MS)
+/* #end */
 
     ctx.setInterval(() => {
       expireActivity()
     }, 30_000)
 
+/* #full */
+    // 3c) Sidebar-Observer: App→Plugin-Sync für Projekt-/Session-Änderungen
+    //     in der Hermes-Desktop-Sidebar (Gateway feuert dafür keine Events).
+    //     MutationObserver auf [data-sessions-mode] + window focus. Disposer
+    //     läuft im onDispose-Block unten.
+    const stopSidebarSync = watchSidebarSync(ctx)
+/* #end */
 
     // 3d) Window-globale Drag-End-/Drop-Fallbacks: wenn eine Zeile während
     //     eines Drags unmountet (Rerender wegen refresh), feuert ihr lokaler
@@ -9939,6 +13018,22 @@ export default {
           run: () => wheelController.cyclePrev()
         }
       },
+/* #full */
+      {
+        id: 'cmd-toggle-animation',
+        area: PALETTE_AREA,
+        data: {
+          id: 'session-flow.toggleAnimation',
+          label: 'Session Flow: Zeilen-Animation umschalten',
+          keywords: ['animation', 'zeilen', 'easing'],
+          run: () => {
+            const next = !readSetting('animation', 'enabled')
+            patchSettings('animation', { enabled: next })
+            host.notify({ kind: 'info', message: `Session Flow: Animation ${next ? 'an' : 'aus'}` })
+          }
+        }
+      },
+/* #end */
       {
         id: 'cmd-toggle-wheel',
         area: PALETTE_AREA,
@@ -9953,6 +13048,22 @@ export default {
           }
         }
       },
+/* #full */
+      {
+        id: 'cmd-toggle-glass',
+        area: PALETTE_AREA,
+        data: {
+          id: 'session-flow.toggleGlass',
+          label: 'Session Flow: Glass-Effekt umschalten',
+          keywords: ['glass', 'blur', 'chips', 'lesbarkeit', 'readability'],
+          run: () => {
+            const next = !readSetting('glass', 'enabled')
+            patchSettings('glass', { enabled: next })
+            host.notify({ kind: 'info', message: `Session Flow: Glass ${next ? 'an' : 'aus'}` })
+          }
+        }
+      },
+/* #end */
       {
         id: 'key-next',
         area: KEYBINDS_AREA,
@@ -9984,15 +13095,39 @@ export default {
       window.clearTimeout(groupsSaveTimer)
       window.clearTimeout(refreshDebounce)
       try {
+/* #full */
+        for (const stop of stopArcWatch) stop()
+        for (const stop of stopTabBusyWatch) stop()
+        stopUiTabsWatch()
+        clearUiTabs()
+        stopTabSelectorWatch()
+        clearTabSelectorMode()
+/* #end */
         stopGroupsDensityWatch()
         clearGroupsDensity()
+/* #full */
+        stopGlassWatch()
+        clearGlass()
+        stopPersonalWatch()
+        clearPersonal()
+/* #end */
         stopGridWatch()
         stopRowsWatch()
         stopThemeWatch()
         clearRows()
         stopAppDensityWatch()
         stopCtxInfoWatch()
+/* #full */
+        for (const stop of stopComposerPillWatch) stop()
+        setComposerMenuOpen(null)
+        document.querySelectorAll(`[${CPROJ_MARKER}]`).forEach(el => el.remove())
+        const cprojMenu = document.querySelector('[data-sf-cproj-menu]')
+        if (cprojMenu) cprojMenu.remove()
+/* #end */
         window.clearTimeout(ctxRefreshTimer)
+/* #full */
+        if (typeof stopSidebarSync === 'function') stopSidebarSync()
+/* #end */
         try {
           window.removeEventListener('dragend', resetDragActive)
           window.removeEventListener('drop', resetDragActive)
@@ -10000,6 +13135,9 @@ export default {
           /* kein echtes window — ignorieren */
         }
         removeCss()
+/* #full */
+        disposeAnimation()
+/* #end */
         wheelController.dispose()
       } catch (error) {
         console.warn(`[${ID}] dispose failed`, error)

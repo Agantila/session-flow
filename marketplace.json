@@ -6,11 +6,11 @@
   "tagline": "Six UX features for the Hermes Desktop session sidebar in one plain-ESM plugin",
   "summary": "Smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style session groups, glass readability for the composer, sidebar-style content tabs, and full personalization — six features in one plugin, all live-configurable from a built-in settings page.",
   "description": "Session Flow turns Hermes Desktop's session sidebar into something that *feels* like a real app:\n\n1. **Line-by-line chat animation** — assistant answers cascade in instead of popping. Duration, stagger, easing, code/list options — all configurable.\n2. **Ctrl+Scroll = session cycling** — hold a modifier and wheel through your active sessions; a HUD shows position and title. Zoom surfaces keep their own behaviour.\n3. **Session pane with Firefox-style groups** — list or grid, groups collapse into a stack (spine/fanned/pill), optional auto-grouping by date/source/project folder. Drop a tab on a project header to move it. Live status icons (thinking / writing / tool / waiting / done / error). Search + quick filter bar. App quick-start row above the toolbar.\n4. **Glass & readability** — optional frost for the input field and UI chips, with a soft accent-tinted gradient overlay that fades to transparent. Blur, saturation, opacity, gradient angle/strength, scopes, and a travelling glow ring — all configurable.\n5. **Sidebar-style UI tabs** — content-area tabs become rounded chips like the sidebar session rows. Live session info from the sidebar: working sessions get the travelling glow ring on their tab.\n6. **Personalization** — pick your own accent color, set a chat background (image or video, fit/dim/blur/scope), and choose the pane surface (native sidebar / chat / none).",
-  "version": "1.28.1",
+  "version": "1.29.0",
   "author": {
     "name": "AGANTILA — Deniz Yilmaz",
     "url": "https://agantila.com",
-    "contact": "deniz@agantila.com"
+    "contact": "info@agantila.com"
   },
   "license": "MIT",
   "homepage": "https://github.com/agantila/session-flow",
@@ -65,17 +65,28 @@
   ],
   "platform": {
     "name": "hermes-desktop",
-    "minVersion": "0.5.0",
+    "minVersion": ">=0.21.5",
     "pluginSdk": "@hermes/plugin-sdk",
     "runtime": "esm",
-    "singleFile": true
+    "singleFile": true,
+    "builds": {
+      "catalog": {
+        "entry": "plugin.js",
+        "note": "SDK-only build — the entry the Hermes Plugin Catalog lists and loads at the pinned SHA (catalog rule 8)."
+      },
+      "full": {
+        "entry": "full/plugin.js",
+        "note": "Standalone build with all UI decorations (composer chip, glass, UI tabs, chat animation, chat background) — distributed via install.sh, not part of the catalog entry."
+      }
+    }
   },
   "install": {
     "type": "file",
     "entry": "plugin.js",
     "commands": {
       "linux": "./install.sh",
-      "linux-dev": "./install.sh --link"
+      "linux-dev": "./install.sh --link",
+      "linux-catalog": "./install.sh --variant catalog"
     },
     "deepLink": "hermes://plugin/install?repo=agantila/session-flow"
   },
@@ -88,8 +99,8 @@
     ]
   },
   "size": {
-    "pluginJs": "525417",
-    "pluginJsHuman": "≈ 513 KB"
+    "pluginJs": "420414",
+    "pluginJsHuman": "≈ 411 KB (catalog) / ≈ 519 KB (full)"
   },
   "locales": [
     "en",
@@ -99,5 +110,5 @@
     "host": "Linux (Wayland/KDE)",
     "hermesDesktop": "0.5.x"
   },
-  "notes": "All 30 marketing images are reproducible from the HTML sources under docs/marketing/src/. Re-render with the included render.sh scripts. The 5-second Hyperframes animation shows the four key visual effects in one loop."
+  "notes": "Two builds from one source: plugin.js (SDK-only catalog build, rule-8 clean — the entry the catalog loads) and full/plugin.js (standalone, all UI decorations, via install.sh). All 30 marketing images are reproducible from the HTML sources under docs/marketing/src/. Contact: info@agantila.com."
 }

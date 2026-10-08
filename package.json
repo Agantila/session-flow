@@ -1,11 +1,11 @@
 {
   "name": "session-flow",
-  "version": "1.28.1",
-  "description": "Hermes Desktop plugin — smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style session tab groups, glass readability for chips and the input field, and sidebar-style content tabs. Live-configurable settings page included.",
+  "version": "1.29.0",
+  "description": "Hermes Desktop plugin — smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style session tab groups, glass readability for chips and the input field, and sidebar-style content tabs. Live-configurable settings page included. Two builds: SDK-only catalog build (plugin.js) and full standalone build (full/plugin.js).",
   "type": "module",
   "private": true,
   "license": "MIT",
-  "author": "AGANTILA — Deniz Yilmaz (https://agantila.com)",
+  "author": "AGANTILA — Deniz Yilmaz (https://agantila.com), contact: info@agantila.com",
   "keywords": [
     "hermes",
     "hermes-desktop",
@@ -21,10 +21,14 @@
   },
   "scripts": {
     "check": "node scripts/check.mjs",
-    "test": "node tests/render-test.mjs",
+    "build:catalog": "node scripts/build-catalog.mjs",
+    "test": "node tests/render-test.mjs full && node tests/render-test.mjs catalog",
+    "test:full": "node tests/render-test.mjs full",
+    "test:catalog": "node tests/render-test.mjs catalog",
+    "test:surface": "node tests/surface-test.mjs",
     "install:plugin": "bash install.sh",
     "install:link": "bash install.sh --link",
     "uninstall:plugin": "bash uninstall.sh",
-    "test:style": "node tests/style-test.mjs"
+    "test:style": "node tests/style-test.mjs full"
   }
 }

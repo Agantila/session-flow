@@ -15,7 +15,8 @@
 // und in eine minimale Test-Seite mit .sf-items[data-view=list|grid]-Struktur
 // geladen. Verglichen werden IMMER Liste gegen Grid (Paritäts-Asserts).
 //
-// Aufruf:  node tests/style-test.mjs            (skip ohne Playwright)
+// Aufruf:  node tests/style-test.mjs [full|catalog]   (Default: full — die
+//          Design-Features leben im Full-Build; skip ohne Playwright)
 //          PLAYWRIGHT_PKG=<pfad/zu/node_modules/playwright> node tests/style-test.mjs
 //          SF_STYLE_SHOTS=<ordner> node tests/style-test.mjs   (Screenshots)
 //
@@ -27,7 +28,12 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 
-const PLUGIN_PATH = fileURLToPath(new URL('../plugin.js', import.meta.url))
+const STYLE_TARGET = (process.argv[2] || 'full').toLowerCase()
+if (STYLE_TARGET !== 'full' && STYLE_TARGET !== 'catalog') {
+  console.error('Aufruf: node tests/style-test.mjs [full|catalog]')
+  process.exit(2)
+}
+const PLUGIN_PATH = fileURLToPath(new URL(STYLE_TARGET === 'full' ? '../full/plugin.js' : '../plugin.js', import.meta.url))
 const require = createRequire(import.meta.url)
 
 // ── Playwright optional laden ───────────────────────────────────────────────

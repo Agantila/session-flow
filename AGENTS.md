@@ -7,15 +7,28 @@ well-known traps.
 
 ## What this is
 
-A Hermes Desktop plugin as **one plain-ESM file** (`plugin.js`, ~8.5k lines,
-no build, no dependencies). Six feature areas: chat line animation,
-Ctrl+Scroll session cycling, a session pane (list/grid + groups + filters),
-glass readability, UI-tab styling, and personalization — all live-configurable
-from a built-in settings page.
+A Hermes Desktop plugin as **one plain-ESM source file**
+(`full/plugin.js`, ~13k lines, no JSX, no dependencies). Six feature areas:
+chat line animation, Ctrl+Scroll session cycling, a session pane (list/grid +
+groups + filters), glass readability, UI-tab styling, and personalization —
+all live-configurable from a built-in settings page.
+
+**Since v1.29.0 there are TWO builds from that one source** (model of the
+catalog-listed `pinned-folders` plugin):
+
+- `full/plugin.js` — source of truth, ALL features, standalone distribution
+  (`./install.sh`, `--link` symlinks `full/` for hot reload).
+- `plugin.js` (repo root) — **generated** SDK-only catalog build
+  (`node scripts/build-catalog.mjs` strips `/* #full */ … /* #end */`
+  regions). This is what the Hermes Plugin Catalog lists and loads at the
+  pinned SHA; it must stay rule-8 clean (no app-markup queries, no
+  `document.body` observers, no core-CSS overrides, no
+  `window.hermesDesktop`) — `tests/surface-test.mjs` trips on violations.
 
 It is installed as a **symlink**: `~/.hermes/desktop-plugins/session-flow` →
-this repo. Saving a file here IS the deploy (hot reload within ~5 s). Never
-copy files around to "install".
+this repo's `full/` directory (re-run `./install.sh --link` once after
+pulling this change). Saving `full/plugin.js` IS the deploy (hot reload
+within ~5 s). Never copy files around to "install".
 
 ## Read first (in this order)
 
@@ -43,6 +56,11 @@ copy files around to "install".
   fails otherwise.
 - Before every commit: `npm run check && npm test` green. `npm run test:style`
   (real Chromium) is mandatory for design-CSS changes.
+- **Catalog rule 8 (catalog build only):** the generated `plugin.js` must
+  contain no app-markup queries, no `document.body` observers, no core-CSS
+  overrides and no `window.hermesDesktop` — such code goes into `/* #full */`
+  regions only. After changing the source: `node scripts/build-catalog.mjs`
+  and commit BOTH files (CI fails on a stale catalog build).
 
 ## Data-layer traps (learned the hard way — do not re-learn them)
 
@@ -64,12 +82,17 @@ copy files around to "install".
 
 ## Test-suite traps (render smoke test)
 
+- The suite runs against BOTH builds: `node tests/render-test.mjs full` and
+  `… catalog` (`npm test` runs both). Full-only sections are wrapped in
+  `if (IS_CATALOG) { skipFullOnly(…) }` guards — keep them when appending
+  sections that test `#full` features.
 - The SDK stub discards every prop except `children` on `Button`/`Codicon`/
   `Tip`/`DropdownMenu*` — assert on real DOM-tag descendants, CSS classes and
   the `t()` call log, never on props of stubbed atoms.
 - Walked nodes carry `.tag`, not `.kind`.
-- New atoms used by `useValue` must be appended to the export-list concat in
-  `tests/render-test.mjs` or tests fail with `mod.$newAtom is undefined`.
+- New atoms used by `useValue` must be appended to `EXPORT_NAMES` in
+  `tests/render-test.mjs` or tests fail with `mod.$newAtom is undefined`;
+  the export list is filtered per build, so catalog-missing names are safe.
 - `$sessions` is global for the whole run — every appended test section sets
   its own fixture at its start and restores the normalized fixture before it
   ends.
@@ -94,8 +117,8 @@ Non-trivial work gets a plan file: copy `docs/plans/TEMPLATE.md` to
 is only `Done` with verification evidence inside. Before finishing, update:
 `CHANGELOG.md`, `docs/SETTINGS.md` (option changes), `docs/ROADMAP.md`,
 `docs/APP-INTEGRATION.md` (new doors/anchors), `docs/README.md` (new files),
-and keep `package.json` version + the `VERSION` constant in `plugin.js` in
-sync.
+and keep `package.json` version + the `VERSION` constant in `full/plugin.js`
+in sync.
 
 ## Git identity
 

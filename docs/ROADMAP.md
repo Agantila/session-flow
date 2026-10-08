@@ -1,9 +1,18 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.28.0 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.29.0 (2026-10-08). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Marketplace-Compliance + Zwei-Build-Modell** (v1.29.0): Resubmission nach
+  der Catalog-Ablehnung #134760 (Regel 8 + Disclosure). `full/plugin.js` =
+  Quelle der Wahrheit (alle Features), Root-`plugin.js` = generierter
+  SDK-only Catalog-Build (`scripts/build-catalog.mjs`, `#full`-Regionen),
+  `plugin.yaml` am Root, Surface-Tripwire (`tests/surface-test.mjs` in
+  `npm run check`), Disclosure vollständig korrigiert (Kontakt
+  info@agantila.com). Siehe
+  [`docs/plans/2026-10-08-marketplace-catalog-compliance.md`](plans/2026-10-08-marketplace-catalog-compliance.md).
 
 - **DnD komplett auf Pointer-Events umgestellt** (v1.28.0, live
   verifiziert): natives HTML5-DnD (`draggable`/`dragstart`/`dragover`/
@@ -251,6 +260,13 @@ Vollständige Pläne zu v1.14.0: `docs/plans/2026-10-04-grouping-filter-dnd-tab-
 und docs/plans/2026-10-04-info-dichte-abstufung.md.
 
 ## Geplant / Ideen
+
+- **Catalog-Build-Parität nach SDK-Doors (v1.29.0-Follow-up)**: sobald die
+  auf [hermes-agent #116305](https://github.com/NousResearch/hermes-agent/issues/116305)
+  angefragten SDK-Slots landen (Composer-Accessory, Tab-Decoration,
+  Message-Render-Hook, Theme-Door, Gateway-Change-Events, REST-Mirror-Door,
+  Picker/Terminal-Doors), wandern die `#full`-Regionen schrittweise auf
+  SDK-Pfade um — jeder Schritt als eigener Mini-Plan + SHA-Bump-PR.
 
 - **Echter Draft-CWD-Hebel (App-PR)**: Plugin-Tür für `$projectScope`/einen
   `setCurrentCwd`-Door, damit der Projekt-Chip den offenen App-Draft direkt

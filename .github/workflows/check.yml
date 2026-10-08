@@ -15,8 +15,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Syntax check + i18n key audit
+      - name: Catalog-Build ist aktuell (build-catalog --check)
+        run: node scripts/build-catalog.mjs --check
+
+      - name: Syntax + i18n + Hook-Audit (beide Builds) + Surface-Tripwire
         run: npm run check
 
-      - name: Render-Smoketest (Pane + Einstellungen, Stub-basiert)
+      - name: Render-Smoketest (beide Builds, Stub-basiert)
         run: npm test

@@ -3,6 +3,78 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.29.0] — 2026-10-08
+
+### Marketplace-Compliance (Resubmission nach hermes-agent #134760)
+
+Die v1.28.1-Submission wurde im Plugin-Katalog abgelehnt (Katalog-Regel 8:
+Desktop-Plugins dürfen die App-eigene UI nicht lesen/modifizieren) plus
+Disclosure-Mängel (Regel 13). v1.29.0 adressiert alle Punkte — **ohne
+Feature-Verlust**:
+
+### Added
+- **Zwei Builds aus einer Quelle** (Modell `pinned-folders`): `full/plugin.js`
+  ist Quelle der Wahrheit (alle Features, Standalone via `install.sh`);
+  `scripts/build-catalog.mjs` erzeugt den **SDK-only Catalog-Build**
+  (Root-`plugin.js`) durch Entfernen der `/* #full */ … /* #end */`-Regionen.
+- **`plugin.yaml`** am Repo-Root (name/version/requires_hermes nach
+  Review-Punkt 1), Disclosure-konforme Beschreibung, Kontakt
+  `info@agantila.com`.
+- **`tests/surface-test.mjs`**: Tripwire gegen Catalog-Regel-8-Muster
+  (App-Markup-Queries, `document.body`-Observer, Desktop-Bridge-Doors,
+  Core-CSS-Overrides, Prototype-Patching) — Spiegelbild des
+  `desktop surface`-Checks im Catalog-CI; läuft in `npm run check` ein.
+- **`scripts/check.mjs`** prüft jetzt BEIDE Builds (Syntax, i18n EN/DE,
+  Hook-Reihenfolge) plus Surface-Check; **`npm test`** rendert gegen beide
+  Builds (`test:full`/`test:catalog` einzeln).
+
+### Changed
+- **Composer-Projekt-Chip, Glass (Composer/Chips/Statusleiste), UI-Tabs-
+  Optik, „Liste/Grid als Tab-Selektor" (Strip-Hide), Chat-Zeilen-Animation,
+  Chat-Hintergrund/Akzent-/Content-Shell** → nur noch im Full-Build; im
+  Catalog-Build ehrlich degradiert, bis die auf
+  [hermes-agent #116305](https://github.com/NousResearch/hermes-agent/issues/116305)
+  angefragten SDK-Slots (Composer-Accessory, Tab-Decoration,
+  Message-Render-Hook, Theme-Door) existieren. Settings-Sektionen dazu
+  erscheinen nur im Full-Build.
+- **Sidebar-Instant-Sync** (`watchSidebarSync`-Observer auf
+  `[data-sessions-mode]`): nur noch Full-Build; Catalog-Build nutzt die
+  bestehenden Poll-Takte + `host.state`-Listener.
+- **window.hermesDesktop im Catalog-Build getilgt**: REST-Spiegel-Lese,
+  Datei-Picker, Dateimanager-Reveal, Terminal-Öffnung sind dort
+  ausgeblendet/degradiert (Clipboard über `navigator.clipboard`, auch im
+  Full-Build vereinfacht); SDK-Doors dafür auf #116305 angefragt.
+- **Kanban-Feature-Detect ohne DOM**: die Präsenz erkennt jetzt die Antwort
+  des öffentlichen Endpoints `GET /api/plugins/kanban/board` statt
+  App-Markup-Probing (`[data-tour^=…]`/`.kanban-drawer-content`) — ein
+  Signal weniger, keine Markup-Kopplung. Läuft über die Desktop-Bridge
+  (`window.hermesDesktop`), also **nur im Full-Build**; der Catalog-Build
+  hat ohne SDK-REST-Door (#116305) gar kein Kanban-Signal und blendet den
+  Button komplett aus, statt ihn ungeprüft zu zeigen.
+- **Pinned-/Archiv-Quickfilter** hängen am REST-Spiegel (`$restMirror`):
+  ohne diese Tür (Catalog-Build) werden beide Subtabs ausgeblendet, statt
+  leere Listen zu zeigen. Pin-Write bleibt über den SDK-Door
+  `host.sessions.pin`.
+- **localStorage-Key `hermes.desktop.projectScope` wird nicht mehr gelesen**
+  (App-interner Zustand — Disclosure-Fehler der v1.28.1-Submission): das
+  aktive Projekt löst ausschließlich über `projects.list` `active_id` auf.
+- `install.sh`: `--variant full|catalog` (Default full), `--link` symlinkt
+  jetzt `full/` (Hot-Reload-Dev auf dem Full-Build); Dokumentation in
+  README/README.de/DEVELOPMENT.md angepasst.
+
+### Fixed
+- **Disclosure-Abgleich (Regel 13)**: die falsche Behauptung, das Plugin
+  schreibe den localStorage-Key `hermes.desktop.projectScope`, ist entfernt
+  (der Code las ihn nur); `plugin.yaml`, `plugin-catalog/session-flow.yaml`
+  und `docs/PLUGIN-CATALOG-PR.md` listen jetzt vollständig alle RPC-Writes
+  (`projects.create/update/add_folder/remove_folder/set_primary/set_active/
+  delete`, `session.title`, `session.branch_stored`, `session.archive`,
+  `session.close`, `session.delete`) und REST-Reads
+  (`/api/sessions`, `/api/plugins/kanban/board`, `/api/cron/jobs`,
+  `/api/getFolderSize` — letzterer nur Full-Build). Kontakt überall auf
+  `info@agantila.com` gestellt (`marketplace.json`, Katalog-YAML, PR-Doku,
+  README/README.de).
+
 ## [1.28.1] — 2026-10-07
 
 ### Fixed

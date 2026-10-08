@@ -1,148 +1,157 @@
-# Catalog entry: `session-flow`
+# Catalog entry: `session-flow` (resubmission after #134760)
 
 This PR adds a single file, `plugin-catalog/session-flow.yaml`, listing
 [`agantila/session-flow`](https://github.com/agantila/session-flow) at the
-pinned commit **`6eebf540453e6b8b7f508a16d8205ff3c6ad0dcb`** (v1.28.1).
+pinned commit `PIN_SHA_HERE` (**v1.29.0**).
+
+**Resubmission of #134760** (review by @teknium1). Every point of the review
+is addressed; see "Review response" below. Contact for this submission:
+**info@agantila.com** (also in the entry, plugin.yaml and marketplace.json).
 
 ## What it does
 
 Six UX features for the Hermes Desktop session sidebar in one plain-ESM
 plugin, all live-configurable from a built-in settings page:
 
-1. **Line-by-line chat animation** — assistant answers cascade in instead of
-   popping. Duration, stagger, easing, code/list options — all configurable.
-2. **Ctrl+Scroll = session cycling** — hold a modifier and wheel through your
-   active sessions; a HUD shows position and title. Zoom surfaces keep their
-   own behaviour.
-3. **Session pane with Firefox-style groups** — list or grid, groups collapse
+1. **Session pane with Firefox-style groups** — list or grid, groups collapse
    into a stack (spine/fanned/pill), optional auto-grouping by date/source/
-   project folder. Drop a tab on a project header to move it. Live status
-   icons (thinking / writing / tool / waiting / done / error). Search + quick
-   filter bar. App quick-start row above the toolbar.
-4. **Glass & readability** — optional frost for the input field and UI chips,
-   with a soft accent-tinted gradient overlay that fades to transparent. Blur,
-   saturation, opacity, gradient angle/strength, scopes, and a travelling glow
-   ring — all configurable.
-5. **Sidebar-style UI tabs** — content-area tabs become rounded chips like
-   the sidebar session rows. Live session info from the sidebar: working
-   sessions get the travelling glow ring on their tab.
-6. **Personalization** — pick your own accent color, set a chat background
-   (image or video, fit/dim/blur/scope), and choose the pane surface (native
-   sidebar / chat / none).
+   project folder (fed by `projects.tree`). Drop a tab on a project header to
+   move it. Live status icons (thinking / writing / tool / waiting / done /
+   error) from gateway RPCs and events. Search + quick filter bar. App
+   quick-start row above the toolbar (SDK `host.navigate` routes).
+2. **Ctrl+Scroll = session cycling** — hold a modifier and wheel through your
+   active sessions; a HUD shows position and title. The gesture listener only
+   reads `event.target.closest(…)` to stay off zoom surfaces — it never
+   queries the document and never touches core UI.
+3. **Project-aware session actions** — rename (`session.title`), branch
+   (`session.branch_stored`), move between projects (`session.workspace.move`
+   / `session.cwd.set`), pin/unpin via the SDK `host.sessions.pin` door,
+   archive/close/delete via `session.*` RPCs — all public gateway RPCs.
+4. **Project management** — create/edit/delete projects and folders, set
+   primary folder, set active project (`projects.*` RPCs, same seams the
+   native sidebar uses).
+5. **Status pips** — Scheduled-jobs and Kanban buttons with honest status
+   dots fed by read-only local-gateway REST reads (`/api/cron/jobs`,
+   `/api/plugins/kanban/board`) where the host exposes them; kanban presence
+   is detected by the endpoint answering, not by probing app markup.
+6. **Settings page + i18n** — own route (`ROUTES_AREA`), sidebar nav entry,
+   palette commands, keybinds, EN + DE bundles.
 
-Plus, since the initial draft: a **composer project chip** in front of the
-`+` Add button so the project anchor for the next message is visible before
-typing (writes `hermes.desktop.projectScope`), **manual groups** (v1.26,
-project-based, schema-migrated), a **project-grouped pane** fed by
-`projects.tree` with pinned sections (REST mirror), **live status icons /
-activity lines**, a **grid view** with parity styling, and **pointer-event
-drag & drop** onto project headers (v1.28.0, replacing native HTML5 DnD).
-Full history in the repo's `CHANGELOG.md` (v1.21.1 → v1.28.1).
+The **catalog build (`plugin.js`) is SDK-only** (catalog rule 8). The repo
+also ships a **full build (`full/plugin.js`)** for standalone installs via
+`install.sh` — it adds UI decorations that need SDK slots which do not exist
+yet (see "SDK slots requested"), reaches past the SDK with the documented
+Desktop-Bridge doors, and is disclosed in the repo README. It is NOT part of
+this catalog entry; the entry pins the catalog build.
 
-## Hermes surfaces used
+## Review response (#134760)
 
-Public surfaces only, per Rule 9:
+| Review point | Resolution |
+|---|---|
+| app-markup queries (`plugin.js:1301`, `2658-2732`, `9566`) | Removed from the catalog build: no `document.querySelector(All)` on `data-slot`/`data-tour`/`data-testid`/`data-sidebar` or any app marker. Composer radius measurement and chip injection deleted; kanban detection now uses the REST endpoint answer instead of DOM probing. A repo-side tripwire (`tests/surface-test.mjs`) mirrors the admission lint so this cannot regress. |
+| `document.body` observers (`7249-7330`) | Removed (chat animation is full-build-only). The catalog build has zero DOM observers on `body`/`documentElement`. |
+| composer injection (`2658-2732`) | Removed from the catalog build; **composer accessory slot requested on #116305**. |
+| core-element CSS overrides (`6460-6570`, `6686`) | Removed from the catalog build (glass/chips/statusbar restyle, hide-tabstrip); **tab decoration + theme slots requested on #116305**. |
+| `window.hermesDesktop.*` | Zero occurrences in the catalog build (grep-checked in CI): REST mirror reads, file picker, reveal-path, open-in-terminal and clipboard bridges are stripped or replaced (clipboard = `navigator.clipboard`). **REST-read door + file-picker/terminal doors requested on #116305**; pinned/archived quick-filters and status pips degrade honestly (hidden, never faked) until then. |
+| disclosure mismatch (localStorage write claim; omitted `projects.*` writes, `session.title`/`session.branch_stored`, `/api/cron/jobs` + kanban reads) | The false write claim is gone — the code never wrote it, and v1.29.0 no longer even READS the app-internal key (active project resolves via `projects.list` `active_id` only). The full RPC/REST list is in the entry `description` above, in the repo `plugin.yaml`, and in the README disclosure section. |
 
-- **`ctx.register`** for: pane (`PANES_AREA`), settings page
-  (`ROUTES_AREA`), sidebar nav (`SIDEBAR_NAV_AREA`), palette commands
-  (`PALETTE_AREA`), `ctx.i18n.register(...)` for EN + DE translation keys.
-- **Sampled atoms** (read-only): `host.state.focusedSessionId`,
-  `host.state.focusedStoredSessionId`, `host.state.focusedSessionProfile`,
-  `host.state.gateway`. Internal `$composerPick`, `$sessionProjectSeed`,
-  `$projectsList`, `$sessions`, `$liveMap` are plugin-local Jotai-style
-  atoms.
-- **Gateway RPCs** (read or write, all public): `projects.tree`,
-  `projects.list`, `projects.set_active`, `session.active_list`,
-  `session.list`, `session.context_breakdown`, `session.title`,
-  `session.workspace.move`, `session.cwd.set`, `session.create`,
-  `host.openSession`, plus the REST mirror `GET /api/sessions`
-  (pinned state only). **No** `AIAgent.<method> = …`, `setattr(server, …)`,
-  `sys.modules[…]` writes, no overrides of core internals.
-- **localStorage** read + write of a single key:
-  `hermes.desktop.projectScope` (the App's existing scope atom backing
-  key — the plugin writes it when the user picks a project in the
-  composer chip; the App reads it on init).
-- **DOM scope** (per Rule 8): only `MutationObserver` on
-  `[data-slot='composer-root']` for the chip's sync loop, and
-  `[data-pane-overlay]`, `[data-pane-hidden]`, `[data-popped-out]` for
-  pane filtering. No `data-slot` / `data-tour` / `data-sidebar` /
-  `data-testid` queries to rewrite core UI. No prototype patching,
-  no `eval` / `new Function`, no dynamic `import()` of non-SDK
-  modules, no script-tag injection.
+## Hermes surfaces used (catalog build)
+
+- **`ctx.register` / `ctx.registerMany`** for: pane (`PANES_AREA`), settings
+  page (`ROUTES_AREA`), sidebar nav (`SIDEBAR_NAV_AREA`), palette commands
+  (`PALETTE_AREA`), keybinds (`KEYBINDS_AREA`); `ctx.i18n.register(...)` for
+  EN + DE; `ctx.onEvent` for gateway events (`message.complete`,
+  `session.info`, `reasoning.delta`, `tool.start`, …); `ctx.storage` for
+  settings/groups under `~/.hermes/cache/desktop-plugins/session-flow/`.
+- **SDK host API**: `host.state.*` atoms (focused session, gateway, cwd,
+  profile), `host.request` (gateway RPCs), `host.openSession`,
+  `host.sessions.pin`, `host.navigate`, `host.notify`/`host.notifyError`,
+  `host.settings.get/subscribe` (app density read).
+- **Gateway RPCs — reads**: `projects.tree`, `projects.list`,
+  `session.list`, `session.active_list`, `session.context_breakdown`.
+- **Gateway RPCs — writes (user-initiated)**: `projects.create`,
+  `projects.update`, `projects.add_folder`, `projects.remove_folder`,
+  `projects.set_primary`, `projects.set_active`, `projects.delete`,
+  `session.create`, `session.cwd.set`, `session.workspace.move`,
+  `session.title`, `session.branch_stored`, `session.archive`,
+  `session.close`, `session.delete`.
+- **Local REST mirror — reads only** (full/known hosts; degrades hidden):
+  `GET /api/sessions` (pinned flag — the RPC wire has no pinned field),
+  `GET /api/plugins/kanban/board` (kanban presence + counts),
+  `GET /api/cron/jobs` (job states).
+- **DOM scope**: only plugin-owned elements (own pane, own overlays, own
+  settings page). One disclosed exception: the wheel gesture handler reads
+  `event.target.closest(BUILTIN_IGNORE)` — the event target of its own
+  listener, never a document query — to keep off zoom surfaces (lightbox,
+  Monaco).
 
 ## Capabilities
 
 ```yaml
 capabilities:
-  provides_tools: []      # no agent tools
-  provides_hooks: []      # no ctx.hooks
-  provides_middleware: [] # no ctx.middleware
-  requires_env: []        # no environment variables
+  provides_tools: []
+  provides_hooks: []
+  provides_middleware: []
+  requires_env: []
 ```
 
-The declared block matches reality at `6eebf540`. `hermes plugins validate
-…--install-deps` should report no undeclared capability creep.
+`hermes plugins validate … --install-deps` at the pin reports no undeclared
+capability creep.
 
-## Disclosure (Rule 13)
+## Disclosure (rule 13) — catalog build
 
-Pure UI layer — what to know before installing:
+- **Network calls to third-party services:** none. Only the local Hermes
+  gateway (RPC + localhost REST mirror).
+- **Reads outside the plugin's own data:** the gateway atoms/RPCs and REST
+  endpoints listed above. Nothing else — no other plugin's data, no browser
+  profile, no vendor CLI tokens, no app-internal localStorage keys.
+- **Shell commands:** none.
+- **Long-running background processes:** none beyond ctx-owned intervals,
+  disposed on unload (live-session poll ~30 s, session refresh ~45 s,
+  project cache + nav status 60 s, activity expiry 30 s, lightweight UI
+  sync 2–5 s).
+- **Stored credentials:** none.
+- **Telemetry:** none.
+- **Approval-system interaction:** none.
+- **Self-update:** none (rule 3). Updates only via SHA-bump PRs here.
 
-- **Network calls to third-party services:** none. The plugin makes no
-  outbound HTTP / WebSocket calls of its own. It only reads the Hermes
-  gateway (localhost) and writes its own settings file.
-- **Reads outside the plugin's own data:** the Hermes gateway atoms
-  (`projects.tree`, `projects.list`, `session.active_list`,
-  `session.list`, `session.context_breakdown`, `session.title`,
-  `session.workspace.move`, `session.cwd.set`), the REST mirror
-  `GET /api/sessions`, and the localStorage key
-  `hermes.desktop.projectScope` (only). No other plugin's data,
-  no browser profile, no vendor CLI token file.
-- **Shell commands:** none. No `child_process`, no `exec`, no shelling out
-  to system CLIs.
-- **Long-running background processes:** none beyond ctx-owned
-  `setInterval` timers, all disposed on plugin unload: live-session poll
-  (~30 s, floor 10 s), session refresh (~45 s, floor 15 s), project-tree
-  cache 60 s, nav-status poll 60 s, activity expiry 30 s, composer-chip
-  sync 2.5 s, and lightweight UI sync timers (2–5 s: pane background,
-  tab busy state, composer radius, chat scan). Plus short HTTP polls
-  driven by Hermes's `host.request` (poll rhythm is Hermes's).
-- **Stored credentials:** none. The plugin has no `config_schema`
-  secrets, no API keys, no OAuth tokens. It only reads what Hermes
-  itself has in memory.
-- **Telemetry / usage reporting:** none — fully opt-in by being
-  absent.
-- **Approval-system interaction:** none. The plugin never auto-approves,
-  never spawns child Hermes processes that inherit YOLO or non-interactive
-  mode, never disables guards. OAuth / interactive prompts are not in
-  its flow.
+## SDK slots requested (upstream #116305)
 
-## Known issues
+1. **Composer accessory slot** — own React node beside the composer controls
+   (for the project chip).
+2. **Tab decoration slot** — badge/class per content tab + an approved way to
+   replace/hide the native tab strip (for the UI-tabs look and
+   "list/grid as tab selector").
+3. **Message-render hook** — per rendered assistant markdown block (for the
+   chat line animation, without DOM observers).
+4. **Theme door** — theme-change event + sanctioned token overrides
+   (`--ui-accent`) and/or a workspace-background slot (personalization).
+5. **Gateway change events** — `session.changed` / `projects.changed`
+   (replaces the full build's sidebar DOM observer).
+6. **REST-mirror read door** — supported SDK way to read `/api/sessions`
+   (pinned flag is not on the RPC wire) plus `/api/cron/jobs` and
+   `/api/plugins/kanban/board`.
+7. **Doors for native file picker / revealPath / openSessionInTerminal.**
 
-None at v1.28.1. (The composer-chip v1.21.0 anchoring bug and the
-v1.25.1–v1.27.7 native-DnD failure modes are fixed in this pin; users on
-older installs bump via `hermes plugins update session-flow` after the
-catalog picks up this PR.)
+As these land, the full-only regions migrate onto the SDK and the catalog
+build regains the features — each as a reviewed SHA-bump PR.
 
-## Verification commands (run locally)
+## Verification
 
-```
-hermes plugins validate /path/to/agantila/session-flow --install-deps
-```
-
-…should pass the manifest check, the desktop surface check, the no
-core override check, the security scan (expect zero `dangerous`; some
-`caution` findings are normal — read the log), and the capabilities
-check against this PR's empty `provides_*` blocks.
-
-Repo-side gates green at the pin: `npm run check`, `npm test`
-(render smoketest), `npm run test:style` (Chromium computed styles).
+- Repo gates at the pin: `npm run check` (syntax + i18n EN/DE + hook-order
+  audit on BOTH builds + surface tripwire on the catalog build), `npm test`
+  (render smoketest against both builds), `npm run test:style`
+  (Chromium computed styles, full build).
+- `node scripts/build-catalog.mjs --check` proves the committed `plugin.js`
+  is exactly the SDK-only build of `full/plugin.js`.
+- `hermes plugins validate /path/to/session-flow --install-deps` passes the
+  manifest, `desktop surface`, `no core override` and security-scan checks.
 
 ## Why this entry qualifies
 
-Rule 5: I'm the owner of `agantila/session-flow`. Rule 2: pinned to a
-full 40-hex commit SHA (`6eebf540…`), not a branch or tag. Rule 3: no
-self-updater in the catalog build (the `install.sh` symlink flow stays
-out of the plugin entrypoint; the catalog loader will clone + checkout
-the exact SHA on every install). Rule 4: every SHA bump is a new PR
-that re-reviews the diff. Rule 14: `requires_hermes: ">=0.21.5"` is a
-SemVer floor, `version: "1.28.1"` matches the code at the pin.
+Rule 5: owner of `agantila/session-flow`. Rule 2: pinned to a full 40-hex
+commit. Rule 3: no self-updater. Rule 4: every SHA bump is a new PR.
+Rule 8: catalog build is SDK-only, enforced by the repo's own surface
+tripwire. Rule 13: disclosure above matches the code at the pin.
+Rule 14: `requires_hermes: ">=0.21.5"` is a SemVer floor; `version: "1.29.0"`
+matches the code. Contact: **info@agantila.com**.

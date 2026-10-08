@@ -11,14 +11,21 @@
 // > Anzahl), Render-Stabilität mehrerer Renders und die Einstellungsseite
 // inkl. der zugehörigen Optionszeile.
 //
-// Aufruf:  npm test   (oder:  node tests/render-test.mjs)
+// Aufruf:  npm test   (oder:  node tests/render-test.mjs [full|catalog])
+//   full    → full/plugin.js  (Quelle der Wahrheit, alle Features)
+//   catalog → plugin.js       (SDK-only Catalog-Build, Full-only-Tests SKIP)
 // Nur Node nötig, keine Dependencies, keine laufende App.
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const PLUGIN_PATH = fileURLToPath(new URL('../plugin.js', import.meta.url))
+const TARGET = (process.argv[2] || 'full').toLowerCase()
+if (TARGET !== 'full' && TARGET !== 'catalog') {
+  console.error('Aufruf: node tests/render-test.mjs [full|catalog]')
+  process.exit(2)
+}
+const PLUGIN_PATH = fileURLToPath(new URL(TARGET === 'full' ? '../full/plugin.js' : '../plugin.js', import.meta.url))
 
 // ── Atom-Factory (get/set/subscribe/listen/update) ──────────────────────────
 function makeAtom(v) {
@@ -360,11 +367,45 @@ const rewritten = src
   .replace("from 'react/jsx-runtime'", `from '${stubUrl}'`)
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
-  .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor, resetSettings, $settings }\n'
-  )
-writeFileSync(join(dir, 'plugin.mjs'), rewritten)
+
+// Test-Exporte: nur Bezeichner exportieren, die der jeweilige Build auch
+// trägt (Catalog-Build without Full-only-Features — fehlende Exporte wären
+// SyntaxErrors). Fehlt ein Name, bleibt er weg; Tests, die ihn brauchen,
+// melden sich über mod.X === undefined und werden unten übersprungen.
+const EXPORT_NAMES = [
+  'patchSettings', 'applyPersonal', 'clearPersonal', 'syncPaneBackgrounds', 'StatusLead', 'pollLiveSessions',
+  '$liveMap', '$ctxInfo', '$sessions', '$projectsList', '$pinnedRows', '$doneFx', '$activityPrev', '$activity',
+  '$folderSizes', '$loadPhase', '$archivedRows', '$sessionsError', 'refreshSessions', 'invalidateProjectTree',
+  'startNewProjectSession', 'startNewSessionInCwd', 'branchSessionRow', 'openFreshSession', 'ambientOwnerProfile',
+  'projectForCwd', 'composerDraftAnchor', 'composerDraftLabel', 'adoptComposerPickForNewSession', '$composerPick',
+  'moveSessionRow', 'findLiveSessionIdByKey', 'resolveNewProjectSessionCwd', '$sessionProjectSeed', '$dragActive',
+  'reconnectRefresh', 'scheduleSettleIn', 'bootstrapSessionData', 'SETTLE_IN_DELAYS_MS', 'NAV_APPS', 'SF_NAV_ROUTES',
+  'navigateAppRoute', '$navStatus', 'kanbanBoardToStatus', 'cronJobsToStatus', 'cronJobState',
+  'navStatusTone', 'refreshNavStatus', 'deriveForTheme', 'detectAppTheme', 'applyRows', 'activeRowColors',
+  'effectiveOpenIntent', 'createGroup', 'updateGroup', 'deleteGroup', 'addProjectToGroup', 'removeProjectFromGroup',
+  'groupsContainingProject', 'normalizeProjectIds', 'loadGroups', '$groupsState', 'activityFor', 'resetSettings',
+  '$settings', '$restMirror'
+]
+const presentExports = EXPORT_NAMES.filter(name =>
+  new RegExp(`(?:^|\\n)(?:async\\s+)?(?:function|const|let|var)\\s+${name.replace(/\$/g, '\\$')}\\b`).test(rewritten)
+)
+const missingExports = EXPORT_NAMES.filter(name => !presentExports.includes(name))
+
+writeFileSync(join(dir, 'plugin.mjs'), `${rewritten}\nexport { ${presentExports.join(', ')} }\n`)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
+
+if (missingExports.length) {
+  console.log(`ℹ Build ohne Full-only-Exporte (Tests dazu werden übersprungen): ${missingExports.join(', ')}`)
+}
+// Catalog-Build (Root plugin.js): Full-only-Features sind ausgebuildt — die
+// zugehörigen Testsektionen werden unten mit `if (!IS_CATALOG)` übersprungen.
+const IS_CATALOG = missingExports.length > 0
+// Full-only-Testspringer: zählt, was im Catalog-Build bewusst nicht geprüft wird.
+let skippedFullOnly = 0
+const skipFullOnly = reason => {
+  skippedFullOnly++
+  console.log(`ℹ Full-only-Tests übersprungen (Catalog-Build): ${reason}`)
+}
 
 // ── ctx-Stub ────────────────────────────────────────────────────────────────
 const storage = new Map()
@@ -674,7 +715,12 @@ check('Einstellungs-Seite: Theme-Mode-Zeile (v1.22.1)', keys13.has('tabsThemeMod
 check('Einstellungs-Seite: Titel-Stil-Zeile (v1.22.1)', keys13.has('tabsTitleStyle') && keys13.has('tabsTitleStyleSolid') && keys13.has('tabsTitleStyleGradient'))
 check('Einstellungs-Seite: Titelfarbe-Zeile erst bei Verlauf', keys13.has('tabsTitleGradFrom'))
 const pickerCount = out13.el.filter(e => e.tag === 'input' && e.props && e.props.type === 'color').length
-check('Einstellungs-Seite: Farb-Picker vorhanden (≥6)', pickerCount >= 6, `pickers=${pickerCount}`)
+if (IS_CATALOG) {
+  // Catalog: Akzent-/BG-Farbwahl ist Full-only — es bleiben die Tabs-Picker.
+  check('Einstellungs-Seite: Farb-Picker vorhanden (≥5)', pickerCount >= 5, `pickers=${pickerCount}`)
+} else {
+  check('Einstellungs-Seite: Farb-Picker vorhanden (≥6)', pickerCount >= 6, `pickers=${pickerCount}`)
+}
 // Bei Stil „Kein" werden die Titel-Farbfelder ausgeblendet → weniger Picker.
 mod.patchSettings('tabs', { titleStyle: 'none' })
 const out13none = { el: [], text: [] }
@@ -705,6 +751,9 @@ check(
 check('v1.13.3: keine Shell-Attribute auf <html>', !('data-sf-shell' in rootHtml.attrs) && !('data-sf-shell-scope' in rootHtml.attrs))
 
 // 15) v1.13.2: Chat-Hintergrund — Layer an der Chat-Surface (nicht mehr am Pane-Host)
+if (IS_CATALOG) {
+  skipFullOnly('15) v1.13.2 Chat-Hintergrund-Layer (Full-only-Feature)')
+} else {
 const bgChat = makeNode({ 'data-chat-surface': '' })
 const bgZoneChat = makeNode({ 'data-tree-group': 'z-bg-chat' })
 const bgZonePlain = makeNode({ 'data-tree-group': 'z-bg-plain' })
@@ -739,6 +788,7 @@ check(
 )
 mod.patchSettings('personal', { bgOn: false })
 check('v1.13.2: Hintergrund aus → alle Layer entfernt', layerCount() === 0, `layers=${layerCount()}`)
+}
 
 // 16) v1.13.4: Status-Indikator — `~spin` darf nicht in der Codicon-Klasse landen
 const leadEl = (kind, status) =>
@@ -2627,12 +2677,10 @@ try {
       bundles && bundles.de ? `${bundles.de.navAppCapabilities}/${bundles.de.navAppCron}` : 'kein Bundle'
     )
 
-    // Kanban anwesend simulieren: positiver Feature-Detect + Klick → /kanban.
-    // Pfad 1: Drawer-Klasse (offener Drawer).
-    globalThis.document.querySelector = selector =>
-      selector === '.kanban-drawer-content' || selector === '[data-tour="sidebar-nav-kanban"]'
-        ? { className: 'kanban-drawer-content' }
-        : realQuery.call(globalThis.document, selector)
+    // Kanban anwesend simulieren — seit v1.29.0 über die REST-Antwort des
+    // Kanban-Endpoints ($navStatus.kanbanOk, siehe refreshNavStatus), nicht
+    // mehr über DOM-Probing. Klick → /kanban.
+    mod.$navStatus.set({ kanban: { state: 'running', count: 2 }, cron: { state: 'error', count: 1 }, kanbanOk: true })
     stub.__resetSlots()
     globalThis.__SF__.tCalls.length = 0
     const out36k = { el: [], text: [] }
@@ -2640,43 +2688,43 @@ try {
     const btnsK = out36k.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn'))
     const barK = out36k.el.find(e => e.cls.includes('sf-navapps') && !e.cls.includes('sf-navapps-btn'))
     check(
-      'v1.20: Kanban-Button bei Detect über Drawer-Klasse (6 Buttons, data-kanban=on)',
+      'v1.20: Kanban-Button bei kanbanOk (6 Buttons, data-kanban=on)',
       btnsK.length === 6 && btnsK[5].props['data-nav'] === 'kanban' && barK && barK.props['data-kanban'] === 'on',
       `n=${btnsK.length}`
     )
     check('v1.20: Kanban-Label-Key wird bei Detect benutzt', globalThis.__SF__.tCalls.some(([k]) => k === 'navAppKanban'))
 
-    // Pfad 2: Nav-Zeilen-Handle der nativen Sessions-Sidebar (data-tour) —
-    // Plugin-Beiträge tragen live das Namensraum-Suffix ":nav" (verifiziert).
-    globalThis.document.querySelector = selector =>
-      selector === '[data-tour^="sidebar-nav-kanban"]'
-        ? { attrs: { 'data-tour': 'sidebar-nav-kanban:nav' } }
-        : realQuery.call(globalThis.document, selector)
-    stub.__resetSlots()
-    const out36t = { el: [], text: [] }
-    walk(pane.render(), out36t)
-    const btnsT = out36t.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn'))
+    // Pips: laufendes Kanban (ok) + Fehler-Cron (bad) → data-status je Button.
+    const kBtn = btnsK.find(b => b.props['data-nav'] === 'kanban')
+    const cBtn = btnsK.find(b => b.props['data-nav'] === 'cron')
     check(
-      'v1.20: Kanban-Button bei Detect über sidebar-nav-Tour-Handle (6 Buttons)',
-      btnsT.length === 6 && btnsT[5].props['data-nav'] === 'kanban',
-      `n=${btnsT.length}`
+      'v1.20 Pips: Kanban-Button trägt data-status=ok, Cron data-status=bad',
+      kBtn && kBtn.props['data-status'] === 'ok' && cBtn && cBtn.props['data-status'] === 'bad',
+      `kanban=${kBtn && kBtn.props['data-status']} cron=${cBtn && cBtn.props['data-status']}`
+    )
+    const t36p = globalThis.__SF__.tCalls.map(([k]) => k)
+    check(
+      'v1.20 Pips: Status-i18n-Keys benutzt (läuft/Fehler-Zweige)',
+      t36p.includes('navStatusRunning') && t36p.includes('navStatusError'),
+      t36p.filter(k => k.startsWith('navStatus')).join(',')
     )
 
-    // Negative Sperrung: keins der beiden Signale → wieder 5 Buttons.
-    globalThis.document.querySelector = realQuery
+    // Negative Sperrung: kein Board → wieder 5 Buttons (data-kanban=off).
+    mod.$navStatus.set({ kanban: null, cron: { state: 'idle', count: 0 }, kanbanOk: false })
     stub.__resetSlots()
     const out36n = { el: [], text: [] }
     walk(pane.render(), out36n)
+    const btnsN = out36n.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn'))
     check(
-      'v1.20: ohne beide Kanban-Signale wieder 5 Buttons (data-kanban=off)',
-      out36n.el.filter(e => e.tag === 'button' && e.cls.includes('sf-navapps-btn')).length === 5
+      'v1.20: ohne kanbanOk wieder 5 Buttons (data-kanban=off), Cron idle → data-status=off',
+      btnsN.length === 5 && btnsN.find(b => b.props['data-nav'] === 'cron').props['data-status'] === 'off'
     )
 
     navLog.length = 0
-    btnsT[5].props.onClick()
+    btnsK[5].props.onClick()
     check('v1.20: Kanban-Klick navigiert nach /kanban', navLog.length === 1 && navLog[0] === '/kanban', navLog.join(','))
 
-    // Neue-Session-Button klickt NICHT den Router (sondern den Pane-Pfad).
+    // Neue-Session-Button klickt NICHT den Router (sonst den Pane-Pfad).
     navLog.length = 0
     btnsK[0].props.onClick()
     check('v1.20: Neue-Session-Klick geht nicht über host.navigate', navLog.length === 0)
@@ -2796,14 +2844,12 @@ try {
   )
 
   // Rendering: Atom setzen → Buttons tragen data-status + Tooltip-Label.
-  const finder = globalThis.document.querySelector
-  globalThis.document.querySelector = selector =>
-    selector === '[data-tour^="sidebar-nav-kanban"]' ? { attrs: { 'data-tour': 'sidebar-nav-kanban:nav' } } : finder.call(globalThis.document, selector)
-
+  // (Kanban-Präsenz seit v1.29.0 über kanbanOk — kein DOM-Spy mehr nötig.)
   try {
     mod.$navStatus.set({
       kanban: { state: 'running', count: 2 },
-      cron: { state: 'error', count: 1 }
+      cron: { state: 'error', count: 1 },
+      kanbanOk: true
     })
     stub.__resetSlots()
     const out38 = { el: [], text: [] }
@@ -2833,8 +2879,8 @@ try {
         globalThis.__SF__.bundles.de.navStatusBlocked(3) === 'blockiert: 3'
     )
 
-    // Idle + keine Daten → keine Pips.
-    mod.$navStatus.set({ kanban: { state: 'idle', count: 0 }, cron: null })
+    // Idle + keine Daten → keine Pips (Kanban-Button bleibt, da kanbanOk).
+    mod.$navStatus.set({ kanban: { state: 'idle', count: 0 }, cron: null, kanbanOk: true })
     stub.__resetSlots()
     globalThis.__SF__.tCalls.length = 0
     const out38b = { el: [], text: [] }
@@ -2853,19 +2899,30 @@ try {
     )
 
     // refreshNavStatus ohne Bridge: darf nicht crashen, Atom unangetastet lassen.
-    const before = mod.$navStatus.get()
-    globalThis.window.hermesDesktop = undefined
-    await mod.refreshNavStatus()
-    check(
-      'v1.20 Pips: refreshNavStatus ohne Bridge degradiert still',
-      JSON.stringify(mod.$navStatus.get()) === JSON.stringify(before)
-    )
+    if (!IS_CATALOG) {
+      const before = mod.$navStatus.get()
+      globalThis.window.hermesDesktop = undefined
+      await mod.refreshNavStatus()
+      check(
+        'v1.20 Pips: refreshNavStatus ohne Bridge degradiert still',
+        JSON.stringify(mod.$navStatus.get()) === JSON.stringify(before)
+      )
+    } else {
+      // Catalog: refreshNavStatus ist ein No-op (keine Bridge-Tür) — gleiche
+      // Garantie, atomar unangetastet.
+      const beforeCat = mod.$navStatus.get()
+      await mod.refreshNavStatus()
+      check(
+        'v1.20 Pips: refreshNavStatus ohne Bridge degradiert still',
+        JSON.stringify(mod.$navStatus.get()) === JSON.stringify(beforeCat)
+      )
+    }
   } finally {
-    globalThis.document.querySelector = finder
+    void 0
   }
 
   // Atom für spätere Sektionen neutral.
-  mod.$navStatus.set({ kanban: null, cron: null })
+  mod.$navStatus.set({ kanban: null, cron: null, kanbanOk: false })
 } catch (error) {
   check('v1.20 Pips-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
@@ -3005,6 +3062,10 @@ try {
 }
 
 // v1.23.0: Neue Session ohne „Owner nicht gefunden\" + Composer-Chip auf dem nativen Sendeweg.
+// (Chip-Adopt ist Full-only — im Catalog-Build gibt es keinen Chip.)
+if (IS_CATALOG) {
+  skipFullOnly('v1.23.0 Composer-Chip-Adopt (Full-only-Feature)')
+} else
 try {
   const calls = []
   const opens = []
@@ -3292,10 +3353,15 @@ try {
 
   // B) Pick-Verbrauch in ALLEN Pfaden: der „schon im Projekt"-Zweig räumt
   //    den Pick jetzt auch weg (vorher blieb er stehen und der Chip zeigte
-  //    das alte Label weiter).
-  mod.$projectsList.set([node('p-a', 'Alpha', '/w/alpha'), node('p-b', 'Beta', '/w/beta')])
+  //    das alte Label weiter). — Full-only (Chip existiert nur dort).
+  // setFocus/pick außerhalb des Guards deklariert — der Endzustands-Reset
+  // unten braucht setFocus in BEIDEN Builds.
   const setFocus = id => hostStub.state.focusedStoredSessionId.set(id)
   const pick = () => mod.$composerPick.get()
+  if (IS_CATALOG) {
+    skipFullOnly('v1.24.1 B/E: Chip-Pick-Verbrauch + Rehome-Fehler (Full-only-Feature)')
+  } else {
+  mod.$projectsList.set([node('p-a', 'Alpha', '/w/alpha'), node('p-b', 'Beta', '/w/beta')])
 
   setFocus('')
   setFocus('st-warmup')
@@ -3337,6 +3403,7 @@ try {
     JSON.stringify(notifies.map(n => n && n.kind))
   )
   check('v1.24.1: Rehome-Fehler verwirft den Pick', pick().id === '', JSON.stringify(pick()))
+  }
 
   // H) Angepinnt-Schnellfilter: Segment-Option + Filterlogik über
   //    filteredSections (pinned-Sektion bleibt, Rest verschwindet).
@@ -3346,6 +3413,8 @@ try {
     { id: 'st-pin-2', title: 'Angepinnt C', message_count: 1, pinned: true }
   ])
   mod.patchSettings('groups', { enabled: false, autoMode: 'off' })
+  // Pinned-Subtab hängt am REST-Spiegel — für den Test beide Builds aktivieren.
+  mod.$restMirror.set(true)
   const outPane = (() => {
     globalThis.__SF__.tCalls.length = 0
     stub.__resetSlots()
@@ -3353,6 +3422,7 @@ try {
     walk(pane.render(), out)
     return out
   })()
+  mod.$restMirror.set(false)
   check(
     'v1.24.1: Filter-Segment trägt die Angepinnt-Option (tCall filterPinned)',
     globalThis.__SF__.tCalls.some(([k]) => k === 'filterPinned'),

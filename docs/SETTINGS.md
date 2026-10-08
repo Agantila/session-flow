@@ -7,6 +7,14 @@ und sind live: Änderungen greifen sofort. Erreichbar über die Seite
 Die Seite hat seit v1.5.0 eine **sticky Kategorie-Leiste** oben: ein Klick springt
 zur jeweiligen Sektion, die aktuelle wird beim Scrollen automatisch markiert.
 
+> **Seit v1.29.0 (Zwei-Build-Modell):** Die Sektionen **Chat-Animation**,
+> **UI-Tabs**, **Glass & Lesbarkeit** sowie die Akzent-/Hintergrund-Steuerungen
+> unter **Individualisierung** existieren nur im **Full-Build**
+> (`full/plugin.js`, Standalone via `install.sh`) — sie dekorieren Kernflächen
+> der App und sind im SDK-only Catalog-Build (Root-`plugin.js`) bewusst nicht
+> enthalten (Katalog-Regel 8). Im Catalog-Build zeigt die Seite nur
+> Session-Liste, Tab-Gruppen, Strg+Scroll und die Pane-Flächen-Option.
+
 ## Chat-Animation
 
 | Key | Default | Wirkung |

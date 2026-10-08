@@ -1,15 +1,32 @@
 # Entwicklung — Architektur & Workflow
 
+## Zwei Builds (seit v1.29.0)
+
+**Quelle der Wahrheit ist `full/plugin.js`** (alle Features, Standalone).
+Der committete Root-`plugin.js` ist der **generierte SDK-only Catalog-Build**
+(`node scripts/build-catalog.mjs` entfernt alle `/* #full */ … /* #end */`-
+Regionen) — er ist der Eintrittspunkt, den der Hermes Plugin Catalog am
+gepinnten SHA lädt (Katalog-Regel 8). CI schlägt an, wenn `plugin.js` nicht
+dem Stand von `full/plugin.js` entspricht; BEIDE Dateien immer zusammen
+committen.
+
+Full-only-Features (Chat-Animation, Composer-Chip, Glass, UI-Tabs-Optik,
+Chat-Hintergrund, Sidebar-DOM-Sync, Desktop-Bridge-Doors) gehören ausschließlich
+in `#full`-Regionen; `tests/surface-test.mjs` (Teil von `npm run check`)
+schlägt bei Regel-8-Verstößen im Catalog-Build an. SDK-Slot-Anfragen laufen
+über upstream hermes-agent #116305 — landen die Slots, wandeln die Regionen
+sich in SDK-Pfade um.
+
 ## Dev-Loop
 
 ```bash
-./install.sh --link   # einmal: Symlink ~/.hermes/desktop-plugins/session-flow -> Repo
-npm run check         # Syntaxcheck + i18n-Audit (Node, keine Dependencies)
-npm test              # Render-Smoketest: Pane + Einstellungen (Stub-basiert, ohne App)
+./install.sh --link   # einmal: Symlink ~/.hermes/desktop-plugins/session-flow -> <repo>/full
+npm run check         # Syntax + i18n + Hook-Audit (beide Builds) + Surface-Tripwire
+npm test              # Render-Smoketest gegen BEIDE Builds (Stub-basiert, ohne App)
 npm run test:style    # optional: Computed-Style-Test am echten Chromium (skip ohne Playwright)
 ```
 
-Danach: `plugin.js` speichern → die App hot-reloaded das Plugin (keine
+Danach: `full/plugin.js` speichern → die App hot-reloaded das Plugin (keine
 Neustarts). Das gilt auch im `--link`-Modus — der File-Watch folgt dem
 Symlink. Falls es klemmt: ⌘K/Ctrl+K → „Reload desktop plugins".
 Beim ersten Laden eines fehlerhaften Stands zeigt die App einen Toast mit der
