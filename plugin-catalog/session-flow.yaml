@@ -1,6 +1,6 @@
 name: session-flow
 repo: https://github.com/agantila/session-flow
-sha: 6d6fbfa78237a19f4200bedca563b330d031cb36
+sha: 359f9afecb5872fe0864eec79867a4dfa4d88d33
 description: >-
   Ctrl+Scroll session cycling, Firefox-style session groups with project
   grouping, a session pane with list/grid views, sidebar-style content tabs
@@ -31,13 +31,13 @@ category: desktop
 requires_hermes: ">=0.21.5"
 docs_url: https://github.com/agantila/session-flow#readme
 version: "1.29.1"
-image: https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/sf-catalog-banner-2x1.png
+image: https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/sf-catalog-banner-2x1.png
 screenshots:
-  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg
-  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a7-settings-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg
+  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a7-settings-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png
 readme: true
 platforms: []
 capabilities:
