@@ -18,12 +18,14 @@ catalog-listed `pinned-folders` plugin):
 
 - `full/plugin.js` — source of truth, ALL features, standalone distribution
   (`./install.sh`, `--link` symlinks `full/` for hot reload).
-- `plugin.js` (repo root) — **generated** SDK-only catalog build
+- `desktop/plugin.js` — **generated** SDK-only catalog build
   (`node scripts/build-catalog.mjs` strips `/* #full */ … /* #end */`
   regions). This is what the Hermes Plugin Catalog lists and loads at the
   pinned SHA; it must stay rule-8 clean (no app-markup queries, no
   `document.body` observers, no core-CSS overrides, no
-  `window.hermesDesktop`) — `tests/surface-test.mjs` trips on violations.
+  `window.hermesDesktop`, no synthetic window/document events) —
+  `tests/surface-test.mjs` trips on violations. Layout (review R2):
+  `plugin.yaml` stays at the repo root, `full/` stays outside `desktop/`.
 
 It is installed as a **symlink**: `~/.hermes/desktop-plugins/session-flow` →
 this repo's `full/` directory (re-run `./install.sh --link` once after
@@ -56,9 +58,10 @@ within ~5 s). Never copy files around to "install".
   fails otherwise.
 - Before every commit: `npm run check && npm test` green. `npm run test:style`
   (real Chromium) is mandatory for design-CSS changes.
-- **Catalog rule 8 (catalog build only):** the generated `plugin.js` must
+- **Catalog rule 8 (catalog build only):** the generated `desktop/plugin.js` must
   contain no app-markup queries, no `document.body` observers, no core-CSS
-  overrides and no `window.hermesDesktop` — such code goes into `/* #full */`
+  overrides, no `window.hermesDesktop` and no synthetic
+  `(window|document).dispatchEvent` — such code goes into `/* #full */`
   regions only. After changing the source: `node scripts/build-catalog.mjs`
   and commit BOTH files (CI fails on a stale catalog build).
 

@@ -1,9 +1,22 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.29.0 (2026-10-08). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.29.1 (2026-10-09). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Marketplace-Compliance R2** (v1.29.1): zweite Review-Runde der
+  Resubmission (Review von @teknium1 auf v1.29.0) — alle vier Restpunkte
+  adressiert: Catalog-Build nach `desktop/plugin.js` (dokumentiertes
+  Layout, `plugin.yaml` am Root, `full/` außerhalb), keine synthetischen
+  focus-/visibilitychange-Events mehr im Catalog-Build (`kickAppRefresh()`
+  dort No-Op; Refresh-Signal als SDK-invalidate-Hook auf #116305
+  angefragt), Catalog-Beschreibung auf Ist-Stand (fünf Features, keine
+  REST-Lesetüren, kein `session.workspace.move`, Settings in der App-
+  Plugin-Storage, Kommentarblock/sha-Kommentar entfernt),
+  Composer-Pill-Toggle nur im Full-Build. Surface-Tripwire um eine
+  `(window|document).dispatchEvent`-Regel erweitert. Siehe
+  [`docs/plans/2026-10-09-marketplace-review-r2.md`](plans/2026-10-09-marketplace-review-r2.md).
 
 - **Marketplace-Compliance + Zwei-Build-Modell** (v1.29.0): Resubmission nach
   der Catalog-Ablehnung #134760 (Regel 8 + Disclosure). `full/plugin.js` =

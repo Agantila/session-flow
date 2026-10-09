@@ -113,12 +113,12 @@ Groups · UI tabs · Glass · Personal · About) and one-click presets for the U
 
 > `docs/overview.png` is optional — drop your own screenshot there.
 
-## Two builds — catalog (`plugin.js`) and full (`full/plugin.js`)
+## Two builds — catalog (`desktop/plugin.js`) and full (`full/plugin.js`)
 
 Both builds come from **one source** (`full/plugin.js`), like the
 catalog-listed `pinned-folders` plugin:
 
-| | Catalog build `plugin.js` | Full build `full/plugin.js` |
+| | Catalog build `desktop/plugin.js` | Full build `full/plugin.js` |
 |---|---|---|
 | Session pane, groups, DnD, search, list/grid | ✓ | ✓ |
 | Session actions (rename/branch/pin/move/archive/delete) | ✓ | ✓ |
@@ -143,19 +143,18 @@ upstream ([hermes-agent #116305](https://github.com/NousResearch/hermes-agent/is
 and the features migrate onto the SDK as the slots land.
 
 Regenerate the catalog build after changing the source:
-`node scripts/build-catalog.mjs` (CI fails on a stale `plugin.js`).
+`node scripts/build-catalog.mjs` (CI fails on a stale `desktop/plugin.js`).
 
 ### Disclosure (catalog build)
 
 Reads the local Hermes gateway via public RPCs (`projects.*`, `session.*`,
-`session.active_list`, `session.context_breakdown`, state atoms) and, where
-the host exposes them, the local REST mirror `GET /api/sessions` (pinned
-state — not on the RPC wire), `GET /api/plugins/kanban/board` and
-`GET /api/cron/jobs` (status pips). Writes only via user-initiated public
-RPCs. Own settings under `~/.hermes/cache/desktop-plugins/session-flow/`.
-**No** app-markup access, no DOM observers on app containers, no core-CSS
-overrides, no `window.hermesDesktop` doors, no outbound network calls, no
-telemetry, no shell commands, no stored credentials, no self-update.
+`session.active_list`, `session.context_breakdown`, state atoms); writes
+only via user-initiated public RPCs. Settings and groups live in the app's
+local plugin storage (`ctx.storage`). **No** app-markup access, no DOM
+observers on app containers, no core-CSS overrides, no
+`window.hermesDesktop` doors, no synthetic focus/visibilitychange events,
+no outbound network calls, no telemetry, no shell commands, no stored
+credentials, no self-update.
 
 ### Disclosure (full build — extras beyond the catalog build)
 
@@ -163,7 +162,10 @@ Uses the documented Desktop-Bridge doors of a standalone install:
 `hermesDesktop.api` (local REST mirror for pinned/unread/costs and folder
 sizes), `hermesDesktop.selectPaths` / `revealPath` /
 `openSessionInTerminal` (native file picker, file manager, terminal), and —
-like the catalog build — public gateway RPCs. The UI decorations above
+like the catalog build — public gateway RPCs. After its own mutations
+(project change, pin, archive) it fires synthetic `focus` /
+`visibilitychange` events so the app sidebar refreshes instantly (the
+catalog build never does this). The UI decorations above
 restyle or annotate core surfaces (composer, chips, status bar, content
 tabs, chat surfaces) and inject their own background layer into chat
 panes. No prototype patching, no `eval`, no dynamic imports beyond
@@ -250,14 +252,14 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
 
 ```
 session-flow/
-├── plugin.js                    # Catalog build (SDK-only, generated — what the marketplace loads)
+├── desktop/plugin.js            # Catalog build (SDK-only, generated — what the marketplace loads)
 ├── full/plugin.js               # SOURCE OF TRUTH (full build, all features, standalone)
 ├── plugin.yaml                  # Package manifest (name/version/requires_hermes)
 ├── scripts/
-│   ├── build-catalog.mjs        # full/plugin.js -> plugin.js (strips #full regions)
+│   ├── build-catalog.mjs        # full/plugin.js -> desktop/plugin.js (strips #full regions)
 │   └── check.mjs                # Syntax + i18n + hook audit (both builds) + surface tripwire
 ├── tests/
-│   ├── surface-test.mjs         # Catalog rule-8 tripwire (root plugin.js)
+│   ├── surface-test.mjs         # Catalog rule-8 tripwire (desktop/plugin.js)
 │   ├── render-test.mjs          # Headless render smoke test (both builds)
 │   └── style-test.mjs           # Computed-style test (Playwright, optional)
 ├── install.sh                   # Installer (full default; --variant catalog; --link dev)
@@ -282,7 +284,7 @@ npm run check          # syntax + locale audit + hook audit (both builds) + surf
 npm test               # render smoke test against BOTH builds
 npm run test:full      # render smoke test, full build only
 npm run test:catalog   # render smoke test, catalog build only
-npm run build:catalog  # regenerate root plugin.js from full/plugin.js
+npm run build:catalog  # regenerate desktop/plugin.js from full/plugin.js
 ./install.sh --link    # set up once (symlinks full/); then: save -> the app reloads
 ```
 
@@ -297,9 +299,9 @@ House rules that must not be broken (otherwise the plugin refuses to load):
   catches it).
 - Clean up timers/listeners via `ctx`, DOM observers + injected `<style>` tags
   via `ctx.onDispose`.
-- **Catalog rule 8 (only enforced for `plugin.js`):** no app-markup queries,
+- **Catalog rule 8 (only enforced for `desktop/plugin.js`):** no app-markup queries,
   no `document.body` observers, no core-CSS overrides, no
-  `window.hermesDesktop` — `npm run check` trips on violations in the catalog
+  `window.hermesDesktop`, no synthetic window/document events — `npm run check` trips on violations in the catalog
   build; keep such code inside `#full` regions or behind SDK doors.
 
 Architecture (controllers, animation dedupe, stores, verification recipes):
@@ -329,8 +331,11 @@ checklist and how to publish the repo to GitHub.
 
 - **Status:** submitted — v1.28.1 was reviewed and declined in
   [hermes-agent #134760](https://github.com/NousResearch/hermes-agent/pull/134760)
-  (catalog rule 8); v1.29.0 is the compliance resubmission. All review points
-  are addressed — see
+  (catalog rule 8); v1.29.0 was the compliance resubmission, reviewed again
+  (round 2): all four remaining points are addressed in **v1.29.1** —
+  documented `desktop/plugin.js` layout, no synthetic focus/visibilitychange
+  events in the catalog build, catalog description matched to the catalog
+  build, composer-pill toggle hidden there. See
   [docs/PLUGIN-CATALOG-PR.md](docs/PLUGIN-CATALOG-PR.md) for the full
   response and the SDK-slot requests on upstream #116305.
 - The catalog entry lives in

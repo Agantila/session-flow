@@ -121,12 +121,12 @@ Gruppen · UI-Tabs · Glass · Individuell · Über) und Ein-Klick-Presets für 
 
 > Hinweis: `docs/overview.png` ist optional — lege dort gern einen Screenshot ab.
 
-## Zwei Builds — Catalog (`plugin.js`) und Full (`full/plugin.js`)
+## Zwei Builds — Catalog (`desktop/plugin.js`) und Full (`full/plugin.js`)
 
 Beide Builds kommen aus **einer Quelle** (`full/plugin.js`) — gleiche Strategie
 wie beim kataloggelisteten `pinned-folders`:
 
-| | Catalog-Build `plugin.js` | Full-Build `full/plugin.js` |
+| | Catalog-Build `desktop/plugin.js` | Full-Build `full/plugin.js` |
 |---|---|---|
 | Session-Pane, Gruppen, DnD, Suche, Liste/Grid | ✓ | ✓ |
 | Session-Aktionen (Rename/Branch/Pin/Verschieben/Archiv/Löschen) | ✓ | ✓ |
@@ -152,21 +152,19 @@ upstream angefragt
 die Features wandern mit den Slots auf das SDK um.
 
 Catalog-Build nach Quell-Änderung neu erzeugen:
-`node scripts/build-catalog.mjs` (CI schlägt bei veraltetem `plugin.js` an).
+`node scripts/build-catalog.mjs` (CI schlägt bei veraltetem `desktop/plugin.js` an).
 
 ### Disclosure (Catalog-Build)
 
 Liest den lokalen Hermes-Gateway über öffentliche RPCs (`projects.*`,
 `session.*`, `session.active_list`, `session.context_breakdown`,
-State-Atome) und — wo der Host sie freigibt — den lokalen REST-Spiegel
-`GET /api/sessions` (Pinned-Flag, nicht auf dem RPC-Wire),
-`GET /api/plugins/kanban/board` und `GET /api/cron/jobs` (Status-Pips).
-Writes nur über nutzer-initiierte öffentliche RPCs. Eigene Einstellungen
-unter `~/.hermes/cache/desktop-plugins/session-flow/`. **Kein** App-Markup-
-Zugriff, keine DOM-Observer auf App-Containern, keine Core-CSS-Overrides,
-keine `window.hermesDesktop`-Doors, keine ausgehenden Netzwerk-Calls, keine
-Telemetrie, keine Shell-Kommandos, keine gespeicherten Credentials, kein
-Self-Update.
+State-Atome); Writes nur über nutzer-initiierte öffentliche RPCs.
+Einstellungen und Gruppen liegen im lokalen Plugin-Speicher der App
+(`ctx.storage`). **Kein** App-Markup-Zugriff, keine DOM-Observer auf
+App-Containern, keine Core-CSS-Overrides, keine
+`window.hermesDesktop`-Doors, keine synthetischen focus-/visibilitychange-
+Events, keine ausgehenden Netzwerk-Calls, keine Telemetrie, keine
+Shell-Kommandos, keine gespeicherten Credentials, kein Self-Update.
 
 ### Disclosure (Full-Build — Zusatz gegenüber dem Catalog-Build)
 
@@ -174,7 +172,10 @@ Nutzt die dokumentierten Desktop-Bridge-Doors einer Standalone-Installation:
 `hermesDesktop.api` (lokaler REST-Spiegel für pinned/unread/Kosten und
 Ordnergrößen), `hermesDesktop.selectPaths` / `revealPath` /
 `openSessionInTerminal` (nativer Picker, Dateimanager, Terminal) sowie — wie
-der Catalog-Build — öffentliche Gateway-RPCs. Die UI-Dekorationen oben
+der Catalog-Build — öffentliche Gateway-RPCs. Nach eigenen Mutationen
+(Projekt geändert, Pin, Archiv) feuert er synthetische `focus`-/
+`visibilitychange`-Events, damit die App-Sidebar instant nachzieht (der
+Catalog-Build tut das nie). Die UI-Dekorationen oben
 stylen oder markieren Kernflächen (Composer, Chips, Statusleiste,
 Content-Tabs, Chat-Flächen) und injizieren ihren eigenen Hintergrund-Layer
 in Chat-Panes. Kein Prototype-Patching, kein `eval`, keine dynamischen
@@ -261,14 +262,14 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
 
 ```
 session-flow/
-├── plugin.js                    # Catalog-Build (SDK-only, generiert — Marketplace-Eintrittspunkt)
+├── desktop/plugin.js            # Catalog-Build (SDK-only, generiert — Marketplace-Eintrittspunkt)
 ├── full/plugin.js               # QUELLE DER WAHRHEIT (Full-Build, alle Features, Standalone)
 ├── plugin.yaml                  # Package-Manifest (name/version/requires_hermes)
 ├── scripts/
-│   ├── build-catalog.mjs        # full/plugin.js -> plugin.js (entfernt #full-Regionen)
+│   ├── build-catalog.mjs        # full/plugin.js -> desktop/plugin.js (entfernt #full-Regionen)
 │   └── check.mjs                # Syntax + i18n + Hook-Audit (beide Builds) + Surface-Tripwire
 ├── tests/
-│   ├── surface-test.mjs         # Catalog-Regel-8-Tripwire (Root plugin.js)
+│   ├── surface-test.mjs         # Catalog-Regel-8-Tripwire (desktop/plugin.js)
 │   ├── render-test.mjs          # Headless-Render-Smoketest (beide Builds)
 │   └── style-test.mjs           # Computed-Style-Test (Playwright, optional)
 ├── install.sh                   # Installer (Full als Default; --variant catalog; --link Dev)
@@ -294,7 +295,7 @@ npm run check          # Syntax + Locale-Audit + Hook-Audit (beide Builds) + Sur
 npm test               # Render-Smoketest gegen BEIDE Builds
 npm run test:full      # Render-Smoketest, nur Full-Build
 npm run test:catalog   # Render-Smoketest, nur Catalog-Build
-npm run build:catalog  # Root-plugin.js aus full/plugin.js neu generieren
+npm run build:catalog  # desktop/plugin.js aus full/plugin.js neu generieren
 ./install.sh --link    # ein mal einrichten (symlinkt full/), danach: speichern -> App lädt neu
 ```
 
@@ -308,9 +309,10 @@ Konventionen, die man nicht brechen darf (sonst lädt das Plugin nicht):
   Backtick beendet das Template und bricht das Plugin (`npm run check` fängt es).
 - Timers/Listener über `ctx`, DOM-Observer + injizierte `<style>`-Tags über
   `ctx.onDispose` abräumen.
-- **Catalog-Regel 8 (gilt nur für `plugin.js`):** keine App-Markup-Queries,
+- **Catalog-Regel 8 (gilt nur für `desktop/plugin.js`):** keine App-Markup-Queries,
   keine `document.body`-Observer, keine Core-CSS-Overrides, keine
-  `window.hermesDesktop`-Doors — `npm run check` schlägt bei Verstößen im
+  `window.hermesDesktop`-Doors, keine synthetischen window/document-Events —
+  `npm run check` schlägt bei Verstößen im
   Catalog-Build an; solchen Code nur in `#full`-Regionen oder hinter SDK-Doors.
 
 Mehr Details zur Architektur (Controller-Design, Animations-Dedupe, Stores,
@@ -340,8 +342,12 @@ und wie das Repo auf GitHub veröffentlicht wird.
 
 - **Status:** eingereicht — v1.28.1 wurde in
   [hermes-agent #134760](https://github.com/NousResearch/hermes-agent/pull/134760)
-  reviewt und abgelehnt (Katalog-Regel 8); v1.29.0 ist die Compliance-
-  Resubmission. Alle Review-Punkte sind adressiert — siehe
+  reviewt und abgelehnt (Katalog-Regel 8); v1.29.0 war die Compliance-
+  Resubmission und wurde einer zweiten Review-Runde unterzogen: alle vier
+  Restpunkte sind in **v1.29.1** adressiert — dokumentiertes
+  `desktop/plugin.js`-Layout, keine synthetischen focus-/visibilitychange-
+  Events im Catalog-Build, Catalog-Beschreibung auf Ist-Stand des Catalog-
+  Builds, Composer-Pill-Toggle dort verborgen. Siehe
   [docs/PLUGIN-CATALOG-PR.md](docs/PLUGIN-CATALOG-PR.md) (vollständige
   Antwort + SDK-Slot-Anfragen auf upstream #116305).
 - Der Katalogeintrag liegt in

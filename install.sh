@@ -7,12 +7,15 @@
 #                                       (Hot-Reload beim Speichern)
 #   ./install.sh --variant catalog      Catalog-Build (SDK-only) installieren
 #   ./install.sh --link --variant catalog
-#                                       Catalog-Build per Symlink (Repo-Root)
+#                                       Catalog-Build per Symlink (desktop/)
 #
-# Zwei Builds aus einem Quellcode (Modell pinned-folders):
-#   - full/plugin.js   Quelle der Wahrheit — ALLE Features (Standalone).
-#   - plugin.js        SDK-only Catalog-Build (node scripts/build-catalog.mjs),
-#                      genau der wird im Hermes Plugin Catalog gelistet.
+# Zwei Builds aus einem Quellcode (Modell pinned-folders), dokumentiertes
+# Layout (Review R2): plugin.yaml am Repo-Root, Catalog-Eintrittspunkt
+# desktop/plugin.js, full/ außerhalb von desktop/:
+#   - full/plugin.js        Quelle der Wahrheit — ALLE Features (Standalone).
+#   - desktop/plugin.js     SDK-only Catalog-Build
+#                           (node scripts/build-catalog.mjs), genau der wird im
+#                           Hermes Plugin Catalog gelistet.
 # HERMES_HOME ist standardmäßig ~/.hermes (oder $HERMES_HOME, wenn gesetzt).
 set -euo pipefail
 
@@ -54,8 +57,8 @@ if [[ "$VARIANT" == "full" ]]; then
   SOURCE_FILE="$REPO_DIR/full/plugin.js"
   LINK_DIR="$REPO_DIR/full"
 else
-  SOURCE_FILE="$REPO_DIR/plugin.js"
-  LINK_DIR="$REPO_DIR"
+  SOURCE_FILE="$REPO_DIR/desktop/plugin.js"
+  LINK_DIR="$REPO_DIR/desktop"
 fi
 
 if [[ ! -f "$SOURCE_FILE" ]]; then

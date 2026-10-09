@@ -27,9 +27,9 @@ Einstiegspunkt, der durch den Rest hier verlinkt.
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Beitrags-Guide inkl. GitHub-Veröffentlichung. |
 | [../CHANGELOG.md](../CHANGELOG.md) | Versionshistorie (Keep a Changelog). |
 | [../SECURITY.md](../SECURITY.md) | Sicherheitsmodell & Meldewege. |
-| [../plugin.yaml](../plugin.yaml) | Catalog-Manifest (Name/Version/`requires_hermes`/Disclosure/Kontakt) für den Catalog-Build `plugin.js`. |
-| [../scripts/build-catalog.mjs](../scripts/build-catalog.mjs) | Generiert `plugin.js` (Root) aus `full/plugin.js` — streift `/* #full */ … /* #end */`-Regionen. `--check` vergleicht gegen den committeten Stand (CI). |
+| [../plugin.yaml](../plugin.yaml) | Catalog-Manifest (Name/Version/`requires_hermes`/Disclosure/Kontakt) für den Catalog-Build `desktop/plugin.js`. |
+| [../scripts/build-catalog.mjs](../scripts/build-catalog.mjs) | Generiert `desktop/plugin.js` aus `full/plugin.js` — streift `/* #full */ … /* #end */`-Regionen. `--check` vergleicht gegen den committeten Stand (CI). |
 | [../scripts/check.mjs](../scripts/check.mjs) | Pre-Flight (`npm run check`): Syntaxcheck + i18n-Key-Audit + Hook-Reihenfolge-Audit + Surface-Check — für Full- UND Catalog-Build. |
-| [../tests/surface-test.mjs](../tests/surface-test.mjs) | **Regel-8-Wächter** für den Catalog-Build: schlägt an auf App-Markup-Queries, `document.body`-Observer, Core-CSS-Overrides oder `window.hermesDesktop` in `plugin.js` (Root). In `npm run check` eingebunden. |
+| [../tests/surface-test.mjs](../tests/surface-test.mjs) | **Regel-8-Wächter** für den Catalog-Build: schlägt an auf App-Markup-Queries, `document.body`-Observer, Core-CSS-Overrides, synthetische window/document-Events oder `window.hermesDesktop` in `desktop/plugin.js`. In `npm run check` eingebunden. |
 | [../tests/render-test.mjs](../tests/render-test.mjs) | **Render-Smoketest** (`npm test`): rendert Sessions-Pane & Einstellungsseite headless gegen SDK-Stubs, einmal pro Build (`node tests/render-test.mjs full`/`catalog`) — prüft UI-Verhalten (u. a. Listen-Begrenzung) ohne laufende App; Full-only-Abschnitte sind per `IS_CATALOG`-Gate übersprungen. |
 | [../tests/style-test.mjs](../tests/style-test.mjs) | **Computed-Style-Test** (`npm run test:style`, optional): prüft die berechneten Styles am echten Chromium (Playwright) — Liste-vs-Grid-Parität, Alpha-Verläufe, Auswahl-/Hover-Stufen, Kontext-Donut (Ring + Loch), Live-Glow-Ring, Hover-Anhebung, Hintergrund-Layer. Skip ohne Playwright. |

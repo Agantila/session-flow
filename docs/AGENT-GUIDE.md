@@ -7,7 +7,8 @@ Details leben in den verlinkten Dateien; hier steht nur die **Reihenfolge**.
 
 ## 0. Was ist das hier?
 
-Ein Hermes-Desktop-Plugin (`plugin.js`, ein File, kein Build) mit sechs
+Ein Hermes-Desktop-Plugin (`full/plugin.js`, ein Quellfile, kein Build;
+Catalog-Build generiert nach `desktop/plugin.js`) mit sechs
 Bereichen: Chat-Animation, Strg+Scroll-Zyklus, Session-Pane (Liste/Grid +
 Gruppen + Filter), Glass/Lesbarkeit, UI-Tabs, Individualisierung. Siehe
 `../README.md` für die Nutzer-Perspektive.
@@ -17,7 +18,7 @@ Gruppen + Filter), Glass/Lesbarkeit, UI-Tabs, Individualisierung. Siehe
 | Schritt | Datei | Warum |
 |---|---|---|
 | 1 | `README.md` (dieser Ordner) | Index aller Doku-Dateien — kurzer Überblick, wo was steht. |
-| 2 | `DEVELOPMENT.md` | Architektur, Datei-Layout von `plugin.js`, Konventionen, Troubleshooting. |
+| 2 | `DEVELOPMENT.md` | Architektur, Datei-Layout von `full/plugin.js`, Konventionen, Troubleshooting. |
 | 3 | `APP-INTEGRATION.md` | Jeder DOM-Anker/Theme-Token, auf den das Plugin sich stützt, inkl. Risiko. **Bei App-Updates zuerst hier.** |
 | 4 | `SETTINGS.md` | Jede Einstellung: Key, Default, Wirkung. |
 | 5 | `ROADMAP.md` | Was zuletzt umgesetzt wurde, was geplant ist, was bewusst nicht passiert, bekannte Grenzen. |
@@ -49,8 +50,8 @@ größerer Umbau — nicht für Typos oder Ein-Zeilen-Fixes):
      „Geplant/Ideen"- oder „Bekannte Grenzen"-Einträge anpassen/entfernen.
    - `APP-INTEGRATION.md` → neue DOM-Anker/Doors eintragen, falls das
      Vorhaben neue App-Hooks angefasst hat.
-   - `../package.json` + `VERSION`-Konstante in `../plugin.js` synchron
-     halten.
+   - `../package.json` + `VERSION`-Konstante in `../full/plugin.js` synchron
+      halten.
 4. **Nie ohne Plan-Datei ausliefern**, wenn das Vorhaben mehr als eine
    Sitzung/einen Kontext braucht — die Plan-Datei IST das Gedächtnis für die
    nächste Sitzung (eigene oder eines anderen Agenten), nicht nur eine

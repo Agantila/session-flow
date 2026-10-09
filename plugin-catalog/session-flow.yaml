@@ -1,57 +1,39 @@
-# Catalog-Eintrag für NousResearch/hermes-agent (PR: eine Datei,
-# plugin-catalog/session-flow.yaml). Spiegel-Kopie im Plugin-Repo.
-#
-# WICHTIG beim Submission-Commit:
-#   1) `sha` auf den vollständigen 40-Hex-Commit des Fix-Stands setzen.
-#   2) `image`/`screenshots`-URLs auf denselben SHA pinnen.
-# `image` ist laut Catalog-README 2:1 (Beispiel 1200x600) — dafür gibt es
-# docs/marketing/sf-catalog-banner-2x1.png (1200x600, echter Crop aus dem
-# a1-Hero, kein 16:9-Screenshot in einen falschen Slot gequetscht).
-# Die Beschreibung trägt die volle Rule-13-Disclosure und muss mit dem Code
-# am Pin übereinstimmen (Review von #134760: Disclosure-Mismatch war ein
-# Ablehnungsgrund — Write-Behauptung ohne Code, nicht genannte projects.*-
-# Writes, session.title/session.branch_stored, /api/cron/jobs + Kanban-Reads).
 name: session-flow
 repo: https://github.com/agantila/session-flow
-sha: 6d6fbfa78237a19f4200bedca563b330d031cb36 # 40-hex — vor dem PR setzen
+sha: 6d6fbfa78237a19f4200bedca563b330d031cb36
 description: >-
-  Smooth line-by-line chat animation, Ctrl+Scroll session cycling,
-  Firefox-style session groups with project grouping, a session pane with
-  list/grid views, sidebar-style content tabs and personalization — six
-  features in a single plain-ESM plugin, all live-configurable from a
-  built-in settings page. Catalog build is SDK-only (panes, settings page,
-  sidebar nav, palette, keybinds via ctx.register). Disclosure — reads the
-  local Hermes gateway via public RPCs (projects.tree, projects.list,
-  session.list, session.active_list, session.context_breakdown,
-  focused-session state) and writes via public RPCs (projects.create,
+  Ctrl+Scroll session cycling, Firefox-style session groups with project
+  grouping, a session pane with list/grid views, sidebar-style content tabs
+  and personalization — five features in a single plain-ESM plugin, all
+  live-configurable from a built-in settings page. Catalog build
+  (desktop/plugin.js) is SDK-only (panes, settings page, sidebar nav,
+  palette, keybinds via ctx.register). Disclosure — reads the local Hermes
+  gateway through public RPCs (projects.tree, projects.list, session.list,
+  session.active_list, session.context_breakdown) plus focused-session
+  state; writes via public RPCs on your actions (projects.create,
   projects.update, projects.add_folder, projects.remove_folder,
   projects.set_primary, projects.set_active, projects.delete, session.create,
-  session.cwd.set, session.workspace.move, session.title, session.branch_stored,
-  session.archive, session.close, session.delete); reads the local gateway
-  REST mirror GET /api/sessions (pinned state — not available via RPC),
-  GET /api/plugins/kanban/board and GET /api/cron/jobs (status pips) where
-  the host exposes them. UI decorations that need SDK slots still missing
-  (composer accessory, tab decoration, message-render hook — requested on
-  upstream #116305) are NOT part of the catalog build; they ship in the
-  standalone full build in this repo (install.sh), which additionally uses
-  the Desktop-Bridge doors (file picker, reveal path, open-in-terminal,
-  REST mirror) and is disclosed in the repo README. Settings are stored
-  under ~/.hermes/cache/desktop-plugins/session-flow/. No outbound network
-  calls, no telemetry, no credentials read or stored, no shell commands,
-  no self-update. All timers are ctx-owned intervals disposed on unload
-  (live-session poll ~30 s, session refresh ~45 s, project cache + nav
-  status 60 s, activity expiry 30 s, lightweight UI sync 2–5 s).
+  session.cwd.set, session.title, session.branch_stored, session.archive,
+  session.close, session.delete); captures Ctrl+mouse-wheel across the app
+  (browser zoom suppressed except over canvases, editors and zoomable
+  images) to cycle sessions. Settings and groups stay in the app's local
+  plugin storage. No outbound network calls, no telemetry, no credentials
+  read or stored, no shell commands, no self-update. All timers are
+  ctx-owned intervals disposed on unload (live-session poll ~30 s, session
+  refresh ~45 s, project cache 60 s, activity expiry 30 s, lightweight UI
+  sync 2–5 s). The standalone full build in this repo (full/plugin.js,
+  install.sh) adds UI decorations via documented Desktop-Bridge doors; it
+  is NOT part of this catalog entry and is disclosed in the repo README.
   Contact: info@agantila.com.
 maintainer: "AGANTILA — Deniz Yilmaz <info@agantila.com>"
 tier: community
 category: desktop
 requires_hermes: ">=0.21.5"
 docs_url: https://github.com/agantila/session-flow#readme
-version: "1.29.0"
+version: "1.29.1"
 image: https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/sf-catalog-banner-2x1.png
 screenshots:
   - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg
-  - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a4-composer-glass-16x9.png
   - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png
   - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png
   - https://raw.githubusercontent.com/agantila/session-flow/6d6fbfa78237a19f4200bedca563b330d031cb36/docs/marketing/heroes/sf-hero-a7-settings-16x9.png

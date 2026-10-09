@@ -96,7 +96,7 @@ Siehe `plans/TEMPLATE.md` für die kopierfertige Vorlage. Pflichtfelder:
    „Bekannte Grenzen"-Einträge angepasst/entfernt.
 6. `APP-INTEGRATION.md`: neue DOM-Anker/Theme-Tokens/Doors eingetragen, falls
    zutreffend.
-7. `../package.json`-Version + `VERSION`-Konstante in `../plugin.js`
+7. `../package.json`-Version + `VERSION`-Konstante in `../full/plugin.js`
    synchron.
 8. `README.md` (dieser Ordner) verlinkt neue Dateien, falls welche entstanden
    sind.

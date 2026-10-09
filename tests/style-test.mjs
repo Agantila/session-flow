@@ -33,7 +33,7 @@ if (STYLE_TARGET !== 'full' && STYLE_TARGET !== 'catalog') {
   console.error('Aufruf: node tests/style-test.mjs [full|catalog]')
   process.exit(2)
 }
-const PLUGIN_PATH = fileURLToPath(new URL(STYLE_TARGET === 'full' ? '../full/plugin.js' : '../plugin.js', import.meta.url))
+const PLUGIN_PATH = fileURLToPath(new URL(STYLE_TARGET === 'full' ? '../full/plugin.js' : '../desktop/plugin.js', import.meta.url))
 const require = createRequire(import.meta.url)
 
 // ── Playwright optional laden ───────────────────────────────────────────────

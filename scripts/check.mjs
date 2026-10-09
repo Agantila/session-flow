@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Check für BEIDE Builds (full/plugin.js + plugin.js):
+ * Check für BEIDE Builds (full/plugin.js + desktop/plugin.js):
  *   1. Syntaxcheck (ESM) über `node --check`.
  *   2. i18n-Audit: vergleicht alle im Code benutzten `t('key')`-Keys mit den
  *      Locale-Bundles (EN/DE) und meldet fehlende sowie unbenutzte Keys.
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 
 const targets = [
   { label: 'Full-Build (full/plugin.js)', pluginPath: fileURLToPath(new URL('../full/plugin.js', import.meta.url)) },
-  { label: 'Catalog-Build (plugin.js)', pluginPath: fileURLToPath(new URL('../plugin.js', import.meta.url)) }
+  { label: 'Catalog-Build (desktop/plugin.js)', pluginPath: fileURLToPath(new URL('../desktop/plugin.js', import.meta.url)) }
 ]
 
 let failed = false

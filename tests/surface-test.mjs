@@ -1,13 +1,17 @@
 // tests/surface-test.mjs — Catalog-Regel-8-Wächter (Spiegelbild des
 // `desktop surface`-Checks im Plugin-Katalog-CI).
 //
-// Geprüft wird NUR der Catalog-Build (Root plugin.js), denn genau dieser
+// Geprüft wird NUR der Catalog-Build (desktop/plugin.js), denn genau dieser
 // wird im Plugin-Katalog am gepinnten SHA geladen. Verboten sind:
 //   - App-Markup-Queries: document.querySelector(All) mit data-slot /
 //     data-tour / data-testid / data-sidebar / data-tree-tab / data-chat-
 //     surface / data-sessions-mode / data-pane-host / aui_* / codicon-*
 //   - Observer auf document.body / document.documentElement
 //   - window.hermesDesktop / globalThis.window?.hermesDesktop (alle Doors)
+//   - synthetische window-focus- / document-visibilitychange-Events
+//     ((window|document).dispatchEvent — Review R2: triggert ALLE Focus-/
+//     Visibility-Listener der App und anderer Plugins; Refresh-Signal stattdes-
+//     sen als SDK-invalidate-Hook auf #116305 anfragen)
 //   - der App-interne localStorage-Key hermes.desktop.projectScope
 //   - CSS-Override-Selektoren auf App-Marker im Stylesheet
 //   - eval / new Function / dynamic import() außer SDK+react / Script-Inject
@@ -19,7 +23,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const pluginPath = fileURLToPath(new URL('../plugin.js', import.meta.url))
+const pluginPath = fileURLToPath(new URL('../desktop/plugin.js', import.meta.url))
 const source = readFileSync(pluginPath, 'utf8')
 const lines = source.split('\n')
 
@@ -82,7 +86,17 @@ for (const [i, line] of lines.entries()) {
   }
 }
 
-// ── 5) JS: keine Desktop-Bridge-Doors, kein App-Scope-Key ───────────────────
+// ── 5) JS: keine synthetischen Events auf window/document ───────────────────
+// Review R2: kickAppRefresh() darf im Catalog-Build keine focus-/
+// visibilitychange-Events feuern (triggert fremde Listener ohne Nutzertat).
+for (const [i, line] of lines.entries()) {
+  if (/(window|document)\.dispatchEvent\s*\(/.test(line)) {
+    failed = true
+    hits.push(`Z.${i + 1}: synthetisches Event auf window/document — ${line.trim().slice(0, 120)}`)
+  }
+}
+
+// ── 6) JS: keine Desktop-Bridge-Doors, kein App-Scope-Key ───────────────────
 const JS_FORBIDDEN = [
   [/window\.hermesDesktop/, 'window.hermesDesktop (Desktop-Bridge)'],
   [/globalThis\.window\?\.hermesDesktop/, 'globalThis.window?.hermesDesktop (Desktop-Bridge)'],
@@ -100,7 +114,7 @@ for (const [i, line] of lines.entries()) {
   }
 }
 
-// ── 6) dynamic import() nur für SDK/react ───────────────────────────────────
+// ── 7) dynamic import() nur für SDK/react ───────────────────────────────────
 for (const match of jsText.matchAll(/import\(\s*(['"`])([^'"`]+)\1\s*\)/g)) {
   const target = match[2]
   if (target !== '@hermes/plugin-sdk' && target !== 'react' && target !== 'react/jsx-runtime') {
@@ -109,7 +123,7 @@ for (const match of jsText.matchAll(/import\(\s*(['"`])([^'"`]+)\1\s*\)/g)) {
   }
 }
 
-// ── 7) prototype-Patching ───────────────────────────────────────────────────
+// ── 8) prototype-Patching ───────────────────────────────────────────────────
 for (const [i, line] of lines.entries()) {
   if (/\.prototype\.\w+\s*=/.test(line) || /Object\.defineProperty\([^)]*prototype/.test(line) || /__proto__\s*=/.test(line)) {
     failed = true
@@ -124,4 +138,5 @@ if (failed) {
 }
 
 console.log('✓ Surface-Check: Catalog-Build ist frei von App-Markup-Zugriff,')
-console.log('  Desktop-Bridge-Doors, Core-CSS-Overrides und Prototype-Patching.')
+console.log('  Desktop-Bridge-Doors, Core-CSS-Overrides, synthetischen window/document-')
+console.log('  Events und Prototype-Patching.')

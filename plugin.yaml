@@ -3,31 +3,32 @@
 # Der Catalog-Eintrag lebt in NousResearch/hermes-agent unter
 # plugin-catalog/session-flow.yaml (Spiegel-Kopie im Repo unter
 # plugin-catalog/session-flow.yaml). Dieses plugin.yaml beschreibt das
-# Package am Repo-Root: Einstiegspunkt ist das Root-plugin.js
-# (SDK-only Catalog-Build, geladen vom Desktop-Plugin-Loader).
+# Package am Repo-Root: Einstiegspunkt ist desktop/plugin.js
+# (SDK-only Catalog-Build, geladen vom Desktop-Plugin-Loader) —
+# dokumentiertes Layout (Review R2): plugin.yaml am Root, full/ außerhalb
+# von desktop/.
 name: session-flow
 title: Session Flow
-version: "1.29.0"
+version: "1.29.1"
 requires_hermes: ">=0.21.5"
 license: MIT
 description: >-
-  Six UX features for the Hermes Desktop session sidebar in one plain-ESM
-  plugin: line-by-line chat animation, Ctrl+Scroll session cycling,
-  Firefox-style session groups with project grouping, a session pane with
-  list/grid views, sidebar-style content tabs, and personalization — all
-  live-configurable from a built-in settings page.
-  Catalog build (plugin.js): SDK-only — panes, settings page, sidebar nav,
-  palette commands and keybinds via ctx.register; gateway RPCs
-  (projects.*, session.*) and read-only REST reads of the local gateway
-  (/api/sessions for pinned state, /api/plugins/kanban/board and
-  /api/cron/jobs for status pips) where available; no app-markup access,
-  no document.body observers, no core-CSS overrides, no window bridges,
-  no telemetry, no shell commands, no stored credentials.
+  Five UX features for the Hermes Desktop session sidebar in one plain-ESM
+  plugin: Ctrl+Scroll session cycling, Firefox-style session groups with
+  project grouping, a session pane with list/grid views, sidebar-style
+  content tabs, and personalization — all live-configurable from a built-in
+  settings page.
+  Catalog build (desktop/plugin.js): SDK-only — panes, settings page,
+  sidebar nav, palette commands and keybinds via ctx.register; public
+  gateway RPCs only (projects.*, session.*); no app-markup access, no
+  document.body observers, no core-CSS overrides, no window bridges, no
+  REST-mirror reads, no synthetic focus/visibilitychange events, no
+  telemetry, no shell commands, no stored credentials.
   Full build (full/plugin.js, standalone distribution only): adds UI
   decorations that reach past the SDK (composer chip, glass readability,
-  UI-tab restyle, chat animation, chat background) via the documented
-  Desktop-Bridge doors; those are disclosed in the repo README and are
-  NOT part of the catalog build.
+  UI-tab restyle, chat animation, chat background) plus local-gateway REST
+  reads via the documented Desktop-Bridge doors; those are disclosed in the
+  repo README and are NOT part of the catalog build.
 maintainer: "AGANTILA — Deniz Yilmaz <info@agantila.com>"
 homepage: https://github.com/agantila/session-flow
 docs_url: https://github.com/agantila/session-flow#readme

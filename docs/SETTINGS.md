@@ -11,9 +11,10 @@ zur jeweiligen Sektion, die aktuelle wird beim Scrollen automatisch markiert.
 > **UI-Tabs**, **Glass & Lesbarkeit** sowie die Akzent-/Hintergrund-Steuerungen
 > unter **Individualisierung** existieren nur im **Full-Build**
 > (`full/plugin.js`, Standalone via `install.sh`) — sie dekorieren Kernflächen
-> der App und sind im SDK-only Catalog-Build (Root-`plugin.js`) bewusst nicht
+> der App und sind im SDK-only Catalog-Build (`desktop/plugin.js`) bewusst nicht
 > enthalten (Katalog-Regel 8). Im Catalog-Build zeigt die Seite nur
-> Session-Liste, Tab-Gruppen, Strg+Scroll und die Pane-Flächen-Option.
+> Session-Liste, Tab-Gruppen, Strg+Scroll und die Pane-Flächen-Option
+> (seit v1.29.1 auch ohne die Composer-Pill-Toggle — Full-only, Review R2).
 
 ## Chat-Animation
 
@@ -92,7 +93,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.themeMode` | `auto` | **Erkanntes Theme**: `auto` (App folgen), `dark`, `light` — erzwingt einen Farb-Satz. `dark`/`light` überschreiben die Erkennung (praktisch, um die Hell-Farben in einer dunklen App zu prüfen). `data-sf-theme` markiert das effektive Theme. |
 | `tabs.themeAutoDerive` | `true` | **Gegenfarbe automatisch ableiten**: beim Setzen einer Farbe (Verlauf/Titel/Auswahl, inkl. Alpha) wird die passende Farbe fürs andere Theme in HSL abgeleitet (Farbton bleibt; Flächen in ein lesbares Helligkeitsband 0.36–0.58 hell / 0.46–0.72 dunkel, Text/Titel invertiert) und dort vorbelegt — danach frei änderbar. |
 | `tabs.lightTheme.*` | abgeleitet | Farb-Satz des Light-Themes (nur mit `themeSplit`): `rowGradOn/From/To/Angle`, `rowShadow`, `titleStyle`, `titleColor`, `titleGradOn/From/To/Angle`, `selColor`, `selShadow` — gleiche Semantik wie die flachen Keys. |
-| `composer.projectPill` | `true` | **Projekt-Kontext-Chip**: minimalistischer Chip (Farb-Dot + Projektname + Caret) in der Eingabezeile des Composers, direkt vor dem „+“-Add-IconButton. Klick öffnet ein Projekt-Menü: Draft → setzt den Anker (`$composerPick`, TTL 5 min) + `hermes.desktop.projectScope`; der App-Sendepfad liest den Chip als erste Quelle, die neue Session landet also beim Enter im gewählten Projekt (kein eager Create mehr, v1.21.1); bestehende Session → Re-Home per `session.workspace.move` (Fallback `session.cwd.set`); zusätzlich best-effort `projects.set_active`. |
+| `composer.projectPill` | `true` | **Projekt-Kontext-Chip** (Toggle nur im Full-Build sichtbar — der Catalog-Build hat keinen Composer-Zugriff, Review R2): minimalistischer Chip (Farb-Dot + Projektname + Caret) in der Eingabezeile des Composers, direkt vor dem „+“-Add-IconButton. Klick öffnet ein Projekt-Menü: Draft → setzt den Anker (`$composerPick`, TTL 5 min) + `hermes.desktop.projectScope`; der App-Sendepfad liest den Chip als erste Quelle, die neue Session landet also beim Enter im gewählten Projekt (kein eager Create mehr, v1.21.1); bestehende Session → Re-Home per `session.workspace.move` (Fallback `session.cwd.set`); zusätzlich best-effort `projects.set_active`. |
 | `tabs.maxVisible` | `0` | Max. sichtbare Einträge je Gruppe in Liste & Grid; der Rest erscheint hinter „Mehr anzeigen (n)" — erneuter Klick klappt wieder ein („Weniger anzeigen"). `0` = aus. |
 | `tabs.hideCron` | `true` | Cron-Sessions ausblenden. |
 | `tabs.livePollSec` | `30` | Intervall der Live-Status-Abfrage (`session.active_list`). Min. 10s. |

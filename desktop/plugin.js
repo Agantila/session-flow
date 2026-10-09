@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.29.0'
+const VERSION = '1.29.1'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -1316,24 +1316,21 @@ function refreshArchivedSessions() {
 
 
 /**
- * Sanfter Refresh-Kick an die App: die eigene Sidebar horcht auf window-focus
- * und visibilitychange (use-background-sync.ts) und zieht ihre Listen genau
- * auf diese Signale nach. Nach Plugin-seitigen Mutationen (Projekt geändert,
- * Pin, Archiv) feuern wir beide — die App bleibt ohne Restart instantan
- * aktuell. Bewusst generisch: kein App-Store wird angefasst.
+ * Sanfter Refresh-Kick an die App — NUR im Full-Build (Standalone-Distro):
+ * die eigene Sidebar horcht auf window-focus und visibilitychange
+ * (use-background-sync.ts) und zieht ihre Listen genau auf diese Signale
+ * nach. Nach Plugin-seitigen Mutationen (Projekt geändert, Pin, Archiv)
+ * feuern wir beide — die App bleibt ohne Restart instantan aktuell.
+ *
+ * Catalog-Build (Review R2, Punkt 2): bewusst leer. Synthetische focus-/
+ * visibilitychange-Events triggern ALLE Focus-/Visibility-Listener der App
+ * und anderer Plugins, ohne dass der Nutzer etwas tut — genau das darf ein
+ * Catalog-Plugin nicht. Ein sauberes Refresh-Signal nach Mutationen ist als
+ * SDK-invalidate-Hook auf upstream #116305 angefragt; bis dahin ziehen die
+ * eigenen Mutationen nur die Plugin-eigenen Daten nach
+ * (invalidateProjectTree + scheduleSessionsRefresh).
  */
 function kickAppRefresh() {
-  try {
-    window.dispatchEvent(new Event('focus'))
-  } catch {
-    /* kein DOM (Tests) — egal */
-  }
-
-  try {
-    document.dispatchEvent(new Event('visibilitychange'))
-  } catch {
-    /* ditto */
-  }
 }
 // Vorherige Aktivität (kurz): speist die Ausblend-Animation der
 // Detailreich-Info-Zeile (storedId -> { kind, name, at }).
@@ -1678,9 +1675,10 @@ function invalidateProjectTree() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Projekt-Verwaltung — dieselben Gateway-RPCs, die auch die Hermes-Sidebar
 // nutzt (methods_projects.py): create/update/add_folder/remove_folder/
-// set_primary/delete/set_active. Jede Mutation zieht den Baum sofort nach
-// und kickt die App-Sidebar (focus/visibilitychange), damit BEIDE Ansichten
-// ohne manuelles Aktualisieren synchron stehen.
+// set_primary/delete/set_active. Jede Mutation zieht den Baum sofort nach;
+// im Full-Build kickt zusätzlich kickAppRefresh() die App-Sidebar, damit
+// BEIDE Ansichten ohne manuelles Aktualisieren synchron stehen (Catalog-
+// Build: kein Kick — synthetische Events sind dort verboten, Review R2).
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Nach einer Projekt-Mutation: Baum + Sessions sofort, App sanft nachziehen. */
@@ -8983,15 +8981,6 @@ function SettingsPage() {
             description: t('tabsAppNavDesc'),
             checked: tabs.appNav !== false,
             onChange: value => patch('tabs', 'appNav', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('composerProjectPill'),
-            description: t('composerProjectPillDesc'),
-            checked: composer.projectPill !== false,
-            onChange: value => {
-              patch('composer', 'projectPill', value)
-              kickComposerPillSync()
-            }
           }),
           jsx(Row, {
             title: t('tabsGridMin'),

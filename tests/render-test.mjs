@@ -12,8 +12,8 @@
 // inkl. der zugehörigen Optionszeile.
 //
 // Aufruf:  npm test   (oder:  node tests/render-test.mjs [full|catalog])
-//   full    → full/plugin.js  (Quelle der Wahrheit, alle Features)
-//   catalog → plugin.js       (SDK-only Catalog-Build, Full-only-Tests SKIP)
+//   full    → full/plugin.js        (Quelle der Wahrheit, alle Features)
+//   catalog → desktop/plugin.js     (SDK-only Catalog-Build, Full-only-Tests SKIP)
 // Nur Node nötig, keine Dependencies, keine laufende App.
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,7 +25,7 @@ if (TARGET !== 'full' && TARGET !== 'catalog') {
   console.error('Aufruf: node tests/render-test.mjs [full|catalog]')
   process.exit(2)
 }
-const PLUGIN_PATH = fileURLToPath(new URL(TARGET === 'full' ? '../full/plugin.js' : '../plugin.js', import.meta.url))
+const PLUGIN_PATH = fileURLToPath(new URL(TARGET === 'full' ? '../full/plugin.js' : '../desktop/plugin.js', import.meta.url))
 
 // ── Atom-Factory (get/set/subscribe/listen/update) ──────────────────────────
 function makeAtom(v) {
@@ -397,7 +397,7 @@ const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
 if (missingExports.length) {
   console.log(`ℹ Build ohne Full-only-Exporte (Tests dazu werden übersprungen): ${missingExports.join(', ')}`)
 }
-// Catalog-Build (Root plugin.js): Full-only-Features sind ausgebuildt — die
+// Catalog-Build (desktop/plugin.js): Full-only-Features sind ausgebuildt — die
 // zugehörigen Testsektionen werden unten mit `if (!IS_CATALOG)` übersprungen.
 const IS_CATALOG = missingExports.length > 0
 // Full-only-Testspringer: zählt, was im Catalog-Build bewusst nicht geprüft wird.

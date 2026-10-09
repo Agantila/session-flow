@@ -3,6 +3,57 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.29.1] — 2026-10-09
+
+### Marketplace-Compliance (Review-Runde 2 der Resubmission)
+
+@teknium1 hat die v1.29.0-Resubmission bei `6d6fbfa` erneut geprüft — drei
+der vier Ablehnungsgründe aus #134760 bewertet er als gefixt. v1.29.1
+adressiert die vier Restpunkte der Runde:
+
+### Changed
+- **Layout: Catalog-Build nach `desktop/plugin.js` verschoben**
+  (dokumentiertes Layout; `plugin.yaml` bleibt am Repo-Root, `full/`
+  außerhalb von `desktop/`): `scripts/build-catalog.mjs`, `scripts/
+  check.mjs`, alle drei Tests und `install.sh` (Catalog-Symlink jetzt auf
+  `desktop/`) nachgezogen — damit besteht `hermes plugins validate`, und
+  der Catalog-Installer kopiert nicht mehr `full/plugin.js`, `install.sh`
+  und die Multi-MB-Docs/Marketing mit in den Desktop-Plugin-Ordner.
+- **Keine synthetischen Events mehr im Catalog-Build**: `kickAppRefresh()`
+  feuert kein `window.dispatchEvent(new Event('focus'))` / `document.
+  dispatchEvent(new Event('visibilitychange'))` mehr — die triggerten jeden
+  Focus-/Visibility-Listener der App und anderer Plugins ohne dass der
+  Nutzer etwas tut. Im Catalog-Build ist die Funktion jetzt ein
+  dokumentierter No-Op (Aufrufstellen `afterProjectMutation` /
+  `restoreSessionRow` bleiben und laufen ins Leere); der Full-Build
+  (Standalone-Distro) behält den Instant-Sync-Kick und disclost ihn jetzt
+  explizit in der README-Disclosure. Sauberes Refresh-Signal nach
+  Mutationen bleibt als SDK-invalidate-Hook auf
+  [#116305](https://github.com/NousResearch/hermes-agent/issues/116305)
+  angefragt.
+- **Disclosure auf den Ist-Stand des Catalog-Builds** (`plugin-catalog/
+  session-flow.yaml`, `plugin.yaml`, README/README.de, marketplace.json):
+  „Smooth line-by-line chat animation" gestrichen (Full-only, siehe
+  README-Feature-Tabelle; sechs→fünf Features), die REST-Lesetüren
+  (`GET /api/sessions`, `GET /api/plugins/kanban/board`,
+  `GET /api/cron/jobs`) aus der Beschreibung gestrichen (im Catalog-Build
+  längst `#catalog-only`-Stubs), `session.workspace.move` aus der
+  Write-Liste entfernt (taucht dort nur in Kommentaren auf),
+  Speicher-Aussage auf „app's local plugin storage" korrigiert (Realität:
+  `ctx.storage`, nicht `~/.hermes/cache/…`), Kommentarblock + Inline-
+  Kommentar am `sha:` aus der Catalog-YAML entfernt (Submission-Leitfaden
+  wanderte nach `docs/PLUGIN-CATALOG-PR.md`), Composer-Glass-Screenshot
+  aus dem Screenshot-Set genommen (zeigt ein Full-only-Feature).
+- **Composer-Pill-Toggle nur im Full-Build**: die
+  `composer.projectPill`-ToggleRow in den Einstellungen ist jetzt in eine
+  `#full`-Region gepackt — im Catalog-Build gab es nichts zu schalten
+  (kein Composer-Zugriff bis #116305), der Toggle tat dort nichts.
+
+### Added
+- **Surface-Tripwire erweitert**: `tests/surface-test.mjs` schlägt jetzt
+  auch auf synthetische `(window|document).dispatchEvent` im Catalog-Build
+  an (Regressionsschutz für den Review-Punkt „synthetic events").
+
 ## [1.29.0] — 2026-10-08
 
 ### Marketplace-Compliance (Resubmission nach hermes-agent #134760)

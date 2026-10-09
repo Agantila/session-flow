@@ -1,8 +1,9 @@
 # Mitwirken — Session Flow
 
 Danke für dein Interesse! Dieses Repo ist bewusst einfach gehalten: **eine
-Datei** (`plugin.js`), keine Abhängigkeiten, kein Build. Beiträge sind als
-Issues und Pull Requests willkommen.
+Quelldatei** (`full/plugin.js`, daraus wird der Catalog-Build
+`desktop/plugin.js` generiert), keine Abhängigkeiten, kein Build. Beiträge
+sind als Issues und Pull Requests willkommen.
 
 ## Schnellstart für Entwickler
 
@@ -54,7 +55,7 @@ stehen in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) und
    Ergebnis in der PR-Beschreibung nennen.
 5. PR öffnen; das Template führt durch die Checkliste.
 6. **CHANGELOG.md** aktualisieren (Keep-a-Changelog-Stil, Version + Datum).
-7. Version in `package.json` und `const VERSION` in `plugin.js` angleichen.
+7. Version in `package.json` und `const VERSION` in `full/plugin.js` angleichen.
 8. Plan (falls angelegt) auf Status `Done` setzen und Verifikations-Belege
    eintragen — siehe `docs/PLANNING.md` für die vollständige Checkliste
    (SETTINGS.md/ROADMAP.md/APP-INTEGRATION.md nachziehen).
@@ -88,7 +89,9 @@ Empfehlungen für das Repo:
 
 | Pfad | Inhalt |
 |---|---|
-| `plugin.js` | Der gesamte Plugin-Code. |
+| `full/plugin.js` | Quelle der Wahrheit: der gesamte Plugin-Code (Full-Build). |
+| `desktop/plugin.js` | Generierter SDK-only Catalog-Build (`npm run build:catalog`). |
+| `plugin.yaml` | Package-Manifest am Repo-Root (Name/Version/`requires_hermes`). |
 | `docs/AGENT-GUIDE.md` | Einstiegspunkt für Mensch & Agent — Lesereihenfolge, Plan-Prozess, Regeln. |
 | `docs/PLANNING.md` | Plan-Prozess im Detail (wann, Lebenszyklus, Pflege-Checkliste). |
 | `docs/plans/` | Einzelpläne je Vorhaben (`TEMPLATE.md` = Vorlage). |

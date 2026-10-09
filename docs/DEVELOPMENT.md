@@ -3,12 +3,13 @@
 ## Zwei Builds (seit v1.29.0)
 
 **Quelle der Wahrheit ist `full/plugin.js`** (alle Features, Standalone).
-Der committete Root-`plugin.js` ist der **generierte SDK-only Catalog-Build**
-(`node scripts/build-catalog.mjs` entfernt alle `/* #full */ … /* #end */`-
-Regionen) — er ist der Eintrittspunkt, den der Hermes Plugin Catalog am
-gepinnten SHA lädt (Katalog-Regel 8). CI schlägt an, wenn `plugin.js` nicht
-dem Stand von `full/plugin.js` entspricht; BEIDE Dateien immer zusammen
-committen.
+Der committete `desktop/plugin.js` ist der **generierte SDK-only
+Catalog-Build** (`node scripts/build-catalog.mjs` entfernt alle
+`/* #full */ … /* #end */`-Regionen) — er ist der Eintrittspunkt, den der
+Hermes Plugin Catalog am gepinnten SHA lädt (Katalog-Regel 8; dokumentiertes
+Layout seit v1.29.1: `plugin.yaml` am Repo-Root, `full/` außerhalb von
+`desktop/`). CI schlägt an, wenn `desktop/plugin.js` nicht dem Stand von
+`full/plugin.js` entspricht; BEIDE Dateien immer zusammen committen.
 
 Full-only-Features (Chat-Animation, Composer-Chip, Glass, UI-Tabs-Optik,
 Chat-Hintergrund, Sidebar-DOM-Sync, Desktop-Bridge-Doors) gehören ausschließlich
@@ -257,11 +258,12 @@ schlägt `npm run check` an.
 - **Temporäre Debug-Ausgaben** (`console.error`) vor dem Commit entfernen und
   `git commit --amend` nie in derselben Runde wie einen Marker-Save ausführen
   (Tool-Reihenfolge nicht garantiert) — danach mit
-  `git show HEAD:plugin.js | grep -c <marker>` prüfen.
+  `git show HEAD:full/plugin.js | grep -c <marker>` prüfen.
 
 ## Render-Smoketest (`npm test`)
 
-`tests/render-test.mjs` lädt die echte `plugin.js`, ersetzt die drei
+`tests/render-test.mjs` lädt die echte Plugin-Datei (`full/plugin.js` bzw.
+`desktop/plugin.js`), ersetzt die drei
 Import-Module (`@hermes/plugin-sdk`, `react`, `react/jsx-runtime`) durch Stubs
 und rendert `SessionsPane` **und** `SettingsPage` komplett (rekursiver Walk —
 Funktions-Komponenten werden tatsächlich aufgerufen). Läuft in Sekunden, nur
@@ -280,7 +282,8 @@ Bei neuen interaktiven UI-Teilen einfach Assertions ergänzen.
 
 ## Computed-Style-Test (`npm run test:style`, optional)
 
-`tests/style-test.mjs` extrahiert die echte CSS aus `plugin.js` und lädt sie in
+`tests/style-test.mjs` extrahiert die echte CSS aus dem jeweiligen Build
+(`full/plugin.js`) und lädt sie in
 eine minimale Test-Seite (`.sf-items[data-view=list|grid]`); geprüft werden die
 **berechneten Styles am echten Chromium** — genau das, was der Render-Smoketest
 nicht sieht:

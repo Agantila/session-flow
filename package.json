@@ -1,7 +1,7 @@
 {
   "name": "session-flow",
-  "version": "1.29.0",
-  "description": "Hermes Desktop plugin — smooth line-by-line chat animation, Ctrl+Scroll session cycling, Firefox-style session tab groups, glass readability for chips and the input field, and sidebar-style content tabs. Live-configurable settings page included. Two builds: SDK-only catalog build (plugin.js) and full standalone build (full/plugin.js).",
+  "version": "1.29.1",
+  "description": "Hermes Desktop plugin — Ctrl+Scroll session cycling, Firefox-style session tab groups, glass readability for chips and the input field, and sidebar-style content tabs. Live-configurable settings page included. Two builds: SDK-only catalog build (desktop/plugin.js) and full standalone build (full/plugin.js).",
   "type": "module",
   "private": true,
   "license": "MIT",

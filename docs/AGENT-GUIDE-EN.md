@@ -6,7 +6,7 @@
 
 ## What this is
 
-A Hermes Desktop plugin as **one plain-ESM file** (`plugin.js`, ~8.5k lines,
+A Hermes Desktop plugin as **one plain-ESM source file** (`full/plugin.js`, ~13k lines,
 no build, no dependencies). Six feature areas: chat line animation,
 Ctrl+Scroll session cycling, a session pane (list/grid + groups + filters),
 glass readability, UI-tab styling, and personalization — all live-configurable
@@ -91,7 +91,7 @@ Non-trivial work gets a plan file: copy `plans/TEMPLATE.md` to
 only `Done` with verification evidence inside. Before finishing, update:
 `../CHANGELOG.md`, `SETTINGS.md` (option changes), `ROADMAP.md`,
 `APP-INTEGRATION.md` (new doors/anchors), `README.md` (new files), and keep
-`package.json` version + the `VERSION` constant in `plugin.js` in sync.
+`package.json` version + the `VERSION` constant in `full/plugin.js` in sync.
 
 ## Git identity
 
