@@ -266,15 +266,26 @@ Gelaufen am 2026-10-09 (Windows-Checkout, Node 22):
 - `npm run test:style` — nicht gelaufen (keine Design-CSS-Änderung; kein
   Playwright auf diesem Rechner). Nachziehen, fallsavailable.
 
-Offen (nur auf der Zielmaschine/supstream möglich, kein Repo-Blocker):
+Auslieferung (erledigt am 2026-10-09):
+
+- `hermes plugins validate` (lokal, Hermes Agent v0.21.6+302): **Validation
+  passed** — u. a. „✓ loadable — entry: desktop/plugin.js", „✓ desktop
+  surface", „✓ no core override", „✓ security scan" (bestätigt genau den
+  Layout-Punkt des Reviews).
+- Push: `origin/main` 503efe9 → 15a50c6 (Agantila/session-flow).
+- PR #135216 (NousResearch/hermes-agent): PR-Branch `catalog/session-flow`
+  um den Re-Pin-Commit `27fad6000b` ergänzt (nur die YAML, 28+/46−; über
+  separaten Worktree — der lokale hermes-agent-Checkout blieb unangetastet),
+  Titel auf „… v1.29.1 @ 359f9af …" und Body auf die neue Fassung von
+  `docs/PLUGIN-CATALOG-PR.md` aktualisiert, Re-Pin-Kommentar an @teknium1
+  gepostet (PR-Head bestätigt: 27fad6000b).
+
+Offen (nur auf der Zielmaschine möglich, kein Repo-Blocker):
 
 - Manuell in Hermes Desktop: `./install.sh --link --variant catalog` →
   Plugin lädt, Tabs-Sektion ohne Projekt-Pill-Toggle; Archiv/Wiederherstellen
   + Projekt-Mutationen feuern kein `focus`/`visibilitychange` mehr; Full-Build
   unverändert (Kick weiterhin).
-- `hermes plugins validate <Repo>` (dokumentiertes Layout bestätigen).
-- Push beider Commits, PR-Datei in NousResearch/hermes-agent auf den neuen
-  Stand bringen, Kommentar an @teknium1 („re-pinned @ <SHA>").
 
 ## Follow-ups
 
