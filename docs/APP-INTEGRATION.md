@@ -55,6 +55,7 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | `--radius-scalar` | Theme-Radius-Skalar (echte Variable); `--radius-2xl` existiert NICHT zur Laufzeit (Tailwind inlined) |
 | `--ui-accent` | Akzent der Kern-UI (Basis aller Fills/Strokes/Hover/Aktiv-Zustände via `color-mix`); Quelle: `--theme-midground` | 
 | `--ui-text-*`, `--ui-stroke-*` | Text/Rahmen überall |
+| `--ui-accent` / `--ui-success` / `--destructive` | Farb-Vokabel des **Status-Loader** (v1.30.0) — identisch zur Farbe des Aktivitäts-Icons (`sf-tab-lead[data-kind]`); der Loader übernimmt damit die Farbwelt der App, statt eine eigene aufzumachen. `waiting` nutzt weiterhin den Bernstein-Fallback `#f59e0b`, `error` den Rot-Fallback `#ef4444`. |
 
 **Regel:** Keine hartkodierten Farben. Alles über Tokens + `color-mix(...)`.
 
@@ -71,6 +72,11 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 - **`prefers-reduced-motion`**: alle unsere Animationen gehen auf `none`.
 - **Pane-Tab-Geometrie**: Chip-Optik über `height:auto` + `margin-block`;
   Label-Fade via `mask-image` (wie die App beim Hover-Schließen).
+- **Status-Loader (v1.30.0)**: Ring-Technik wie beim Kontext-Donut —
+  `conic-gradient` + radiale Maske (`radial-gradient(closest-side, transparent
+  0 X%, #000 Y%)`), Rotation per `transform`-Keyframe auf `::after`. Der
+  Loader ist **Plugin-Code**; das Core-Primitive `SessionStatusDot` wird
+  nicht mehr gerendert (siehe `docs/plans/2026-11-16-status-loader.md`).
 - **Radius-Konzentrizität**: Innen liegende Ringe brauchen `r − 1px`
   (Border-Breite); wir **messen** den echten Surface-Radius zur Laufzeit
   (`getComputedStyle(...).borderTopLeftRadius` → `--sf-arc-radius`, 4-s-Refresh),
@@ -97,8 +103,8 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | Umbenennen | `session.title {session_id, title}` | **Nur live/geladen** (Runtime-ID aus `$liveMap` bevorzugen; stored-ID ⇒ „session not found“). Die App nutzt für persistierte Zeilen REST — kein Plugin-Door |
 | Zweig erstellen | `session.branch_stored {parent_session_id, cols, source, cwd?, idempotency_key}` | Lehnt leere Sessions ab („nothing to branch — send a message first“); Antwort: `stored_session_id` |
 | In Projekt verschieben | `session.workspace.move {session_key, cwd}` | cwd = `primary_path` des Zielprojekts; seit v1.14.0 auch per Drag & Drop auf einen Projekt-Ordner-Header (Projekt-Gruppierung) |
-| Archivieren | `session.archive {session_id, archived}` | akzeptiert stored-id/-key/-title; Runtime-ID first |
-| Löschen | `session.delete {session_id}` | **verweigert laufende Sessions (4023)** → vorher `session.close {session_id: runtimeId}` |
+| Archivieren | REST `PATCH /api/sessions/{id}` `{archived}` über die Bridge — **fenced**: vorher `GET /api/sessions/{id}/mutation-snapshot`, dann Body mit `request_id`/`expected_revision`/`expected_generation` (+`profile`). `session.archive`-RPC ist auf Authority-Backends gesperrt; Bridge-los-Fallback bleibt der RPC (v1.29.4/v1.29.5) |
+| Löschen | REST `DELETE /api/sessions/{id}` über die Bridge — **App-Parität**: vorher `GET /api/sessions/{id}/mutation-snapshot`, dann DELETE mit `request_id`/`expected_revision`/`expected_generation` als Query (+`profile`). Ohne diese Fence antwortet der Gateway 409 „client_upgrade_required … update the app to edit sessions“ (v1.29.5). Vorgeschaltet `session.interrupt {session_id: runtimeId}` (Authority-Verb, ohne `profile`). **Legacy-RPC `session.delete` ist auf Authority-Backends gesperrt** („unknown method …", `ws_legacy_fallback.py`) — nur Bridge-los-Fallback. 409/412 (Busy oder veralteter Fence) → 1 Retry nach 600 ms mit frischem Snapshot + neuer `request_id`; bleibendes Busy → i18n-Hinweis `deleteActiveHint` |
 | Im Terminal öffnen | `window.hermesDesktop.openSessionInTerminal(id)` (IPC) | stored-id ok (tui resume); Rückgabe `{ok}` prüfen |
 | ID kopieren | `window.hermesDesktop.writeClipboard(text)` (IPC) | Feature-Detect |
 | Info-Dichte folgen | SDK `host.settings.get/subscribe('sessionListDensity')` | Werte `compact`/`comfortable`/`detailed`; App-persistiert unter localStorage `hermes.desktop.sessionListDensity` (Fallback-Lesepfad) |

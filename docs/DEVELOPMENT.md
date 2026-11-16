@@ -224,8 +224,12 @@ CSS neu gebaut, nur Variablen gesetzt (`$settings.listen(applyGlass)`).
   `tool.complete`, `message.complete`, `error`, `clarify.request`) verfeinern
   die Anzeige (z. B. Tool-Name). Events tragen Runtime-IDs → Auflösung über die
   `$liveMap`.
-- Der Status-Punkt im Modus `dot` ist das Core-Primitive `SessionStatusDot`
-  (eine Quelle der Wahrheit für alle Status-Vokabeln).
+- Der Status-Loader (Modus `loader`/`glyph+loader`) ist ein eigener Baustein
+  (`StatusLoader` in `plugin.js`): ein Donut-Ring aus `conic-gradient` +
+  radialer Maske. Farbe, Drehung und Glow hängen am `data-kind`
+  (Aktivitäts-Kind aus `activityFor()`); der `key` des Elements folgt dem
+  Zustand, damit der Glow-Impuls bei jedem Wechsel neu startet. Der
+  Core-Primitive `SessionStatusDot` wird seit v1.30.0 nicht mehr gerendert.
 
 ### i18n
 

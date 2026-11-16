@@ -1,6 +1,6 @@
 {
   "name": "session-flow",
-  "version": "1.29.1",
+  "version": "1.30.0",
   "description": "Hermes Desktop plugin — Ctrl+Scroll session cycling, Firefox-style session tab groups, glass readability for chips and the input field, and sidebar-style content tabs. Live-configurable settings page included. Two builds: SDK-only catalog build (desktop/plugin.js) and full standalone build (full/plugin.js).",
   "type": "module",
   "private": true,

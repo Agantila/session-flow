@@ -15,6 +15,15 @@ zur jeweiligen Sektion, die aktuelle wird beim Scrollen automatisch markiert.
 > enthalten (Katalog-Regel 8). Im Catalog-Build zeigt die Seite nur
 > Session-Liste, Tab-Gruppen, Strg+Scroll und die Pane-Flächen-Option
 > (seit v1.29.1 auch ohne die Composer-Pill-Toggle — Full-only, Review R2).
+Seit v1.29.2 gliedern die langen Sektionen ihre Optionen zusätzlich per
+**Subtab** (Segment oben in der Sektion): Session-Tabs („Ansicht · Design ·
+Auswahl · Effekte"), UI-Tabs („Optik · Verhalten"), Glass („Fläche · Rahmen ·
+Bereiche") und Individualisierung („Akzent · Hintergrund"). Master-Schalter
+(`uiTabs.enabled`, `glass.enabled`), Preset- und Hinweis-Zeilen stehen außerhalb
+der Subtabs; alle Panes bleiben geladen, inaktive sind nur ausgeblendet. Der
+aktive Subtab ist reiner UI-Zustand und wird nicht persistiert. Im
+**Catalog-Build** gibt es nur die Subtabs der Session-Tabs-Sektion — die
+übrigen Sektionen sind dort Full-only (siehe Kasten oben).
 
 ## Chat-Animation
 
@@ -79,7 +88,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.doneFxStrength` | `subtle` | Stärke des Wackel-Effekts: `subtle` (dezent) / `medium` / `strong`. |
 | `tabs.showContext` | `false` | Kontextfenster (kompakt): Prozent-Label je Zeile/Karte für **Live-Sessions** (read-only `session.context_breakdown`, kein Provider-Call). Ab 70 % bernstein, ab 90 % rot; Tooltip zeigt used/max. |
 | `tabs.ctxPie` | `true` | Kontextfenster als **Donut**: Außenring = Füllstand, Innenkreis ausgespart (die Zeilenfläche scheint durch). Der Wert steht im Loch — weiß mit mehrlagigem Text-Schatten (Kontur + Glow); Farbstufen ab 70 %/90 %. Aus = reines Prozent-Label. **Listen-Ansicht:** Donut ganz rechts am Ende (nach der Zeit); **Grid:** vor der Zeit. |
-| `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |
+| `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `loader` (eigener Status-Loader: Donut-Ring, der sich wie ein Loader dreht), `glyph+loader` (Icon + Loader). Ersetzt seit v1.30.0 den Core-Status-Punkt; gespeicherte Altwerte `dot`/`glyph+dot` werden beim Start einmalig auf `loader`/`glyph+loader` umgestellt. |
 | `tabs.showTime` | `true` | Alter der Session anzeigen. |
 | `tabs.showPreview` | `false` | Letzte Nachricht als Vorschau (cozy-Dichte). |
 | `tabs.showCounts` | `false` | Nachrichtenanzahl anzeigen. |

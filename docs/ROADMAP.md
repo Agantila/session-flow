@@ -1,10 +1,77 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.29.1 (2026-10-09). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.30.0 (2026-11-16). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
 
+- **Status-Loader (Donut-Ring) ersetzt den Core-Status-Punkt** (v1.30.0, Plan:
+  `docs/plans/2026-11-16-status-loader.md`): Die Status-Darstellung der
+  Session-Einträge hat jetzt einen eigenen Loader — ein äußerer Kreis, der
+  sich wie ein Loader dreht (heller Kopf mit auslaufendem Schweif, wie ein
+  Ladebalken im Kreis). Die Donut-Animation spiegelt Interaktion bzw.
+  Zustand; beim Zustandswechsel läuft ein dezenter Glow-Impuls. Alle Zustände
+  sind visuell UND farblich abgebildet (Farb-Vokabel identisch zum
+  Aktivitäts-Icon). Im Modus „Icon + Loader" liegt der Ring **konzentrisch um
+  das Icon** — beide ergeben zusammen ein Icon. Einstellung „Punkt“ heißt jetzt
+  „Loader“; gespeicherte Altwerte werden einmalig migriert.
+
+- **Feature-Linie in die Katalog-Linie überführt** (v1.30.0, Plan:
+  `docs/plans/2026-11-16-katalog-integration.md`): die Feature-Arbeit
+  (Settings-Subtabs, Session-Löschen/Archivieren über REST-Fence,
+  Status-Loader) liegt jetzt im R2-Zwei-Build-Layout — `full/plugin.js` als
+  Quelle, `desktop/plugin.js` als generierter SDK-only Catalog-Build, den
+  der Marketplace lädt. Die Full-only-Regeln bleiben gewahrt: REST-Bridge-
+  Teile und die Individualisierungs-Subtabs sind `#full`, der Catalog-Build
+  zeigt dort die Pane-Flächen-Option. Die Feature-Linie wurde dabei auf
+  v1.29.2–v1.29.5 verschoben (v1.29.0/v1.29.1 waren vom Katalog-Build
+  belegt).
+
+- **Revision-Fence für Delete/Archive** (v1.29.5, Plan:
+  `docs/plans/2026-11-16-session-delete-fix.md`): Der Gateway verlangt für
+  REST-Session-Mutationen eine Fence-Identität
+  (`request_id`/`expected_revision`/`expected_generation`) — ohne sie: 409
+  „client_upgrade_required … update the app to edit sessions“. Das Plugin
+  liest jetzt vor jeder Mutation `GET /api/sessions/{id}/mutation-snapshot`
+  und schickt die Identität mit (DELETE-Query, PATCH-Body); Konflikt/Busy →
+  ein Retry mit frischem Snapshot und neuer request_id. „client_upgrade_required“
+  wird bewusst NICHT als „Session beschäftigt“ fehlklassifiziert.
+
+- **Delete/Archive auf REST umgestellt** (v1.29.4, Plan:
+  `docs/plans/2026-11-16-session-delete-fix.md`): Der Gateway des aktuellen
+  Hermes-Desktop bedient Legacy-Session-Writer (`session.delete`, `session.close`,
+  `session.archive`) über Desktop-Sockets nicht mehr — die Session-Authority
+  übernimmt („unknown method … not available on this Hermes backend"). Das
+  Plugin löscht jetzt wie die App selbst: `session.interrupt` (Authority-Verb)
+  + REST `DELETE /api/sessions/{id}` über die Bridge mit `profile`-Routing;
+  Archivieren per REST `PATCH {archived}`. 409-Retry + i18n-Hinweis bei
+  bleibend aktiver Turn-Lease. RPC-Pfad bleibt als Fallback für Brücken-lose
+  Shells (v1.29.3-Logik). Achtung Rollback-Sicht: v1.29.3 alone fixte nur
+  Old-Backends — der gemeldete Fehler war die Authority-Sperre.
+
+- **Session-Löschen repariert** (v1.29.3, Plan:
+  `docs/plans/2026-11-16-session-delete-fix.md`): Delete läuft jetzt in der
+  App-Sequenz `session.interrupt` → `session.close` → `session.delete` mit
+  frischer Runtime-Auflösung (`findLiveSessionIdByKey` statt nur dem
+  30-s-Live-Poll) und Owner-Profil-Scope (`row.profile`) auf allen drei
+  RPCs. Hintergrund: Der Gateway verweigert `session.delete` seit #123583
+  auch bei aktiver Turn-Lease (Write-Guard) mit 4023 — ohne interrupt
+  stand der Fehler-Toast; ohne `profile` traf der Write die DB des
+  Launch-Profils (4007 für Agency-Zeilen). Ein 4023-Retry (600 ms) und der
+  i18n-Hinweis `deleteActiveHint` bei bleibender Verweigerung ergänzen das.
+  Bekannte Folge-Lücke (bewusst nicht mitgefixt): `session.archive`
+  (Archivieren/Wiederherstellen) trägt ebenfalls noch kein `profile`.
+
+- **Settings-Subtabs** (v1.29.2, Plan:
+  `docs/plans/2026-11-16-settings-subtabs.md`): die vier langen Sektionen
+  (Session-Tabs, UI-Tabs, Glass, Individualisierung) gruppieren ihre Rows
+  jetzt per Subtab über eine generische `SettingsSubtabs`-Komponente.
+  Alle Panes bleiben gemountet, inaktive tragen nur `hidden` — der
+  Render-Smoke asserting auf dem t()-Call-Log blieb dadurch unangetastet.
+  Abweichungen vom Plan: Glass bekam 3 Subtabs (Fläche/Rahmen/Bereiche,
+  statt 2), Individualisierung nur 2 (Akzent/Hintergrund — die im Plan
+  genannten Shell-Rows existieren nicht mehr); alignTop/hoverLift wanderten
+  von Design nach Ansicht.
 - **Marketplace-Compliance R2** (v1.29.1): zweite Review-Runde der
   Resubmission (Review von @teknium1 auf v1.29.0) — alle vier Restpunkte
   adressiert: Catalog-Build nach `desktop/plugin.js` (dokumentiertes
@@ -26,7 +93,6 @@ zugesagt.
   `npm run check`), Disclosure vollständig korrigiert (Kontakt
   info@agantila.com). Siehe
   [`docs/plans/2026-10-08-marketplace-catalog-compliance.md`](plans/2026-10-08-marketplace-catalog-compliance.md).
-
 - **DnD komplett auf Pointer-Events umgestellt** (v1.28.0, live
   verifiziert): natives HTML5-DnD (`draggable`/`dragstart`/`dragover`/
   `drop`) restlos entfernt — Hermes Desktop selbst ist aus denselben
@@ -280,7 +346,10 @@ und docs/plans/2026-10-04-info-dichte-abstufung.md.
   Message-Render-Hook, Theme-Door, Gateway-Change-Events, REST-Mirror-Door,
   Picker/Terminal-Doors), wandern die `#full`-Regionen schrittweise auf
   SDK-Pfade um — jeder Schritt als eigener Mini-Plan + SHA-Bump-PR.
-
+- **Settings-Subtabs nachschärfen** (Follow-ups aus v1.29.2): „Erweitert"-
+  Disclosure für die doneFx-Feinparameter (Achse/Stärke), falls der
+  Effekte-Tab als zu lang empfunden wird; optional Persistenz des aktiven
+  Subtabs je Sektion (dann Settings-Schema-Version mitnehmen).
 - **Echter Draft-CWD-Hebel (App-PR)**: Plugin-Tür für `$projectScope`/einen
   `setCurrentCwd`-Door, damit der Projekt-Chip den offenen App-Draft direkt
   umstellt — statt des jetzigen Ersatz-Creates (der App-Draft bleibt dann
@@ -319,10 +388,12 @@ und docs/plans/2026-10-04-info-dichte-abstufung.md.
   dass es ausdrücklich gewünscht ist.
 - **Animation nur auf Assistant-Markdown.** User-Nachrichten und Tool-Karten
   bleiben unangetastet — weniger Flackern, klare Lesbarkeit.
-- **Kein eigener Status-Punkt.** Der Core-`SessionStatusDot` bleibt die einzige
-  Statusquelle im Tab (SDK-Regel: Plugins, die daneben einen eigenen Punkt
-  malen, brechen die Farb-Vokabel der App). Wir erweitern ihn nur um den
-  Live-Glow (gleiche Engine wie die Sidebar).
+- **Kein eigener Status-Punkt.** ~~Der Core-`SessionStatusDot` bleibt die einzige
+  Statusquelle im Tab~~ — **seit v1.30.0 umgekehrt**: Der Core-Punkt ist weg,
+  der eigene Status-Loader (Donut-Ring) übernimmt die Aufgabe vollständig
+  (Farb-Vokabel, Zustands-Abdeckung, Live-Glow). Grund: der Punkt war starr
+  und konnte die Interaktion nicht zeigen; der Loader kann es (Plan:
+  `docs/plans/2026-11-16-status-loader.md`).
 - **Kein `!important` auf `backdrop-filter`.** Der systemweite
   „Transparenz reduzieren"-Gate der App muss gewinnen.
 - **Filter-Leiste ephemeral.** Bewusst nicht persistiert (siehe Hermes-Vorbild)

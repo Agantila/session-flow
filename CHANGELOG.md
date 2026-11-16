@@ -3,6 +3,130 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.30.0] — 2026-11-16
+
+### Added
+- **Status-Loader (Donut-Ring) ersetzt den Core-Status-Punkt** — die
+  Status-Darstellung der Session-Einträge hat jetzt einen eigenen Loader:
+  ein äußerer Kreis, der sich wie ein Loader dreht — der helle Kopf läuft mit
+  auslaufendem Schweif wie ein Ladebalken im Kreis über den Ring, und diese
+  Donut-Animation spiegelt Interaktion bzw. Zustand. Beim Zustandswechsel
+  läuft zusätzlich ein **dezenter Glow-Impuls** (einmalig, ~1,15 s) — „wenn
+  etwas passiert“. Alle Zustände sind visuell UND farblich abgebildet:
+  *arbeiten/denkt/Tool* = Akzent (Ring dreht 1,4 s), *wartet* = Bernstein
+  (dreht langsam, 2,8 s), *fertig/ungelesen* = ruhender Vollring in der
+  Erfolgsfarbe, *Fehler* = ruhender Vollring in Fehlerfarbe, *idle* = ruhender,
+  matter Ring. Die Farb-Vokabel ist identisch zum Aktivitäts-Icon — der Loader
+  bricht die Farbwelt der App also nicht.
+- **Einstellung „Status-Darstellung“**: „Punkt“ heißt jetzt **„Loader“**,
+  „Icon + Punkt“ heißt **„Icon + Loader“**. Im Modus „Icon + Loader“ liegt der
+  Ring **konzentrisch um das Icon** — beide ergeben zusammen EIN Icon statt
+  zweier Elemente nebeneinander. Gespeicherte Altwerte (`dot`, `glyph+dot`)
+  werden beim Start einmalig auf die neuen Werte umgestellt — die gewählte
+  Darstellungsart bleibt erhalten. Plan:
+  `docs/plans/2026-11-16-status-loader.md`.
+
+### Changed
+- **Der Core-`SessionStatusDot` wird nicht mehr gerendert.** Bewusste
+  Umkehr der bisherigen Design-Entscheidung („kein eigener Status-Punkt“):
+  Der Loader übernimmt die Punkt-Aufgabe vollständig — inklusive Farb-Vokabel
+  und Zustands-Abdeckung.
+- **Feature-Linie in die Katalog-Linie überführt** — die bis heute
+  unveröffentlichte Feature-Arbeit (Settings-Subtabs, Session-Löschen/
+  Archivieren über REST-Fence, Status-Loader) liegt jetzt im
+  R2-Zwei-Build-Layout: `full/plugin.js` ist die Quelle, `desktop/plugin.js`
+  der daraus generierte SDK-only Catalog-Build, den der Marketplace lädt.
+  Damit erreicht v1.30.0 den Marketplace und die Full-only-Regeln bleiben
+  gewahrt: REST-Bridge-Teile (Löschen/Archivieren über REST) und die
+  Individualisierungs-Subtabs sind `#full`; der Catalog-Build zeigt dort wie
+  bisher die Pane-Flächen-Option. Die Feature-Linie wurde dabei auf
+  v1.29.2–v1.29.5 verschoben (v1.29.0/v1.29.1 waren vom Katalog-Build
+  belegt). Plan: `docs/plans/2026-11-16-katalog-integration.md`.
+
+## [1.29.5] — 2026-11-16
+
+### Fixed
+- **Löschen scheitert an „client_upgrade_required“** — der Gateway verlangt
+  für REST-Mutationen inzwischen eine **Revision-Fence**: ohne
+  `request_id`/`expected_revision`/`expected_generation` lehnt er die
+  Mutation mit 409 „this app is out of sync (different versions) with the
+  Hermes backend; update the app to edit sessions“ ab (das war der Toast in
+  v1.29.4). Das Plugin liest jetzt wie die Hermes-Sidebar zuerst
+  `GET /api/sessions/{id}/mutation-snapshot` (`runtime_revision` /
+  `runtime_generation`) und hängt die Fence-Identität an den DELETE
+  (Query) bzw. an den PATCH-Body (Archivieren). Konflikte/Busy (409/412)
+  werden mit **frischem** Snapshot und **neuer** `request_id` genau einmal
+  wiederholt. Wichtig: „client_upgrade_required“ ist kein „Session
+  beschäftigt“ — dieser Fehler bleibt als Rohtext sichtbar, statt als
+  irreführender Busy-Hinweis aufzutauchen.
+
+## [1.29.4] — 2026-11-16
+
+### Fixed
+- **„Unknown method session.delete“** — die eigentliche Ursache des
+  Lösch-Fehlers: Der Gateway des aktuellen Hermes-Desktop läuft mit
+  **Session-Authority** über den Desktop-Socket. Seitdem bedient der WS
+  Legacy-Session-Writer für Desktop-Verbindungen nicht mehr
+  (`ws_legacy_fallback.py` sperrt `session.delete`/`session.close`/
+  `session.archive` gezielt; Antwort: „unknown method: … not available on
+  this Hermes backend"). Die App selbst löscht deshalb per
+  REST `DELETE /api/sessions/{id}`. Das Plugin macht das jetzt genauso:
+  Laufenden Turn per `session.interrupt` abbrechen (Authority-Verb,
+  funktioniert), dann per REST-Bridge löschen — mit `profile`-Routing-Feld
+  für Zeilen anderer Profile (Agency-Setup). 409 „session_active_turn"
+  wird einmal nach 600 ms wiederholt, bleibende Verweigerung zeigt den
+  i18n-Hinweis `deleteActiveHint`. **Archivieren/Wiederherstellen**
+  (dasselbe Authority-Problem, `session.archive` wäre ebenfalls -32601)
+  läuft parallel auf REST `PATCH /api/sessions/{id} {archived}` um. Ohne
+  Bridge (ältere Shells) bleibt der v1.29.3-RPC-Pfad als Fallback.
+
+## [1.29.3] — 2026-11-16
+
+### Fixed
+- **Session-Löschen schlägt fehl („cannot delete an active session“ /
+  „session not found“)** — `deleteSessionRow` läuft jetzt in der
+  App-Sequenz: Runtime frisch über `findLiveSessionIdByKey` auflösen
+  (30-s-`$liveMap`-Poll kennt frische/fremde Runtimes noch nicht), dann
+  `session.interrupt` → `session.close` → `session.delete`. Der Gateway
+  verweigert deletes seit #123583 zweistufig (Live-Runtime UND aktive
+  Turn-Lease/Write-Guard) — ohne interrupt blieb die Lease stehen und der
+  Löschversuch endete im 4023-Fehler-Toast. Zusätzlich trägt jeder der
+  drei RPCs jetzt das Owner-Profil der Zeile (`row.profile`): ohne
+  `profile` schreibt der Gateway in die state.db des LAUNCH-Profils und
+  Zeilen anderer Profile (Agency-Setup) quittieren mit 4007 „session not
+  found“, obwohl sie existieren. Ein 4023 nach close wird einmalig nach
+  600 ms wiederholt (Guard-Freigabe läuft dem close kurz nach); bleibt er,
+  zeigt der Toast den i18n-Hinweis `deleteActiveHint` statt der rohen
+  Gateway-Message (Plan: `docs/plans/2026-11-16-session-delete-fix.md`).
+  **Hinweis:** Der Live-Fehler kam vom Gateway-Socket (Authority sperrt
+  Legacy-Writer) und von der Fence-Pflicht der REST-Route — beides ist in
+  v1.29.4/v1.29.5 behoben; dieser Eintrag allein genügt auf aktuellen
+  Backends NICHT.
+
+## [1.29.2] — 2026-11-16
+
+> **Hinweis zur Nummerierung:** Die Feature-Linie (Settings-Subtabs,
+> Session-Löschen/Archivieren über REST-Fence) entstand parallel zur
+> Katalog-Linie und wurde beim Merge auf v1.29.2–v1.29.5 verschoben —
+> v1.29.0/v1.29.1 waren bereits vom Katalog-Build belegt. Unveröffentlichte
+> Zwischenstände: Settings-Subtabs (v1.29.2), Delete-Reparatur per RPC
+> (v1.29.3), Authority-Umstellung auf REST (v1.29.4), Revision-Fence
+> (v1.29.5).
+
+### Changed
+- **Settings-Sektionen mit Subtabs gruppiert** (Plan:
+  `docs/plans/2026-11-16-settings-subtabs.md`): Die vier langen Sektionen
+  brechen ihre Scroll-Länge jetzt per Subtab auf — Session-Tabs:
+  „Ansicht / Design / Auswahl / Effekte", UI-Tabs: „Optik / Verhalten",
+  Glass: „Fläche / Rahmen / Bereiche", Individualisierung:
+  „Akzent / Hintergrund". Master-Schalter (`uiTabs.enabled`,
+  `glass.enabled`) und Preset-/Hinweis-Zeilen bleiben außerhalb der Tabs
+  immer sichtbar; die sticky Kategorie-Navigation und alle Anker-IDs sind
+  unverändert. Technisch: eine generische `SettingsSubtabs`-Komponente,
+  deren Panes alle gemountet bleiben und inaktive nur `hidden` tragen —
+  der Render-Smoke (t()-Call-Log) sieht dadurch weiterhin jede Zeile, alle
+  bestehenden Settings-Assertions blieben unangetastet grün. Der aktive
+  Subtab ist reiner UI-Zustand (nicht persistiert, kein Schema-Wandel).
 ## [1.29.1] — 2026-10-09
 
 ### Marketplace-Compliance (Review-Runde 2 der Resubmission)
@@ -131,7 +255,6 @@ Feature-Verlust**:
   `/api/getFolderSize` — letzterer nur Full-Build). Kontakt überall auf
   `info@agantila.com` gestellt (`marketplace.json`, Katalog-YAML, PR-Doku,
   README/README.de).
-
 ## [1.28.1] — 2026-10-07
 
 ### Fixed

@@ -9,7 +9,7 @@
 # von desktop/.
 name: session-flow
 title: Session Flow
-version: "1.29.1"
+version: "1.30.0"
 requires_hermes: ">=0.21.5"
 license: MIT
 description: >-

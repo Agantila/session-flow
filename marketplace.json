@@ -6,7 +6,7 @@
   "tagline": "Five UX features for the Hermes Desktop session sidebar in one plain-ESM plugin",
   "summary": "Ctrl+Scroll session cycling, Firefox-style session groups with project grouping, a session pane with list/grid views, sidebar-style content tabs, and personalization — five features in one plugin, all live-configurable from a built-in settings page.",
   "description": "Session Flow turns Hermes Desktop's session sidebar into something that *feels* like a real app:\n\n1. **Ctrl+Scroll = session cycling** — hold a modifier and wheel through your active sessions; a HUD shows position and title. Zoom surfaces keep their own behaviour.\n2. **Session pane with Firefox-style groups** — list or grid, groups collapse into a stack (spine/fanned/pill), optional auto-grouping by date/source/project folder. Drop a tab on a project header to move it. Live status icons (thinking / writing / tool / waiting / done / error). Search + quick filter bar. App quick-start row above the toolbar.\n3. **Sidebar-style UI tabs** — content-area tabs become rounded chips like the sidebar session rows. Live session info from the sidebar: working sessions get the travelling glow ring on their tab.\n4. **Personalization** — pick your own accent color and choose the pane surface (native sidebar / chat / none).\n\nAll live-configurable from a built-in settings page (EN + DE). The standalone full build in this repo adds chat line animation, composer glass and a chat background via documented Desktop-Bridge doors — it is not part of the catalog entry and is disclosed in the repo README.",
-  "version": "1.29.1",
+  "version": "1.30.0",
   "author": {
     "name": "AGANTILA — Deniz Yilmaz",
     "url": "https://agantila.com",
@@ -99,8 +99,8 @@
     ]
   },
   "size": {
-    "pluginJs": "420922",
-    "pluginJsHuman": "≈ 411 KB (catalog) / ≈ 521 KB (full)"
+    "pluginJs": "436681",
+    "pluginJsHuman": "≈ 426 KB (catalog) / ≈ 543 KB (full)"
   },
   "locales": [
     "en",

@@ -373,12 +373,14 @@ const rewritten = src
 // SyntaxErrors). Fehlt ein Name, bleibt er weg; Tests, die ihn brauchen,
 // melden sich über mod.X === undefined und werden unten übersprungen.
 const EXPORT_NAMES = [
-  'patchSettings', 'applyPersonal', 'clearPersonal', 'syncPaneBackgrounds', 'StatusLead', 'pollLiveSessions',
+  'patchSettings', 'applyPersonal', 'clearPersonal', 'syncPaneBackgrounds', 'StatusLead', 'StatusLoader',
+  'normalizeStatusStyle', 'pollLiveSessions',
   '$liveMap', '$ctxInfo', '$sessions', '$projectsList', '$pinnedRows', '$doneFx', '$activityPrev', '$activity',
   '$folderSizes', '$loadPhase', '$archivedRows', '$sessionsError', 'refreshSessions', 'invalidateProjectTree',
   'startNewProjectSession', 'startNewSessionInCwd', 'branchSessionRow', 'openFreshSession', 'ambientOwnerProfile',
   'projectForCwd', 'composerDraftAnchor', 'composerDraftLabel', 'adoptComposerPickForNewSession', '$composerPick',
-  'moveSessionRow', 'findLiveSessionIdByKey', 'resolveNewProjectSessionCwd', '$sessionProjectSeed', '$dragActive',
+  'moveSessionRow', 'deleteSessionRow', 'archiveSessionRow', 'restoreSessionRow', 'findLiveSessionIdByKey',
+  'resolveNewProjectSessionCwd', '$sessionProjectSeed', '$dragActive',
   'reconnectRefresh', 'scheduleSettleIn', 'bootstrapSessionData', 'SETTLE_IN_DELAYS_MS', 'NAV_APPS', 'SF_NAV_ROUTES',
   'navigateAppRoute', '$navStatus', 'kanbanBoardToStatus', 'cronJobsToStatus', 'cronJobState',
   'navStatusTone', 'refreshNavStatus', 'deriveForTheme', 'detectAppTheme', 'applyRows', 'activeRowColors',
@@ -417,7 +419,9 @@ const ctx = {
   },
   onDispose: () => {},
   setInterval: () => () => {},
-  setTimeout: () => 0,
+  // Echte Timer: Der 4023-Retry im Delete-Flow (CTX.setTimeout) muss im Test
+  // wirklich auflösen. Der Bootstrap-Fallback (20 s) feuert vor Testende nie.
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
   onEvent: () => () => {},
   addEventListener: () => () => {},
   storage: {
@@ -686,6 +690,46 @@ try {
   check('Einstellungs-Seite (Theme-Farben) rendert', false, error.message)
 }
 
+// 11c) v1.29: Settings-Subtabs — Panes bleiben alle gemountet, inaktive hidden.
+// Der Segment-Stub rendert null (kein 'pinned'), deshalb wird über Panes und
+// t()-Call-Log asserting — nicht über Tab-Buttons.
+// Build-abhängig: UI-Tabs, Glass und Individualisierung sind Full-only — der
+// Catalog-Build kennt nur die Subtabs der Session-Tabs-Sektion.
+try {
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out11c = { el: [], text: [] }
+  walk(settingsPage.render(), out11c)
+  const seen11c = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  const subKeys = IS_CATALOG
+    ? ['subView', 'subDesign', 'subSelection', 'subEffects']
+    : [
+        'subView', 'subDesign', 'subSelection', 'subEffects',
+        'subLook', 'subBehavior', 'subSurface', 'subFrame', 'subScope',
+        'subAccent', 'subBackground'
+      ]
+  for (const key of subKeys) {
+    check(`Einstellungs-Seite enthält Subtab-Key ${key}`, seen11c.has(key))
+  }
+  const panes11c = out11c.el.filter(e => e.tag === 'div' && e.cls.includes('sf-subtab-pane'))
+  const hidden11c = panes11c.filter(e => e.props && e.props.hidden === true)
+  const visible11c = panes11c.filter(e => !e.props || e.props.hidden !== true)
+  const expectPanes = IS_CATALOG ? 4 : 11
+  const expectVisible = IS_CATALOG ? 1 : 4
+  const expectHidden = IS_CATALOG ? 3 : 7
+  check(`Subtabs: ${expectPanes} Panes`, panes11c.length === expectPanes, `panes=${panes11c.length}`)
+  check(`Subtabs: je Gruppe genau 1 Pane sichtbar (${expectVisible})`, visible11c.length === expectVisible, `visible=${visible11c.length}`)
+  check(`Subtabs: ${expectHidden} inaktive Panes hidden`, hidden11c.length === expectHidden, `hidden=${hidden11c.length}`)
+  // Mount-alles: auch Rows in versteckten Panes feuern t() — bestehende
+  // Key-Assertions bleiben so unangetastet grün.
+  const hiddenKeys = IS_CATALOG ? [] : ['glassArcWidth', 'personalBgFit', 'uiTabsCloseMode']
+  for (const key of hiddenKeys) {
+    check(`Subtabs: versteckte Pane rendert weiter (${key})`, seen11c.has(key))
+  }
+} catch (error) {
+  check('Einstellungs-Seite (Subtabs) rendert', false, error.message)
+}
+
 // 12) v1.13: App-Optik-Attribute (Text oben, Hover-Anhebung, Kontext-Pie, Live-Rahmen)
 mod.patchSettings('tabs', { alignTop: false, hoverLift: false, ctxPie: false, liveFrame: 'ring' })
 check(
@@ -814,6 +858,96 @@ check(
 )
 const waitingGlyph = glyphOf(leadEl('waiting', 'waiting'))
 check('v1.13.4: Wartend-Icon (bell) intakt', waitingGlyph && waitingGlyph.p.name === 'bell' && !waitingGlyph.p.spinning, waitingGlyph && String(waitingGlyph.p.name))
+
+// 16b) v1.30.0: Status-Loader (Donut-Ring) ERSETZT den Core-Status-Punkt.
+// Der Loader ist ein eigener Baustein mit data-kind (Farbe/Drehung im CSS);
+// sein key haengt am Zustand, damit der Glow-Impuls bei jedem Wechsel neu
+// startet. Alte Settings-Werte ("dot"/"glyph+dot") zeigen jetzt den Loader.
+const resolveChild = el => (el && typeof el.t === 'function' ? el.t(el.p || {}) : el)
+const loaderOf = lead =>
+  (lead.p.children || []).map(resolveChild).find(child => child && child.p && child.p.className === 'sf-loader') || null
+const leadWithStyle = style =>
+  mod.StatusLead({
+    row: { id: 's-lead' },
+    live: { r1: { storedId: 's-lead', status: 'working' } },
+    activity: {},
+    style,
+    t: key => key
+  })
+
+const loaderOnly = leadWithStyle('loader')
+check('v1.30.0: Modus „Loader" rendert den Status-Loader', Boolean(loaderOf(loaderOnly)), 'kein Loader gefunden')
+check(
+  'v1.30.0: Loader trägt den Zustand als data-kind',
+  loaderOf(loaderOnly) && loaderOf(loaderOnly).p['data-kind'] === 'working',
+  loaderOf(loaderOnly) && String(loaderOf(loaderOnly).p['data-kind'])
+)
+check('v1.30.0: Modus „Loader" rendert KEIN Aktivitäts-Icon', !glyphOf(loaderOnly), 'Icon gefunden')
+check(
+  'v1.30.0: Loader-Key folgt dem Zustand (Glow startet neu)',
+  loaderOf(loaderOnly) && loaderOf(loaderOnly).k === 'loader-working',
+  loaderOf(loaderOnly) && String(loaderOf(loaderOnly).k)
+)
+
+const glyphAndLoader = leadWithStyle('glyph+loader')
+check(
+  'v1.30.0: „Icon + Loader" rendert Icon UND Loader',
+  Boolean(glyphOf(glyphAndLoader)) && Boolean(loaderOf(glyphAndLoader)),
+  `icon=${Boolean(glyphOf(glyphAndLoader))} loader=${Boolean(loaderOf(glyphAndLoader))}`
+)
+check(
+  'v1.30.0: Lead meldet den Modus als data-mode',
+  leadWithStyle('glyph+loader').p['data-mode'] === 'glyph+loader',
+  String(leadWithStyle('glyph+loader').p['data-mode'])
+)
+
+check(
+  'v1.30.0: Altwert „dot" wird zum Loader (Migration)',
+  Boolean(loaderOf(leadWithStyle('dot'))) && !glyphOf(leadWithStyle('dot')),
+  `loader=${Boolean(loaderOf(leadWithStyle('dot')))}`
+)
+check(
+  'v1.30.0: Altwert „glyph+dot" wird zu Icon + Loader',
+  Boolean(glyphOf(leadWithStyle('glyph+dot'))) && Boolean(loaderOf(leadWithStyle('glyph+dot'))),
+  `icon=${Boolean(glyphOf(leadWithStyle('glyph+dot')))} loader=${Boolean(loaderOf(leadWithStyle('glyph+dot')))}`
+)
+check(
+  'v1.30.0: normalizeStatusStyle bildet Alt- und Neuwerte ab',
+  mod.normalizeStatusStyle('dot') === 'loader' &&
+    mod.normalizeStatusStyle('glyph+dot') === 'glyph+loader' &&
+    mod.normalizeStatusStyle('glyph') === 'glyph' &&
+    mod.normalizeStatusStyle('loader') === 'loader' &&
+    mod.normalizeStatusStyle('glyph+loader') === 'glyph+loader' &&
+    mod.normalizeStatusStyle(undefined) === 'glyph',
+  JSON.stringify(
+    ['dot', 'glyph+dot', 'glyph', 'loader', 'glyph+loader', undefined].map(v => mod.normalizeStatusStyle(v))
+  )
+)
+check(
+  'v1.30.0: Settings kennen „Icon + Loader" statt „Icon + Punkt"',
+  globalThis.__SF__.bundles &&
+    globalThis.__SF__.bundles.en.tabsStatusLoader === 'Loader' &&
+    globalThis.__SF__.bundles.en.tabsStatusBoth === 'Icon + loader' &&
+    globalThis.__SF__.bundles.de.tabsStatusLoader === 'Loader' &&
+    globalThis.__SF__.bundles.de.tabsStatusBoth === 'Icon + Loader' &&
+    !('tabsStatusDot' in globalThis.__SF__.bundles.en) &&
+    !('tabsStatusDot' in globalThis.__SF__.bundles.de),
+  'Bundles ohne tabsStatusDot erwartet'
+)
+
+try {
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  walk(settingsPage.render(), { el: [], text: [] })
+  const seen = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  check(
+    'v1.30.0: Einstellungs-Seite zeigt „Loader" + „Icon + Loader"',
+    seen.has('tabsStatusLoader') && seen.has('tabsStatusBoth') && !seen.has('tabsStatusDot'),
+    `loader=${seen.has('tabsStatusLoader')} both=${seen.has('tabsStatusBoth')} dot=${seen.has('tabsStatusDot')}`
+  )
+} catch (error) {
+  check('v1.30.0: Einstellungs-Seite rendert (Status-Darstellung)', false, error.message)
+}
 
 // 17) Info-Dichte-Abstufung: data-density, reichere Detail-Zeile, Stats bei Detailreich
 try {
@@ -3797,6 +3931,286 @@ try {
   mod.$projectsList.set([])
 } catch (error) {
   check('v1.27.4-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── 35) v1.29.1-RPC: Delete-Flow — interrupt → close → delete, Owner-Profil, 4023-Retry
+// App-Parität (Gateway #123583): delete verweigert Sessions mit aktiver
+// Turn-Lease; ohne interrupt/close bzw. ohne profile-Param kommt die rohe
+// Gateway-Meldung (4023/4007) als Toast. Hier wird die RPC-Folge direkt
+// gegen einen aufzeichnenden Stub verifiziert.
+try {
+  const prevRequest = hostStub.request
+  const frames = []
+  let deleteAttempts = 0
+
+  // Fall 1: Live-Session (nur über active_list auffindbar, leere $liveMap),
+  // erster delete verweigert mit 4023, Retry erzeugt.
+  hostStub.request = async (method, params = {}) => {
+    frames.push({ method, params })
+    if (method === 'session.active_list') {
+      return { sessions: [{ id: 'rt-del', session_key: 'st-del', status: 'working' }] }
+    }
+    if (method === 'session.delete') {
+      deleteAttempts += 1
+      if (deleteAttempts === 1) {
+        const err = new Error('cannot delete an active session')
+        err.code = 4023
+        throw err
+      }
+      return { deleted: params.session_id }
+    }
+    return {}
+  }
+
+  mod.$liveMap.set({})
+  await mod.deleteSessionRow({ id: 'st-del', profile: 'agency-lead' })
+
+  const seq = frames.map(f => f.method)
+  check(
+    'v1.29.1-RPC: Delete fragt frisch session.active_list nach (stale Map reicht nicht)',
+    seq.includes('session.active_list'),
+    `seq=${seq.join(',')}`
+  )
+  check(
+    'v1.29.1-RPC: Delete-Reihenfolge interrupt → close → delete',
+    seq.indexOf('session.interrupt') >= 0 &&
+      seq.indexOf('session.interrupt') < seq.indexOf('session.close') &&
+      seq.indexOf('session.close') < seq.indexOf('session.delete'),
+    `seq=${seq.join(',')}`
+  )
+  const intFrame = frames.find(f => f.method === 'session.interrupt')
+  check(
+    'v1.29.2: interrupt adressiert die Runtime-ID (ohne profile — geschlossenes Param-Set)',
+    intFrame?.params?.session_id === 'rt-del' && intFrame?.params?.profile === undefined,
+    JSON.stringify(intFrame?.params)
+  )
+  for (const m of ['session.close', 'session.delete']) {
+    const f = frames.find(x => x.method === m)
+    check(
+      `v1.29.2: RPC-Fallback ${m} trägt das Owner-Profil der Zeile`,
+      f?.params?.profile === 'agency-lead',
+      JSON.stringify(f?.params)
+    )
+  }
+  check(
+    'v1.29.1-RPC: 4023 löst genau EINEN Retry aus',
+    deleteAttempts === 2,
+    `attempts=${deleteAttempts}`
+  )
+
+  // Fall 2: 4023 bleibt auch nach dem Retry → i18n-Hinweis statt Rohtext.
+  frames.length = 0
+  deleteAttempts = 0
+  hostStub.request = async (method, params = {}) => {
+    frames.push({ method, params })
+    if (method === 'session.delete') {
+      deleteAttempts += 1
+      const err = new Error('cannot delete an active session')
+      err.code = 4023
+      throw err
+    }
+    return {}
+  }
+  let thrown = null
+  try {
+    await mod.deleteSessionRow({ id: 'st-stubborn' })
+  } catch (error) {
+    thrown = error
+  }
+  check(
+    'v1.29.1-RPC: doppelte 4023 wirft den i18n-Hinweis deleteActiveHint',
+    thrown?.message === 'deleteActiveHint',
+    `msg=${thrown?.message}`
+  )
+
+  // Den vom Erfolg geplanten Refresh (800 ms, echte Timer) INNERHALB der
+  // Sektion ableben lassen, damit er keine spätere Sektion trifft; danach
+  // Fixtures und Request-Stub zurückstellen.
+  await new Promise(resolve => setTimeout(resolve, 900))
+  hostStub.request = prevRequest
+  mod.$liveMap.set({})
+  mod.$sessions.set([])
+} catch (error) {
+  check('v1.29.1-RPC-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── 36) v1.29.3: Delete/Archive über die REST-Bridge mit Revision-Fence
+// (Session-Authority-Migration: Legacy-session.delete/-archive sind über den
+// WS gesperrt; der Gateway verlangt für REST-Mutationen zusätzlich Snapshot
+// + request_id/expected_revision/expected_generation — ohne sie: 409
+// „client_upgrade_required“).
+if (!IS_CATALOG) {
+  try {
+    const prevRequest = hostStub.request
+    const prevBridge = globalThis.window && globalThis.window.hermesDesktop
+    const restCalls = []
+  const rpcMethods = []
+
+  let deleteAttempts = 0
+  const snapshotOf = id => ({ session_id: id, exists: true, runtime_revision: 7, runtime_generation: 3 })
+
+  globalThis.window.hermesDesktop = {
+    api: async req => {
+      restCalls.push(req)
+      const path = String(req?.path || '')
+
+      if (req?.method === 'DELETE') {
+        deleteAttempts += 1
+        if (deleteAttempts === 1) {
+          const err = new Error('409: {"detail":"session_active_turn: session has an active turn lease"}')
+          err.statusCode = 409
+          throw err
+        }
+        return { object: 'hermes.session.deleted', id: 'st-rest', deleted: true }
+      }
+      if (req?.method === 'PATCH') {
+        return { object: 'hermes.session', session: { id: 'st-rest', archived: true } }
+      }
+      if (path.includes('/mutation-snapshot')) {
+        return snapshotOf('st-rest')
+      }
+      return { sessions: [] } // Listen-Nachzug des Refresh-Debounces
+    }
+  }
+  hostStub.request = async (method, params = {}) => {
+    rpcMethods.push({ method, params })
+    if (method === 'session.active_list') {
+      return { sessions: [{ id: 'rt-rest', session_key: 'st-rest', status: 'working' }] }
+    }
+    return {}
+  }
+
+  mod.$liveMap.set({})
+  await mod.deleteSessionRow({ id: 'st-rest', profile: 'agency-design' })
+
+  const snapReq = restCalls.find(r => String(r?.path || '').includes('/mutation-snapshot'))
+  check(
+    'v1.29.3: Delete liest vorab den Mutation-Snapshot (Fence-Pflicht)',
+    Boolean(snapReq) && snapReq.profile === 'agency-design',
+    JSON.stringify(snapReq || null)
+  )
+
+  const delReq = restCalls.find(r => r.method === 'DELETE')
+  const delQuery = new URLSearchParams(String(delReq?.path || '').split('?')[1] || '')
+  check(
+    'v1.29.3: DELETE trägt request_id + expected_revision + expected_generation',
+    delReq?.method === 'DELETE' && delQuery.get('request_id') &&
+      delQuery.get('expected_revision') === '7' && delQuery.get('expected_generation') === '3',
+    JSON.stringify(delReq?.path || null)
+  )
+  check(
+    'v1.29.3: DELETE nennt das Owner-Profil (Query + routing-Feld)',
+    delQuery.get('profile') === 'agency-design' && delReq?.profile === 'agency-design',
+    JSON.stringify(delReq || null)
+  )
+  check(
+    'v1.29.3: interrupt bleibt RPC (Authority-Verb), adressiert Runtime ohne profile',
+    rpcMethods.some(m => m.method === 'session.interrupt' && m.params.session_id === 'rt-rest' && m.params.profile === undefined),
+    JSON.stringify(rpcMethods.filter(m => m.method === 'session.interrupt'))
+  )
+  check(
+    'v1.29.3: KEIN session.delete/session.close über den WS (Authority sperrt Legacy)',
+    !rpcMethods.some(m => m.method === 'session.delete' || m.method === 'session.close'),
+    JSON.stringify(rpcMethods.map(m => m.method))
+  )
+  check(
+    'v1.29.3: Busy-409 löst genau EINEN Retry aus',
+    deleteAttempts === 2,
+    `attempts=${deleteAttempts}`
+  )
+
+  const deleteReqs = restCalls.filter(r => r.method === 'DELETE')
+  const ids = deleteReqs.map(r => new URLSearchParams(String(r.path).split('?')[1] || '').get('request_id'))
+  const snapshots = restCalls.filter(r => String(r?.path || '').includes('/mutation-snapshot'))
+  check(
+    'v1.29.3: Retry nutzt frischen Snapshot + neue request_id',
+    snapshots.length === 2 && ids.length === 2 && ids[0] && ids[1] && ids[0] !== ids[1],
+    `snapshots=${snapshots.length} ids=${JSON.stringify(ids)}`
+  )
+
+  // Archivieren geht jetzt per fenced PATCH — mit demselben Profil-Routing.
+  restCalls.length = 0
+  await mod.archiveSessionRow({ id: 'st-rest', profile: 'agency-design' })
+  const patchReq = restCalls.find(r => r.method === 'PATCH')
+  check(
+    'v1.29.3: Archivieren per PATCH mit Fence + Profil-Routing',
+    patchReq?.body?.archived === true && patchReq?.body?.pinned === false &&
+      Boolean(patchReq?.body?.request_id) && patchReq?.body?.expected_revision === 7 &&
+      patchReq?.profile === 'agency-design',
+    JSON.stringify(patchReq || null)
+  )
+
+  // Bleibende Busy-409 → i18n-Hinweis.
+  deleteAttempts = 0
+  globalThis.window.hermesDesktop = {
+    api: async req => {
+      const path = String(req?.path || '')
+      if (req?.method === 'DELETE') {
+        deleteAttempts += 1
+        const err = new Error('409: {"detail":"session_active_turn: session has an active turn lease"}')
+        err.statusCode = 409
+        throw err
+      }
+      if (path.includes('/mutation-snapshot')) {
+        return snapshotOf('st-stuck')
+      }
+      return { sessions: [] }
+    }
+  }
+  let thrownRest = null
+  try {
+    await mod.deleteSessionRow({ id: 'st-stuck' })
+  } catch (error) {
+    thrownRest = error
+  }
+  check(
+    'v1.29.3: bleibende Busy-409 wirft den i18n-Hinweis deleteActiveHint',
+    thrownRest?.message === 'deleteActiveHint',
+    `msg=${thrownRest?.message}`
+  )
+
+  // client_upgrade_required ist KEIN Busy → rohe Meldung, kein Hinweis.
+  globalThis.window.hermesDesktop = {
+    api: async req => {
+      const path = String(req?.path || '')
+      if (req?.method === 'DELETE') {
+        const err = new Error('409: {"detail":"client_upgrade_required: this app is out of sync with the Hermes backend"}')
+        err.statusCode = 409
+        throw err
+      }
+      if (path.includes('/mutation-snapshot')) {
+        return snapshotOf('st-outofsync')
+      }
+      return { sessions: [] }
+    }
+  }
+  let thrownUpgrade = null
+  try {
+    await mod.deleteSessionRow({ id: 'st-outofsync' })
+  } catch (error) {
+    thrownUpgrade = error
+  }
+  check(
+    'v1.29.3: client_upgrade_required bleibt als Rohfehler (kein Busy-Hinweis)',
+    Boolean(thrownUpgrade) && thrownUpgrade.message !== 'deleteActiveHint' &&
+      /client_upgrade_required/.test(String(thrownUpgrade?.message || '')),
+    `msg=${thrownUpgrade?.message}`
+  )
+
+  await new Promise(resolve => setTimeout(resolve, 900)) // Refresh-Debounce ableben lassen
+  if (prevBridge === undefined) {
+    delete globalThis.window.hermesDesktop
+  } else {
+    globalThis.window.hermesDesktop = prevBridge
+  }
+  hostStub.request = prevRequest
+  mod.$liveMap.set({})
+  mod.$sessions.set([])
+  } catch (error) {
+    check('v1.29.3-Tests durchgelaufen', false, error && (error.stack || error.message))
+  }
+} else {
+  console.log('ℹ v1.29.3-REST-Tests: im Catalog-Build übersprungen (kein REST-Door im SDK)')
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

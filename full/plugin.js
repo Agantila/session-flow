@@ -99,7 +99,6 @@ const {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   SegmentedControl,
-  SessionStatusDot,
   ColorSwatches,
   PROFILE_SWATCHES,
   LocalizedTabTitle,
@@ -117,7 +116,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.29.1'
+const VERSION = '1.30.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -478,6 +477,24 @@ function loadSettings() {
         next.lightTheme = ltNext
       }
       $settings.set({ ...current, tabs: next })
+      scheduleSettingsSave()
+    }
+  } catch {
+    /* egal */
+  }
+
+  // v1.30.0: Der Core-Status-Punkt wurde durch den eigenen Status-Loader
+  // (Donut-Ring) ersetzt. Gespeicherte Altwerte `dot`/`glyph+dot` werden
+  // einmalig auf `loader`/`glyph+loader` umgestellt — die gewaehlte
+  // Darstellungsart bleibt erhalten, nur der Punkt wird zum Loader.
+  try {
+    const current = $settings.get()
+    const style = current?.tabs?.statusStyle
+    if (style === 'dot' || style === 'glyph+dot') {
+      $settings.set({
+        ...current,
+        tabs: { ...current.tabs, statusStyle: normalizeStatusStyle(style) }
+      })
       scheduleSettingsSave()
     }
   } catch {
@@ -3757,6 +3774,11 @@ const GATEWAY_BOOTSTRAP_FALLBACK_MS = 20_000
 // 5 s stehen Sessions, Projekte, Pins und Live-Status vollständig — der
 // User muss „Aktualisieren" nicht mehr klicken.
 const SETTLE_IN_DELAYS_MS = [1800, 4500]
+// Wartezeit des 4023-Retries beim Session-Löschen: Nach interrupt + close
+// kann die Turn-Lease (Write-Guard, Gateway #123583) noch für einen Moment
+// stehen, bis der Run-Thread die Abbruch-Bedingung gesehen hat — einmal
+// kurz warten und erneut löschen, bevor der Fehler gemeldet wird.
+const DELETE_ACTIVE_RETRY_MS = 600
 
 /** Erster Daten-Satz: Sessions + Pins + Live-Status + Projekt-Baum. */
 function bootstrapSessionData() {
@@ -5050,11 +5072,10 @@ const EN = {
   tabsDensityCompact: 'Compact',
   tabsDensityCozy: 'Cozy',
   tabsStatusStyle: 'Status display',
-  tabsStatusStyleDesc: 'Activity marker per tab: icon, core status dot, or both.',
+  tabsStatusStyleDesc: 'Activity marker per tab: icon, status loader, or both.',
   tabsStatusGlyph: 'Icon',
-  tabsStatusDot: 'Dot',
-  tabsStatusBoth: 'Icon + dot',
-  tabsDesignHead: 'Design — List & Grid',
+  tabsStatusLoader: 'Loader',
+  tabsStatusBoth: 'Icon + loader',
   tabsThemeSplit: 'Separate colours for the light theme',
   tabsThemeSplitDesc: 'On: the list & grid colours below get their own set for the light theme and switch automatically with the app theme. Off: one colour set applies to both themes.',
   tabsThemeAutoDerive: 'Derive the matching colour automatically',
@@ -5096,7 +5117,6 @@ const EN = {
   tabsTitleGradToDesc: 'Second color of the title gradient. Optional alpha via 8-digit hex (#RRGGBBAA).',
   tabsTitleGradAngle: 'Title gradient angle',
   tabsTitleGradAngleDesc: 'Direction of the title gradient in degrees (0–360).',
-  tabsSelHead: 'Selected state',
   tabsSelTint: 'Selection tint',
   tabsSelTintDesc: 'Background tint of the selected (open) session.',
   tabsSelTintStandard: 'Standard',
@@ -5118,7 +5138,6 @@ const EN = {
   applyNowHint: 'Saves the settings immediately and re-applies all effects',
   colorPicker: 'Pick color',
   colorAlpha: 'Opacity in %',
-  tabsLiveHead: 'Live status',
   tabsRowLive: 'Highlight active & waiting',
   tabsRowLiveDesc: 'Sessions that are working or waiting get an accent glow and a pulsing status icon — the same visual language as the tab design.',
   tabsLiveFrame: 'Live frame',
@@ -5366,6 +5385,19 @@ const EN = {
   navUiTabs: 'UI tabs',
   navGlass: 'Glass',
   navAbout: 'About',
+
+  // Settings-Subtabs (v1.29.2) — Gruppierung innerhalb langer Sektionen
+  subView: 'View',
+  subDesign: 'Design',
+  subSelection: 'Selection',
+  subEffects: 'Effects',
+  subLook: 'Look',
+  subBehavior: 'Behavior',
+  subSurface: 'Surface',
+  subFrame: 'Frame',
+  subScope: 'Areas',
+  subAccent: 'Accent',
+  subBackground: 'Background',
   uiTabsPresets: 'Quick presets',
   uiTabsPresetsDesc: 'One click to a known-good look — every option below stays adjustable.',
   uiTabsPresetSidebar: 'Sidebar look',
@@ -5508,6 +5540,7 @@ const EN = {
   deleteSession: 'Delete',
   deleteConfirmTitle: 'Delete session?',
   deleteConfirmBody: 'Removes the session and its transcript — this cannot be undone.',
+  deleteActiveHint: 'Session is still busy (a running turn or another client holds it) — try deleting again in a moment.',
   copySessionId: 'Copy ID',
   renameLiveOnly: 'Renaming is available once the session is active/loaded — open it, then rename.',
   tabsGridCols: 'Grid: columns',
@@ -5682,11 +5715,10 @@ const DE = {
   tabsDensityCompact: 'Kompakt',
   tabsDensityCozy: 'Bequem',
   tabsStatusStyle: 'Status-Darstellung',
-  tabsStatusStyleDesc: 'Aktivitäts-Marker je Tab: Icon, Core-Status-Punkt oder beides.',
+  tabsStatusStyleDesc: 'Aktivitäts-Marker je Tab: Icon, Status-Loader oder beides.',
   tabsStatusGlyph: 'Icon',
-  tabsStatusDot: 'Punkt',
-  tabsStatusBoth: 'Icon + Punkt',
-  tabsDesignHead: 'Design — Liste & Grid',
+  tabsStatusLoader: 'Loader',
+  tabsStatusBoth: 'Icon + Loader',
   tabsThemeSplit: 'Eigene Farben fürs Light-Theme',
   tabsThemeSplitDesc: 'An: die Liste-&-Grid-Farben unten haben fürs Light-Theme einen eigenen Satz und schalten mit dem App-Theme automatisch um. Aus: ein Satz gilt für beide Themes.',
   tabsThemeAutoDerive: 'Gegenfarbe automatisch ableiten',
@@ -5728,7 +5760,6 @@ const DE = {
   tabsTitleGradToDesc: 'Zweite Farbe des Titel-Verlaufs. Optional Alpha per 8-stelligem Hex (#RRGGBBAA).',
   tabsTitleGradAngle: 'Titel Verlaufswinkel',
   tabsTitleGradAngleDesc: 'Richtung des Titel-Verlaufs in Grad (0–360).',
-  tabsSelHead: 'Auswahl-Zustand',
   tabsSelTint: 'Auswahl-Tönung',
   tabsSelTintDesc: 'Hintergrund-Tönung der ausgewählten (geöffneten) Session.',
   tabsSelTintStandard: 'Standard',
@@ -5750,7 +5781,6 @@ const DE = {
   applyNowHint: 'Speichert die Einstellungen sofort und wendet alle Effekte neu an',
   colorPicker: 'Farbe wählen',
   colorAlpha: 'Deckkraft in %',
-  tabsLiveHead: 'Live-Status',
   tabsRowLive: 'Aktiv & Wartend hervorheben',
   tabsRowLiveDesc: 'Arbeitende oder wartende Sessions erhalten einen Akzent-Glow und ein pulsierendes Status-Icon — die gleiche Bildsprache wie im Tab-Design.',
   tabsLiveFrame: 'Live-Rahmen',
@@ -5996,6 +6026,19 @@ const DE = {
   navUiTabs: 'UI-Tabs',
   navGlass: 'Glass',
   navAbout: 'Über',
+
+  // Settings-Subtabs (v1.29.2) — Gruppierung innerhalb langer Sektionen
+  subView: 'Ansicht',
+  subDesign: 'Design',
+  subSelection: 'Auswahl',
+  subEffects: 'Effekte',
+  subLook: 'Optik',
+  subBehavior: 'Verhalten',
+  subSurface: 'Fläche',
+  subFrame: 'Rahmen',
+  subScope: 'Bereiche',
+  subAccent: 'Akzent',
+  subBackground: 'Hintergrund',
   uiTabsPresets: 'Schnellauswahl',
   uiTabsPresetsDesc: 'Ein Klick zu einem stimmigen Look — jede Option darunter bleibt feinjustierbar.',
   uiTabsPresetSidebar: 'Sidebar-Look',
@@ -6138,6 +6181,7 @@ const DE = {
   deleteSession: 'Löschen',
   deleteConfirmTitle: 'Session löschen?',
   deleteConfirmBody: 'Entfernt die Session samt Verlauf — nicht rückgängig zu machen.',
+  deleteActiveHint: 'Session ist noch beschäftigt (laufender Turn oder ein anderer Client hält sie) — bitte gleich erneut löschen.',
   copySessionId: 'ID kopieren',
   renameLiveOnly: 'Umbenennen ist möglich, sobald die Session aktiv/geladen ist — einmal öffnen, dann umbenennen.',
   tabsGridCols: 'Grid: Spalten',
@@ -6395,6 +6439,34 @@ html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-pl
 .sf-tab-lead[data-kind=done]{color:var(--ui-success,var(--ui-accent))}
 .sf-tab-lead[data-kind=unread]{color:var(--ui-success,var(--ui-accent))}
 .sf-tab-lead[data-kind=error]{color:var(--destructive,#ef4444)}
+/* Status-Loader (v1.30.0) — ersetzt den Core-Status-Punkt. Ein aeusserer Ring
+   (Donut), der sich wie ein Loader dreht: der helle Kopf laeuft mit auslaufendem
+   Schweif wie ein Ladebalken im Kreis ueber den Ring und spiegelt damit
+   Interaktion und Zustand. Farb-Vokabel identisch zum Aktivitaets-Icon oben;
+   der Glow-Impuls laeuft einmalig, wenn der Zustand wechselt. */
+.sf-loader{--sf-loader-color:var(--ui-text-tertiary);--sf-loader-arc:0;--sf-loader-dur:1.4s;position:relative;display:inline-block;width:11px;height:11px;border-radius:50%;flex-shrink:0;filter:drop-shadow(0 0 2px color-mix(in srgb,var(--sf-loader-color) 42%,transparent))}
+.sf-loader::before{content:'';position:absolute;inset:0;border-radius:50%;background:color-mix(in srgb,var(--sf-loader-color) 22%,transparent);-webkit-mask:radial-gradient(closest-side,transparent 0 58%,#000 60%);mask:radial-gradient(closest-side,transparent 0 58%,#000 60%)}
+.sf-loader::after{content:'';position:absolute;inset:0;border-radius:50%;opacity:var(--sf-loader-arc);background:conic-gradient(from 0deg,var(--sf-loader-color) 0deg,color-mix(in srgb,var(--sf-loader-color) 55%,transparent) 58deg,transparent 128deg,transparent 360deg);-webkit-mask:radial-gradient(closest-side,transparent 0 58%,#000 60%);mask:radial-gradient(closest-side,transparent 0 58%,#000 60%);animation:sf-loader-spin var(--sf-loader-dur) linear infinite}
+.sf-loader[data-kind=thinking],.sf-loader[data-kind=streaming],.sf-loader[data-kind=tool],.sf-loader[data-kind=working]{--sf-loader-color:var(--ui-accent);--sf-loader-arc:1}
+.sf-loader[data-kind=waiting]{--sf-loader-color:#f59e0b;--sf-loader-arc:1;--sf-loader-dur:2.8s}
+.sf-loader[data-kind=done],.sf-loader[data-kind=unread]{--sf-loader-color:var(--ui-success,var(--ui-accent))}
+.sf-loader[data-kind=error]{--sf-loader-color:var(--destructive,#ef4444)}
+.sf-loader[data-kind=done]::after,.sf-loader[data-kind=unread]::after,.sf-loader[data-kind=error]::after{background:var(--sf-loader-color);opacity:1;animation:none}
+.sf-loader[data-kind=done],.sf-loader[data-kind=unread],.sf-loader[data-kind=error]{animation:sf-loader-glow 1.15s cubic-bezier(.22,.8,.3,1) 1}
+.sf-loader[data-kind=idle]{filter:none}
+.sf-loader[data-kind=idle]::after{animation:none}
+/* Modus „Icon + Loader": der Loader legt sich als aeusserer Ring UM das Icon
+   (konzentrisch) — beide ergeben zusammen EIN Icon statt zweier Elemente
+   nebeneinander. Der Ring wird dafuer groesser (18 px) und sein Loch
+   entsprechend weiter (72 % statt 58 %), damit das 13-px-Icon frei im Ring
+   sitzt; die Ringstaerke bleibt mit ~2,5 px auf der des Solo-Loaders. */
+.sf-tab-lead[data-mode="glyph+loader"]{position:relative;min-width:18px}
+.sf-tab-lead[data-mode="glyph+loader"] .sf-loader{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px}
+.sf-tab-lead[data-mode="glyph+loader"] .sf-loader::before,.sf-tab-lead[data-mode="glyph+loader"] .sf-loader::after{-webkit-mask:radial-gradient(closest-side,transparent 0 72%,#000 74%);mask:radial-gradient(closest-side,transparent 0 72%,#000 74%)}
+@keyframes sf-loader-spin{to{transform:rotate(360deg)}}
+@keyframes sf-loader-glow{0%{filter:drop-shadow(0 0 1px color-mix(in srgb,var(--sf-loader-color) 30%,transparent))}38%{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--sf-loader-color) 72%,transparent))}100%{filter:drop-shadow(0 0 2px color-mix(in srgb,var(--sf-loader-color) 42%,transparent))}}
+@media (prefers-reduced-motion:reduce){.sf-loader,.sf-loader::after{animation:none}}
+html[data-renderer-animations-paused] .sf-loader,html[data-renderer-animations-paused] .sf-loader::after{animation-play-state:paused}
 .sf-tab-main{min-width:0;flex:1;display:flex;flex-direction:column;justify-content:center;gap:1px}
 .sf-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-label-size,10px);line-height:14px;font-weight:500;color:inherit;margin:0}
 .sf-tab[data-active=true] .sf-tab-title{font-weight:600}
@@ -6852,6 +6924,8 @@ html[data-sf-bg~='on'][data-sf-bg-scope='all']{
 .sf-settings section{scroll-margin-top:46px}
 .sf-preset-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .sf-subhead{margin:10px 2px 2px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ui-text-quaternary)}
+.sf-subtabs{margin:4px 0 6px}
+.sf-subtab-pane[hidden]{display:none}
 html[data-sf-rowgrad~=on]{--sf-row-layer:linear-gradient(var(--sf-row-angle,135deg),var(--sf-row-from,#7c3aed),var(--sf-row-to,#00dbda))}
 html[data-sf-rowgrad~=on] .sf-tab{background:linear-gradient(var(--sf-row-angle,135deg),var(--sf-row-from,#7c3aed),var(--sf-row-to,#00dbda))}
 html[data-sf-rowgrad~=on] .sf-tab:hover{filter:brightness(1.07)}
@@ -7709,7 +7783,7 @@ function createWheelController(ctx) {
 // UI — kleine Bausteine
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Eigener Status-Glyph (Aktivitäts-Icon) mit Core-Fallback via SessionStatusDot. */
+/** Eigener Status-Glyph (Aktivitäts-Icon). */
 /**
  * Codicon-Aufruf mit `~spin`-Marker. Die App-Komponente kennt den Marker NICHT —
  * sie erwartet den `spinning`-Prop; ein Name wie `codicon-sync~spin` ist eine
@@ -7729,40 +7803,70 @@ function SfIcon({ name, size, className, ...rest }) {
   })
 }
 
+/**
+ * Status-Loader (v1.30.0) — Nachfolger des Core-Status-Punkts.
+ *
+ * Ein äußerer Ring (Donut), der sich wie ein Loader dreht: der helle Kopf mit
+ * auslaufendem Schweif läuft wie ein Ladebalken im Kreis über den Ring und
+ * spiegelt damit Interaktion und Zustand. Farbe, Dreh-Verhalten und Glow
+ * stecken komplett im CSS (`data-kind`) — ein Zustandswechsel ändert damit nur
+ * ein Attribut.
+ *
+ * Der `key` hängt am Zustand: React baut das Element bei jedem Wechsel neu
+ * auf, sodass der dezente Glow-Impuls (CSS-Animation) neu startet.
+ */
+function StatusLoader({ kind }) {
+  return jsx(
+    'span',
+    {
+      className: 'sf-loader',
+      'data-kind': kind,
+      'aria-hidden': 'true'
+    },
+    `loader-${kind}`
+  )
+}
+
+/**
+ * v1.30.0: Alte Punkt-Werte auf den Loader umstellen. Gespeicherte Settings
+ * aus v1.29.x tragen `dot`/`glyph+dot` — die One-Shot-Migration schreibt sie
+ * um, diese Funktion fängt Altwerte zusätzlich ab (z. B. beim Export).
+ */
+function normalizeStatusStyle(value) {
+  if (value === 'loader' || value === 'glyph+loader') {
+    return value
+  }
+
+  if (value === 'dot') {
+    return 'loader'
+  }
+
+  if (value === 'glyph+dot') {
+    return 'glyph+loader'
+  }
+
+  return 'glyph'
+}
+
 function StatusLead({ row, live, activity, style, t }) {
   const detail = activityFor(row, live, activity)
   const glyph = ACTIVITY_GLYPHS[detail.kind] || ACTIVITY_GLYPHS.idle
   const label = activityLabel(t, detail)
-  const showGlyph = style === 'glyph' || style === 'glyph+dot'
-  const showDot = style === 'dot' || style === 'glyph+dot'
+  const mode = normalizeStatusStyle(style)
+  const showGlyph = mode === 'glyph' || mode === 'glyph+loader'
+  const showLoader = mode === 'loader' || mode === 'glyph+loader'
 
   return jsxs('span', {
     className: 'sf-tab-lead',
     'data-kind': detail.kind,
+    'data-mode': mode,
     title: label,
     role: 'status',
     'aria-label': label,
     children: [
-      showGlyph ? jsx(SfIcon, { name: glyph.icon, size: '0.8125rem' }) : showDot ? renderDot(row) : null,
-      showDot && showGlyph ? renderDot(row) : null
+      showGlyph ? jsx(SfIcon, { key: 'glyph', name: glyph.icon, size: '0.8125rem' }) : null,
+      showLoader ? jsx(StatusLoader, { key: 'loader', kind: detail.kind }) : null
     ]
-  })
-}
-
-function renderDot(row) {
-  if (SessionStatusDot) {
-    return jsx(SessionStatusDot, { storedSessionId: row.id, session: null })
-  }
-
-  return jsx('span', {
-    'aria-hidden': 'true',
-    style: {
-      width: '5px',
-      height: '5px',
-      borderRadius: '50%',
-      background: 'var(--ui-text-quaternary)',
-      display: 'inline-block'
-    }
   })
 }
 
@@ -8681,7 +8785,9 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
 // Terminal öffnen (IPC), Umbenennen (session.title), Anpinnen/Farbe (SDK),
 // Zweig erstellen (session.branch_stored), In Projekt verschieben
 // (session.cwd.set), Archivieren (session.archive), Löschen
-// (session.delete — schließt eine laufende Runtime vorher) und ID kopieren.
+// (session.delete — App-Parität: interrupt → close → delete, mit Owner-
+// Profil-Scope und frischer Runtime-Auflösung, siehe deleteSessionRow)
+// und ID kopieren.
 // Lokale App-Zustände (gelesen/ungelesen, Export) haben keine Plugin-Door und
 // bleiben bewusst außen vor.
 
@@ -8840,9 +8946,49 @@ async function moveSessionRow(row, project) {
   }
 }
 
+/** Session-Flag über die REST-Bridge setzen (App-Parität: die App schreibt
+ * `archived` per fenced PATCH /api/sessions/{id} — Snapshot lesen, dann
+ * Body mit request_id/expected_revision/expected_generation). Seit der
+ * Session-Authority-Migration des Gateways sind Legacy-Session-WRITER über
+ * den WS gesperrt („unknown method: session.archive …") — die REST-Route
+ * bleibt die offizielle Tür und routet über das request-`profile` auch
+ * Zeilen anderer Profile auf deren Backend. Ohne Bridge (ältere Shell)
+ * bleibt der RPC. */
+async function setSessionArchivedRow(row, archived) {
+  const profile = String(row?.profile || '').trim()
+  /* #full */
+  const bridge = globalThis.window?.hermesDesktop
+
+  if (bridge && typeof bridge.api === 'function') {
+    const identity = mutationIdentity(await fetchMutationSnapshot(bridge, row.id, profile))
+
+    await bridge.api({
+      path: `/api/sessions/${encodeURIComponent(row.id)}${profile ? `?profile=${encodeURIComponent(profile)}` : ''}`,
+      method: 'PATCH',
+      // App-Parität (setSessionArchived): Archivieren hebt den Pin auf.
+      body: { archived, ...(archived ? { pinned: false } : {}), ...identity, ...(profile ? { profile } : {}) },
+      ...(profile ? { profile } : {}),
+      timeoutMs: 10_000
+    })
+    return
+  }
+  /* #end */
+  /* #catalog-only */
+  // Catalog-Build: kein REST-Door im SDK (Anfrage auf #116305) — Archivieren
+  // bleibt beim RPC-Pfad (Legacy-Autorität-Backends verweigern ihn, das ist
+  // dokumentiert und ändert sich erst mit dem SDK-REST-Slot).
+  /* #end */
+
+  await host.request('session.archive', {
+    session_id: row.id,
+    archived,
+    ...(profile ? { profile } : {})
+  })
+}
+
 async function archiveSessionRow(row) {
   try {
-    await host.request('session.archive', { archived: true, session_id: row.id })
+    await setSessionArchivedRow(row, true)
     scheduleSessionsRefresh(800)
   } catch (error) {
     host.notifyError(error, CTX?.i18n?.t('archiveSession') || 'Archivieren')
@@ -8852,7 +8998,7 @@ async function archiveSessionRow(row) {
 /** Archiviertes wiederherstellen — zieht beide Listen (aktiv + Archiv) nach. */
 async function restoreSessionRow(row) {
   try {
-    await host.request('session.archive', { archived: false, session_id: row.id })
+    await setSessionArchivedRow(row, false)
     archivedSucceededAt = 0
     kickAppRefresh()
     scheduleSessionsRefresh(400)
@@ -8861,19 +9007,231 @@ async function restoreSessionRow(row) {
   }
 }
 
-async function deleteSessionRow(row) {
-  const runtimeId = liveRuntimeIdFor(row.id)
+/** JSON-RPC-Fehlercode eines Gateway-Fehlers (JsonRpcGatewayError.code)
+ * oder null — duck-getippt statt instanceof, damit auch Fehler aus dem
+ * SDK-Realm erkannt werden. */
+function rpcErrorCode(error) {
+  const code = Number(error && typeof error === 'object' ? error.code : NaN)
+  return Number.isFinite(code) ? code : null
+}
+
+/** „Session ist beschäftigt"-Verweigerung — REST antwortet 409
+ * (code session_active_turn), der Legacy-RPC 4023. Wichtig: 409
+ * client_upgrade_required (fence-loser Client) ist KEIN busy. */
+function isBusySessionError(error) {
+  if (rpcErrorCode(error) === 4023) {
+    return true
+  }
+  const message = String(error?.message || error || '')
+  return /session_active_turn|active turn lease|cannot delete an active session/i.test(message)
+}
+
+/** Ein Retry lohnt sich bei Busy (Turn-Lease) oder veraltetem Fence
+ * (Konflikt 409/412) — mit FRISCHEM Snapshot + neuer request_id. */
+function isRetryableSessionMutationError(error) {
+  const status = Number(error?.statusCode)
+  return status === 409 || status === 412 || isBusySessionError(error)
+}
+
+/** Kurze Pause vor dem Busy-Retry (Guard-Freigabe läuft dem interrupt nach). */
+function sleepDeleteRetry() {
+  return new Promise(resolve => {
+    const timer = typeof CTX?.setTimeout === 'function' ? CTX.setTimeout : window.setTimeout
+    timer(resolve, DELETE_ACTIVE_RETRY_MS)
+  })
+}
+
+/** i18n-Hinweis statt roher Gateway-Message, wenn die Session auch nach
+ * interrupt + Retry noch von einem Turn/Client festgehalten wird. */
+function busySessionError(cause) {
+  return new Error(
+    CTX?.i18n?.t('deleteActiveHint') || String(cause?.message || cause || 'session busy')
+  )
+}
+
+/** Einmalige Request-ID für die Revision-Fence (Retry-Idempotenz). */
+function randomRequestId() {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `sf-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
+  }
+}
+
+/* #full */
+/** Frischer Mutation-Snapshot — die Revision-Fence, die der Gateway seit der
+ * Fence-Pflicht von fence-losen REST-Mutationen verlangt (409
+ * „client_upgrade_required: this app is out of sync … to edit sessions").
+ * null = älterer Backend ohne Snapshot-Route → Basis-Write ohne Fence
+ * (App-Parität, mutateSessionFenced MissingMutationSnapshotRoute-Zweig). */
+async function fetchMutationSnapshot(bridge, storedId, profile) {
+  const query = profile ? `?profile=${encodeURIComponent(profile)}` : ''
+
+  try {
+    return await bridge.api({
+      path: `/api/sessions/${encodeURIComponent(storedId)}/mutation-snapshot${query}`,
+      ...(profile ? { profile } : {}),
+      timeoutMs: 10_000
+    })
+  } catch (error) {
+    if (Number(error?.statusCode) === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+/** Fence-Identität aus einem Snapshot (App-Parität:
+ * apps/shared session-http-mutations — request_id + runtime_revision +
+ * runtime_generation). Null-Snapshot ⇒ leere Identität (Basis-Write). */
+function mutationIdentity(snapshot) {
+  if (!snapshot) {
+    return {}
+  }
+
+  const revision = Number(snapshot.runtime_revision)
+  const generation = Number(snapshot.runtime_generation)
+
+  return {
+    request_id: randomRequestId(),
+    ...(Number.isFinite(revision) ? { expected_revision: revision } : {}),
+    ...(Number.isFinite(generation) ? { expected_generation: generation } : {})
+  }
+}
+
+/** DELETE über die REST-Bridge — derselbe Weg, den die Hermes-Sidebar
+ * selbst benutzt (api/sessions.ts deleteSession): Erst
+ * GET /api/sessions/{id}/mutation-snapshot, dann
+ * DELETE ?request_id&expected_revision&expected_generation. 404 = Zeile
+ * schon weg → Ziel erreicht; Busy/Konflikt → ein Retry mit frischem
+ * Snapshot und NEUER request_id. */
+async function deleteSessionRowViaRest(bridge, storedId, profile) {
+  const attempt = async () => {
+    const identity = mutationIdentity(await fetchMutationSnapshot(bridge, storedId, profile))
+    const params = new URLSearchParams()
+
+    if (profile) {
+      params.set('profile', profile)
+    }
+    for (const [name, value] of Object.entries(identity)) {
+      params.set(name, String(value))
+    }
+
+    const query = params.toString()
+
+    return bridge.api({
+      path: `/api/sessions/${encodeURIComponent(storedId)}${query ? `?${query}` : ''}`,
+      method: 'DELETE',
+      ...(profile ? { profile } : {}),
+      timeoutMs: 10_000
+    })
+  }
+
+  try {
+    await attempt()
+    return
+  } catch (error) {
+    if (Number(error?.statusCode) === 404) {
+      return // Zeile existiert schon nicht mehr — stiller Erfolg
+    }
+    if (!isRetryableSessionMutationError(error)) {
+      throw error
+    }
+  }
+
+  await sleepDeleteRetry()
+
+  try {
+    await attempt()
+  } catch (retryError) {
+    if (Number(retryError?.statusCode) === 404) {
+      return
+    }
+    if (isBusySessionError(retryError)) {
+      throw busySessionError(retryError)
+    }
+    throw retryError
+  }
+}
+/* #end */
+
+/** RPC-Pfad für Shells OHNE REST-Bridge (ältere Hermes-Builds, in denen
+ * session.delete/session.close noch über den WS bedient werden). */
+async function deleteSessionRowViaRpc(storedId, profile, runtimeId) {
+  const scope = profile ? { profile } : {}
 
   if (runtimeId) {
     try {
-      await host.request('session.close', { session_id: runtimeId })
+      await host.request('session.close', { session_id: runtimeId, ...scope })
     } catch {
       /* Runtime evtl. schon weg — delete entscheidet */
     }
   }
 
-  await host.request('session.delete', { session_id: row.id })
+  try {
+    await host.request('session.delete', { session_id: storedId, ...scope })
+  } catch (error) {
+    if (!isBusySessionError(error)) {
+      throw error
+    }
+
+    await sleepDeleteRetry()
+
+    try {
+      await host.request('session.delete', { session_id: storedId, ...scope })
+    } catch (retryError) {
+      if (isBusySessionError(retryError)) {
+        throw busySessionError(retryError)
+      }
+      throw retryError
+    }
+  }
+}
+
+async function deleteSessionRow(row) {
+  const storedId = String(row?.id || '').trim()
+  const profile = String(row?.profile || '').trim()
+
+  // Laufenden Turn zuerst abbrechen: `session.interrupt` ist ein Authority-
+  // Verb und funktioniert auf neuen UND alten Backends (kein profile-Schlüssel
+  // — das Param-Set ist geschlossen; die Runtime-ID ist prozess-eindeutig).
+  // Ohne interrupt hält die Turn-Lease (Write-Guard, Gateway #123583) das
+  // DELETE mit „session_active_turn"/4023 auf.
+  const runtimeId = await findLiveSessionIdByKey(storedId)
+
+  if (runtimeId) {
+    try {
+      await host.request('session.interrupt', { session_id: runtimeId })
+    } catch {
+      /* Runtime evtl. schon weg — delete entscheidet */
+    }
+  }
+
+  // Löschen selbst per REST-Bridge (App-Parität): Seit der Session-Authority-
+  // Migration bedient der WS `session.delete` für Desktop-Sockets nicht mehr
+  // („unknown method: session.delete — not available on this Hermes backend",
+  // ws_legacy_fallback sperrt Legacy-Session-Writer). Die REST-Route ist die
+  // offizielle Tür und routet über das request-`profile` auf das richtige
+  // Backend — Ohne Bridge fällt der Call auf den Legacy-RPC zurück.
+  /* #full */
+  const bridge = globalThis.window?.hermesDesktop
+
+  if (bridge && typeof bridge.api === 'function') {
+    await deleteSessionRowViaRest(bridge, storedId, profile)
+  } else {
+    await deleteSessionRowViaRpc(storedId, profile, runtimeId)
+  }
+
   scheduleSessionsRefresh(800)
+  return
+  /* #end */
+  /* #catalog-only */
+  // Catalog-Build: kein REST-Door im SDK (Anfrage auf #116305) — gelöscht wird
+  // über den Legacy-RPC (mit Interrupt-Vorab); Authority-Backends verweigern
+  // ihn, das ist bis zum SDK-REST-Slot dokumentiert.
+  await deleteSessionRowViaRpc(storedId, profile, runtimeId)
+  scheduleSessionsRefresh(800)
+  /* #end */
 }
 
 async function copySessionIdRow(row) {
@@ -11076,6 +11434,37 @@ function SettingsSection({ id, icon, title, description, children }) {
   })
 }
 
+// Subtabs innerhalb einer Sektion (v1.29.2): gruppiert lange Row-Listen.
+// Alle Panes bleiben gemountet — inaktive tragen nur `hidden`. Der Render-
+// Smoke-Test asserting auf dem t()-Call-Log einer einzigen Render-Passage;
+// Conditional-Mount würde dort ~20 Key-Assertions brechen.
+function SettingsSubtabs({ tabs }) {
+  const t = usePluginI18n(ID)
+  const [activeState, setActive] = useState(tabs[0].id)
+  // Guard gegen veraltete Slot-Werte (Test-Stub teilt Slots zwischen Bäumen):
+  // unbekannte IDs fallen auf den ersten Tab zurück.
+  const active = tabs.some(tab => tab.id === activeState) ? activeState : tabs[0].id
+
+  return jsxs('div', {
+    className: 'sf-subtabs',
+    children: [
+      jsx(Segment, {
+        options: tabs.map(tab => ({ id: tab.id, label: t(tab.labelKey) })),
+        value: active,
+        onChange: setActive
+      }),
+      ...tabs.map(tab =>
+        jsx('div', {
+          className: 'sf-subtab-pane',
+          hidden: active === tab.id ? undefined : true,
+          key: tab.id,
+          children: tab.rows
+        })
+      )
+    ]
+  })
+}
+
 // Kategorien der Einstellungsseite — Reihenfolge = Sektions-Reihenfolge.
 const SETTINGS_CATEGORIES = [
   { id: 'sf-sec-chat', icon: 'sparkle', labelKey: 'navChat' },
@@ -11508,535 +11897,544 @@ function SettingsPage() {
         title: t('secTabs'),
         description: t('secTabsDesc'),
         children: [
-          jsx(Row, {
-            title: t('tabsDensity'),
-            description: t('tabsDensityDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'compact', label: t('tabsDensityCompact') },
-                { id: 'cozy', label: t('tabsDensityCozy') }
-              ],
-              value: tabs.density,
-              onChange: value => patch('tabs', 'density', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsView'),
-            description: t('tabsViewDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'list', label: t('tabsViewList') },
-                { id: 'grid', label: t('tabsViewGrid') }
-              ],
-              value: tabs.view,
-              onChange: value => patch('tabs', 'view', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsAppNav'),
-            description: t('tabsAppNavDesc'),
-            checked: tabs.appNav !== false,
-            onChange: value => patch('tabs', 'appNav', value)
-          }),
-          /* #full */
-          // Composer-Pill-Toggle: nur im Full-Build — im Catalog-Build gibt es
-          // keinen Composer-Zugriff (SDK-Accessory-Slot auf #116305), der
-          // Toggle würde nichts tun (Review R2, Punkt 4).
-          jsx(ToggleRow, {
-            label: t('composerProjectPill'),
-            description: t('composerProjectPillDesc'),
-            checked: composer.projectPill !== false,
-            onChange: value => {
-              patch('composer', 'projectPill', value)
-              kickComposerPillSync()
-            }
-          }),
-          /* #end */
-          jsx(Row, {
-            title: t('tabsGridMin'),
-            description: t('tabsGridMinDesc'),
-            action: jsx(NumberInput, {
-              min: 110,
-              max: 280,
-              step: 10,
-              value: tabs.gridMin,
-              onChange: value => patch('tabs', 'gridMin', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsGridCols'),
-            description: t('tabsGridColsDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'auto', label: t('tabsGridColsAuto') },
-                { id: '1', label: '1' },
-                { id: '2', label: '2' },
-                { id: '3', label: '3' },
-                { id: '4', label: '4' }
-              ],
-              value: tabs.gridCols,
-              onChange: value => patch('tabs', 'gridCols', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsTextSize'),
-            description: t('tabsTextSizeDesc'),
-            action: jsx(NumberInput, {
-              min: 80,
-              max: 160,
-              step: 5,
-              value: tabs.textSize,
-              onChange: value => patch('tabs', 'textSize', clampNumber(value, 80, 160, 100))
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsGridGap'),
-            description: t('tabsGridGapDesc'),
-            action: jsx(NumberInput, {
-              min: 2,
-              max: 16,
-              step: 1,
-              value: tabs.gridGap,
-              onChange: value => patch('tabs', 'gridGap', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsGridLines'),
-            description: t('tabsGridLinesDesc'),
-            action: jsx(NumberInput, {
-              min: 1,
-              max: 4,
-              step: 1,
-              value: tabs.gridLines,
-              onChange: value => patch('tabs', 'gridLines', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsGridPreview'),
-            description: t('tabsGridPreviewDesc'),
-            checked: tabs.gridPreview,
-            onChange: value => patch('tabs', 'gridPreview', value)
-          }),
-          jsx(Row, {
-            title: t('tabsInfoDensity'),
-            description: t('tabsInfoDensityDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'auto', label: t('infoDensityAuto') },
-                { id: 'compact', label: t('infoDensityCompact') },
-                { id: 'comfortable', label: t('infoDensityComfortable') },
-                { id: 'detailed', label: t('infoDensityDetailed') }
-              ],
-              value: tabs.infoDensity,
-              onChange: value => patch('tabs', 'infoDensity', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsShowContext'),
-            description: t('tabsShowContextDesc'),
-            checked: tabs.showContext,
-            onChange: value => patch('tabs', 'showContext', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsCtxPie'),
-            description: t('tabsCtxPieDesc'),
-            checked: tabs.ctxPie,
-            onChange: value => patch('tabs', 'ctxPie', value)
-          }),
-          // Darstellungs-Stil nur relevant wenn die visuelle Darstellung
-          // überhaupt aktiv ist — Toggle oben entscheidet darüber.
-          tabs.ctxPie
-            ? jsx(Row, {
-                title: t('tabsCtxStyle'),
-                description: t('tabsCtxStyleDesc'),
-                action: jsx(Segment, {
-                  options: [
-                    { id: 'donut', label: t('tabsCtxStyleDonut') },
-                    { id: 'bar', label: t('tabsCtxStyleBar') }
-                  ],
-                  value: tabs.ctxStyle === 'bar' ? 'bar' : 'donut',
-                  onChange: value => patch('tabs', 'ctxStyle', value === 'bar' ? 'bar' : 'donut')
+          jsx(SettingsSubtabs, {
+            tabs: [
+              { id: 'view', labelKey: 'subView', rows: [
+                jsx(Row, {
+                  title: t('tabsDensity'),
+                  description: t('tabsDensityDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'compact', label: t('tabsDensityCompact') },
+                      { id: 'cozy', label: t('tabsDensityCozy') }
+                    ],
+                    value: tabs.density,
+                    onChange: value => patch('tabs', 'density', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsView'),
+                  description: t('tabsViewDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'list', label: t('tabsViewList') },
+                      { id: 'grid', label: t('tabsViewGrid') }
+                    ],
+                    value: tabs.view,
+                    onChange: value => patch('tabs', 'view', value)
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsAppNav'),
+                  description: t('tabsAppNavDesc'),
+                  checked: tabs.appNav !== false,
+                  onChange: value => patch('tabs', 'appNav', value)
+                }),
+                /* #full */
+                // Composer-Pill-Toggle: nur im Full-Build — im Catalog-Build gibt es
+                // keinen Composer-Zugriff (SDK-Accessory-Slot auf #116305), der
+                // Toggle würde nichts tun (Review R2, Punkt 4).
+                jsx(ToggleRow, {
+                  label: t('composerProjectPill'),
+                  description: t('composerProjectPillDesc'),
+                  checked: composer.projectPill !== false,
+                  onChange: value => {
+                    patch('composer', 'projectPill', value)
+                    kickComposerPillSync()
+                  }
+                }),
+                /* #end */
+                jsx(Row, {
+                  title: t('tabsGridMin'),
+                  description: t('tabsGridMinDesc'),
+                  action: jsx(NumberInput, {
+                    min: 110,
+                    max: 280,
+                    step: 10,
+                    value: tabs.gridMin,
+                    onChange: value => patch('tabs', 'gridMin', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsGridCols'),
+                  description: t('tabsGridColsDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'auto', label: t('tabsGridColsAuto') },
+                      { id: '1', label: '1' },
+                      { id: '2', label: '2' },
+                      { id: '3', label: '3' },
+                      { id: '4', label: '4' }
+                    ],
+                    value: tabs.gridCols,
+                    onChange: value => patch('tabs', 'gridCols', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsTextSize'),
+                  description: t('tabsTextSizeDesc'),
+                  action: jsx(NumberInput, {
+                    min: 80,
+                    max: 160,
+                    step: 5,
+                    value: tabs.textSize,
+                    onChange: value => patch('tabs', 'textSize', clampNumber(value, 80, 160, 100))
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsGridGap'),
+                  description: t('tabsGridGapDesc'),
+                  action: jsx(NumberInput, {
+                    min: 2,
+                    max: 16,
+                    step: 1,
+                    value: tabs.gridGap,
+                    onChange: value => patch('tabs', 'gridGap', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsGridLines'),
+                  description: t('tabsGridLinesDesc'),
+                  action: jsx(NumberInput, {
+                    min: 1,
+                    max: 4,
+                    step: 1,
+                    value: tabs.gridLines,
+                    onChange: value => patch('tabs', 'gridLines', value)
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsGridPreview'),
+                  description: t('tabsGridPreviewDesc'),
+                  checked: tabs.gridPreview,
+                  onChange: value => patch('tabs', 'gridPreview', value)
+                }),
+                jsx(Row, {
+                  title: t('tabsInfoDensity'),
+                  description: t('tabsInfoDensityDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'auto', label: t('infoDensityAuto') },
+                      { id: 'compact', label: t('infoDensityCompact') },
+                      { id: 'comfortable', label: t('infoDensityComfortable') },
+                      { id: 'detailed', label: t('infoDensityDetailed') }
+                    ],
+                    value: tabs.infoDensity,
+                    onChange: value => patch('tabs', 'infoDensity', value)
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsShowContext'),
+                  description: t('tabsShowContextDesc'),
+                  checked: tabs.showContext,
+                  onChange: value => patch('tabs', 'showContext', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsCtxPie'),
+                  description: t('tabsCtxPieDesc'),
+                  checked: tabs.ctxPie,
+                  onChange: value => patch('tabs', 'ctxPie', value)
+                }),
+                // Darstellungs-Stil nur relevant wenn die visuelle Darstellung
+                // überhaupt aktiv ist — Toggle oben entscheidet darüber.
+                tabs.ctxPie
+                  ? jsx(Row, {
+                      title: t('tabsCtxStyle'),
+                      description: t('tabsCtxStyleDesc'),
+                      action: jsx(Segment, {
+                        options: [
+                          { id: 'donut', label: t('tabsCtxStyleDonut') },
+                          { id: 'bar', label: t('tabsCtxStyleBar') }
+                        ],
+                        value: tabs.ctxStyle === 'bar' ? 'bar' : 'donut',
+                        onChange: value => patch('tabs', 'ctxStyle', value === 'bar' ? 'bar' : 'donut')
+                      })
+                    })
+                  : null,
+                jsx(Row, {
+                  title: t('tabsStatusStyle'),
+                  description: t('tabsStatusStyleDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'glyph', label: t('tabsStatusGlyph') },
+                      { id: 'loader', label: t('tabsStatusLoader') },
+                      { id: 'glyph+loader', label: t('tabsStatusBoth') }
+                    ],
+                    value: normalizeStatusStyle(tabs.statusStyle),
+                    onChange: value => patch('tabs', 'statusStyle', normalizeStatusStyle(value))
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsAlignTop'),
+                  description: t('tabsAlignTopDesc'),
+                  checked: tabs.alignTop,
+                  onChange: value => patch('tabs', 'alignTop', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsHoverLift'),
+                  description: t('tabsHoverLiftDesc'),
+                  checked: tabs.hoverLift,
+                  onChange: value => patch('tabs', 'hoverLift', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsShowTime'),
+                  description: t('tabsShowTimeDesc'),
+                  checked: tabs.showTime,
+                  onChange: value => patch('tabs', 'showTime', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsShowPreview'),
+                  description: t('tabsShowPreviewDesc'),
+                  checked: tabs.showPreview,
+                  onChange: value => patch('tabs', 'showPreview', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsShowCounts'),
+                  description: t('tabsShowCountsDesc'),
+                  checked: tabs.showCounts,
+                  onChange: value => patch('tabs', 'showCounts', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsShowSource'),
+                  description: t('tabsShowSourceDesc'),
+                  checked: tabs.showSource,
+                  onChange: value => patch('tabs', 'showSource', value)
+                }),
+                jsx(Row, {
+                  title: t('tabsOpenIntent'),
+                  description: t('tabsOpenIntentDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'in-place', label: t('tabsOpenIntentInPlace') },
+                      { id: 'stack', label: t('tabsOpenIntentStack') },
+                      { id: 'tab', label: t('tabsOpenIntentTab') }
+                    ],
+                    value: tabs.openIntent,
+                    // v1.24.0: Tab-Selektor-Modus erzwingt `in-place` (siehe
+                    // `effectiveOpenIntent`). Wir no-oppen onChange hier, damit
+                    // der UI-Punkt nicht versehentlich auf "Stapeln/Tab" hängen
+                    // bleibt, wenn der User ihn klickt — der Hinweis-Block
+                    // darunter macht das Verhalten sichtbar.
+                    onChange: tabs.asTabSelector ? () => {} : value => patch('tabs', 'openIntent', value)
+                  })
+                }),
+                tabs.asTabSelector
+                  ? jsx(Row, {
+                      title: t('tabsOpenIntentForcedNote'),
+                      description: null,
+                      action: null
+                    })
+                  : null,
+                jsx(ToggleRow, {
+                  label: t('tabsAsTabSelector'),
+                  description: t('tabsAsTabSelectorDesc'),
+                  checked: tabs.asTabSelector,
+                  onChange: value => patch('tabs', 'asTabSelector', value)
+                }),
+                jsx(Row, {
+                  title: t('tabsMaxItems'),
+                  description: t('tabsMaxItemsDesc'),
+                  action: jsx(NumberInput, {
+                    min: 10,
+                    max: 200,
+                    step: 10,
+                    value: tabs.maxItems,
+                    onChange: value => patch('tabs', 'maxItems', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsMaxVisible'),
+                  description: t('tabsMaxVisibleDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 200,
+                    step: 1,
+                    value: tabs.maxVisible,
+                    onChange: value => patch('tabs', 'maxVisible', value)
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsHideCron'),
+                  description: t('tabsHideCronDesc'),
+                  checked: tabs.hideCron,
+                  onChange: value => patch('tabs', 'hideCron', value)
+                }),
+                jsx(Row, {
+                  title: t('tabsLivePoll'),
+                  description: t('tabsLivePollDesc'),
+                  action: jsx(NumberInput, {
+                    min: 10,
+                    max: 300,
+                    step: 5,
+                    value: tabs.livePollSec,
+                    onChange: value => patch('tabs', 'livePollSec', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsRefresh'),
+                  description: t('tabsRefreshDesc'),
+                  action: jsx(NumberInput, {
+                    min: 15,
+                    max: 600,
+                    step: 5,
+                    value: tabs.refreshSec,
+                    onChange: value => patch('tabs', 'refreshSec', value)
+                  })
                 })
-              })
-            : null,
-          jsx(Row, {
-            title: t('tabsStatusStyle'),
-            description: t('tabsStatusStyleDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'glyph', label: t('tabsStatusGlyph') },
-                { id: 'dot', label: t('tabsStatusDot') },
-                { id: 'glyph+dot', label: t('tabsStatusBoth') }
-              ],
-              value: tabs.statusStyle,
-              onChange: value => patch('tabs', 'statusStyle', value)
-            })
-          }),
-          jsx('p', { className: 'sf-subhead', children: t('tabsDesignHead') }),
-          jsx(ToggleRow, {
-            label: t('tabsThemeSplit'),
-            description: t('tabsThemeSplitDesc'),
-            checked: tabs.themeSplit,
-            onChange: value => patch('tabs', 'themeSplit', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsThemeAutoDerive'),
-            description: t('tabsThemeAutoDeriveDesc'),
-            checked: tabs.themeAutoDerive,
-            disabled: !tabs.themeSplit,
-            onChange: value => patch('tabs', 'themeAutoDerive', value)
-          }),
-          jsx(Row, {
-            title: t('tabsThemeMode'),
-            description: t('tabsThemeModeDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'auto', label: t('tabsThemeModeAuto') },
-                { id: 'dark', label: t('tabsThemeModeDark') },
-                { id: 'light', label: t('tabsThemeModeLight') }
-              ],
-              value: ['auto', 'dark', 'light'].includes(tabs.themeMode) ? tabs.themeMode : 'auto',
-              onChange: value => patch('tabs', 'themeMode', ['dark', 'light'].includes(value) ? value : 'auto')
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsThemeEditing'),
-            description: isLightTab ? t('tabsThemeEditingLight') : t('tabsThemeEditingDark'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'dark', label: t('tabsThemeDark') },
-                { id: 'light', label: t('tabsThemeLight') }
-              ],
-              value: themeTab,
-              // Hell wählen schaltet themeSplit automatisch ein — sonst würden
-              // Edits im Hell-Satz still nichts bewirken (das war der Bug).
-              onChange: value => {
-                if (value === 'light') {
-                  patchSettings('tabs', { themeTab: 'light', themeSplit: true })
-                } else {
-                  patch('tabs', 'themeTab', 'dark')
-                }
-              }
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsRowGrad'),
-            description: t('tabsRowGradDesc'),
-            checked: colorFor('rowGradOn'),
-            onChange: value => setThemeFlag('rowGradOn', value)
-          }),
-          jsx(Row, {
-            title: t('tabsRowGradFrom'),
-            description: t('tabsRowGradFromDesc'),
-            action: colorRowControl(colorFor('rowGradFrom'), value => setThemeColor('rowGradFrom', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
-          }),
-          jsx(Row, {
-            title: t('tabsRowGradTo'),
-            description: t('tabsRowGradToDesc'),
-            action: colorRowControl(colorFor('rowGradTo'), value => setThemeColor('rowGradTo', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
-          }),
-          jsx(Row, {
-            title: t('tabsRowGradAngle'),
-            description: t('tabsRowGradAngleDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 360,
-              step: 15,
-              value: colorFor('rowGradAngle'),
-              onChange: value => setThemeFlag('rowGradAngle', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsRowShadow'),
-            description: t('tabsRowShadowDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'off', label: t('personalShellShadowOff') },
-                { id: 'subtle', label: t('personalShellShadowSubtle') },
-                { id: 'medium', label: t('personalShellShadowMedium') },
-                { id: 'strong', label: t('personalShellShadowStrong') }
-              ],
-              value: colorFor('rowShadow'),
-              onChange: value => setThemeFlag('rowShadow', SF_ROW_SHADOWS.includes(value) ? value : 'off')
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsAlignTop'),
-            description: t('tabsAlignTopDesc'),
-            checked: tabs.alignTop,
-            onChange: value => patch('tabs', 'alignTop', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsHoverLift'),
-            description: t('tabsHoverLiftDesc'),
-            checked: tabs.hoverLift,
-            onChange: value => patch('tabs', 'hoverLift', value)
-          }),
-          jsx(Row, {
-            title: t('tabsTitleStyle'),
-            description: t('tabsTitleStyleDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'none', label: t('tabsTitleStyleNone') },
-                { id: 'solid', label: t('tabsTitleStyleSolid') },
-                { id: 'gradient', label: t('tabsTitleStyleGradient') }
-              ],
-              value: titleStyleVal,
-              onChange: value => setThemeFlag('titleStyle', ['solid', 'gradient'].includes(value) ? value : 'none')
-            })
-          }),
-          titleStyleVal === 'solid'
-            ? jsx(Row, {
-                title: t('tabsTitleColor'),
-                description: t('tabsTitleColorDesc'),
-                action: colorRowControl(colorFor('titleColor'), value => setThemeColor('titleColor', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
-              })
-            : null,
-          titleStyleVal === 'gradient'
-            ? jsx(Row, {
-                title: t('tabsTitleGradFrom'),
-                description: t('tabsTitleGradFromDesc'),
-                action: colorRowControl(colorFor('titleGradFrom'), value => setThemeColor('titleGradFrom', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
-              })
-            : null,
-          titleStyleVal === 'gradient'
-            ? jsx(Row, {
-                title: t('tabsTitleGradTo'),
-                description: t('tabsTitleGradToDesc'),
-                action: colorRowControl(colorFor('titleGradTo'), value => setThemeColor('titleGradTo', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
-              })
-            : null,
-          titleStyleVal === 'gradient'
-            ? jsx(Row, {
-                title: t('tabsTitleGradAngle'),
-                description: t('tabsTitleGradAngleDesc'),
-                action: jsx(NumberInput, {
-                  min: 0,
-                  max: 360,
-                  step: 15,
-                  value: colorFor('titleGradAngle'),
-                  onChange: value => setThemeFlag('titleGradAngle', value)
-                })
-              })
-            : null,
-          jsx('p', { className: 'sf-subhead', children: t('tabsSelHead') }),
-          jsx(Row, {
-            title: t('tabsSelTint'),
-            description: t('tabsSelTintDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'standard', label: t('tabsSelTintStandard') },
-                { id: 'accent', label: t('tabsSelTintAccent') },
-                { id: 'custom', label: t('tabsSelTintCustom') }
-              ],
-              value: tabs.selTint,
-              onChange: value => patch('tabs', 'selTint', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsSelColor'),
-            description: t('tabsSelColorDesc'),
-            action: colorRowControl(colorFor('selColor'), value => setThemeColor('selColor', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsSelBorder'),
-            description: t('tabsSelBorderDesc'),
-            checked: tabs.selBorder,
-            onChange: value => patch('tabs', 'selBorder', value)
-          }),
-          jsx(Row, {
-            title: t('tabsSelShadow'),
-            description: t('tabsSelShadowDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'off', label: t('personalShellShadowOff') },
-                { id: 'subtle', label: t('personalShellShadowSubtle') },
-                { id: 'medium', label: t('personalShellShadowMedium') },
-                { id: 'strong', label: t('personalShellShadowStrong') }
-              ],
-              value: colorFor('selShadow'),
-              onChange: value => setThemeFlag('selShadow', SF_ROW_SHADOWS.includes(value) ? value : 'off')
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsSelHover'),
-            description: t('tabsSelHoverDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'off', label: t('selHoverOff') },
-                { id: 'soft', label: t('selHoverSoft') },
-                { id: 'strong', label: t('selHoverStrong') }
-              ],
-              value: tabs.selHover,
-              onChange: value => patch('tabs', 'selHover', value)
-            })
-          }),
-          jsx('p', { className: 'sf-subhead', children: t('tabsLiveHead') }),
-          jsx(ToggleRow, {
-            label: t('tabsRowLive'),
-            description: t('tabsRowLiveDesc'),
-            checked: tabs.rowLive,
-            onChange: value => patch('tabs', 'rowLive', value)
-          }),
-          jsx(Row, {
-            title: t('tabsLiveFrame'),
-            description: t('tabsLiveFrameDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'off', label: t('liveFrameOff') },
-                { id: 'ring', label: t('liveFrameRing') },
-                { id: 'glow', label: t('liveFrameGlow') }
-              ],
-              value: tabs.liveFrame,
-              onChange: value => patch('tabs', 'liveFrame', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsDoneFx'),
-            description: t('tabsDoneFxDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'off', label: t('doneFxOff') },
-                { id: 'glow', label: t('doneFxGlow') },
-                { id: 'wobble', label: t('doneFxWobble') },
-                { id: 'glow-wobble', label: t('doneFxGlowWobble') },
-                { id: 'shine', label: t('doneFxShine') },
-                { id: 'pop', label: t('doneFxPop') }
-              ],
-              value: tabs.doneFx,
-              onChange: value => patch('tabs', 'doneFx', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsDoneFxAxis'),
-            description: t('tabsDoneFxAxisDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'x', label: t('doneFxAxisX') },
-                { id: 'y', label: t('doneFxAxisY') },
-                { id: 'z', label: t('doneFxAxisZ') }
-              ],
-              value: tabs.doneFxAxis,
-              onChange: value => patch('tabs', 'doneFxAxis', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsDoneFxStrength'),
-            description: t('tabsDoneFxStrengthDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'subtle', label: t('doneFxSubtle') },
-                { id: 'medium', label: t('doneFxMedium') },
-                { id: 'strong', label: t('doneFxStrong') }
-              ],
-              value: tabs.doneFxStrength,
-              onChange: value => patch('tabs', 'doneFxStrength', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsShowTime'),
-            description: t('tabsShowTimeDesc'),
-            checked: tabs.showTime,
-            onChange: value => patch('tabs', 'showTime', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsShowPreview'),
-            description: t('tabsShowPreviewDesc'),
-            checked: tabs.showPreview,
-            onChange: value => patch('tabs', 'showPreview', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsShowCounts'),
-            description: t('tabsShowCountsDesc'),
-            checked: tabs.showCounts,
-            onChange: value => patch('tabs', 'showCounts', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsShowSource'),
-            description: t('tabsShowSourceDesc'),
-            checked: tabs.showSource,
-            onChange: value => patch('tabs', 'showSource', value)
-          }),
-          jsx(Row, {
-            title: t('tabsOpenIntent'),
-            description: t('tabsOpenIntentDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'in-place', label: t('tabsOpenIntentInPlace') },
-                { id: 'stack', label: t('tabsOpenIntentStack') },
-                { id: 'tab', label: t('tabsOpenIntentTab') }
-              ],
-              value: tabs.openIntent,
-              // v1.24.0: Tab-Selektor-Modus erzwingt `in-place` (siehe
-              // `effectiveOpenIntent`). Wir no-oppen onChange hier, damit
-              // der UI-Punkt nicht versehentlich auf "Stapeln/Tab" hängen
-              // bleibt, wenn der User ihn klickt — der Hinweis-Block
-              // darunter macht das Verhalten sichtbar.
-              onChange: tabs.asTabSelector ? () => {} : value => patch('tabs', 'openIntent', value)
-            })
-          }),
-          tabs.asTabSelector
-            ? jsx(Row, {
-                title: t('tabsOpenIntentForcedNote'),
-                description: null,
-                action: null
-              })
-            : null,
-          jsx(ToggleRow, {
-            label: t('tabsAsTabSelector'),
-            description: t('tabsAsTabSelectorDesc'),
-            checked: tabs.asTabSelector,
-            onChange: value => patch('tabs', 'asTabSelector', value)
-          }),
-          jsx(Row, {
-            title: t('tabsMaxItems'),
-            description: t('tabsMaxItemsDesc'),
-            action: jsx(NumberInput, {
-              min: 10,
-              max: 200,
-              step: 10,
-              value: tabs.maxItems,
-              onChange: value => patch('tabs', 'maxItems', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsMaxVisible'),
-            description: t('tabsMaxVisibleDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 200,
-              step: 1,
-              value: tabs.maxVisible,
-              onChange: value => patch('tabs', 'maxVisible', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('tabsHideCron'),
-            description: t('tabsHideCronDesc'),
-            checked: tabs.hideCron,
-            onChange: value => patch('tabs', 'hideCron', value)
-          }),
-          jsx(Row, {
-            title: t('tabsLivePoll'),
-            description: t('tabsLivePollDesc'),
-            action: jsx(NumberInput, {
-              min: 10,
-              max: 300,
-              step: 5,
-              value: tabs.livePollSec,
-              onChange: value => patch('tabs', 'livePollSec', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('tabsRefresh'),
-            description: t('tabsRefreshDesc'),
-            action: jsx(NumberInput, {
-              min: 15,
-              max: 600,
-              step: 5,
-              value: tabs.refreshSec,
-              onChange: value => patch('tabs', 'refreshSec', value)
-            })
+              ] },
+              { id: 'design', labelKey: 'subDesign', rows: [
+                jsx(ToggleRow, {
+                  label: t('tabsThemeSplit'),
+                  description: t('tabsThemeSplitDesc'),
+                  checked: tabs.themeSplit,
+                  onChange: value => patch('tabs', 'themeSplit', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsThemeAutoDerive'),
+                  description: t('tabsThemeAutoDeriveDesc'),
+                  checked: tabs.themeAutoDerive,
+                  disabled: !tabs.themeSplit,
+                  onChange: value => patch('tabs', 'themeAutoDerive', value)
+                }),
+                jsx(Row, {
+                  title: t('tabsThemeMode'),
+                  description: t('tabsThemeModeDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'auto', label: t('tabsThemeModeAuto') },
+                      { id: 'dark', label: t('tabsThemeModeDark') },
+                      { id: 'light', label: t('tabsThemeModeLight') }
+                    ],
+                    value: ['auto', 'dark', 'light'].includes(tabs.themeMode) ? tabs.themeMode : 'auto',
+                    onChange: value => patch('tabs', 'themeMode', ['dark', 'light'].includes(value) ? value : 'auto')
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsThemeEditing'),
+                  description: isLightTab ? t('tabsThemeEditingLight') : t('tabsThemeEditingDark'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'dark', label: t('tabsThemeDark') },
+                      { id: 'light', label: t('tabsThemeLight') }
+                    ],
+                    value: themeTab,
+                    // Hell wählen schaltet themeSplit automatisch ein — sonst würden
+                    // Edits im Hell-Satz still nichts bewirken (das war der Bug).
+                    onChange: value => {
+                      if (value === 'light') {
+                        patchSettings('tabs', { themeTab: 'light', themeSplit: true })
+                      } else {
+                        patch('tabs', 'themeTab', 'dark')
+                      }
+                    }
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsRowGrad'),
+                  description: t('tabsRowGradDesc'),
+                  checked: colorFor('rowGradOn'),
+                  onChange: value => setThemeFlag('rowGradOn', value)
+                }),
+                jsx(Row, {
+                  title: t('tabsRowGradFrom'),
+                  description: t('tabsRowGradFromDesc'),
+                  action: colorRowControl(colorFor('rowGradFrom'), value => setThemeColor('rowGradFrom', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+                }),
+                jsx(Row, {
+                  title: t('tabsRowGradTo'),
+                  description: t('tabsRowGradToDesc'),
+                  action: colorRowControl(colorFor('rowGradTo'), value => setThemeColor('rowGradTo', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+                }),
+                jsx(Row, {
+                  title: t('tabsRowGradAngle'),
+                  description: t('tabsRowGradAngleDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 360,
+                    step: 15,
+                    value: colorFor('rowGradAngle'),
+                    onChange: value => setThemeFlag('rowGradAngle', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsRowShadow'),
+                  description: t('tabsRowShadowDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'off', label: t('personalShellShadowOff') },
+                      { id: 'subtle', label: t('personalShellShadowSubtle') },
+                      { id: 'medium', label: t('personalShellShadowMedium') },
+                      { id: 'strong', label: t('personalShellShadowStrong') }
+                    ],
+                    value: colorFor('rowShadow'),
+                    onChange: value => setThemeFlag('rowShadow', SF_ROW_SHADOWS.includes(value) ? value : 'off')
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsTitleStyle'),
+                  description: t('tabsTitleStyleDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'none', label: t('tabsTitleStyleNone') },
+                      { id: 'solid', label: t('tabsTitleStyleSolid') },
+                      { id: 'gradient', label: t('tabsTitleStyleGradient') }
+                    ],
+                    value: titleStyleVal,
+                    onChange: value => setThemeFlag('titleStyle', ['solid', 'gradient'].includes(value) ? value : 'none')
+                  })
+                }),
+                titleStyleVal === 'solid'
+                  ? jsx(Row, {
+                      title: t('tabsTitleColor'),
+                      description: t('tabsTitleColorDesc'),
+                      action: colorRowControl(colorFor('titleColor'), value => setThemeColor('titleColor', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+                    })
+                  : null,
+                titleStyleVal === 'gradient'
+                  ? jsx(Row, {
+                      title: t('tabsTitleGradFrom'),
+                      description: t('tabsTitleGradFromDesc'),
+                      action: colorRowControl(colorFor('titleGradFrom'), value => setThemeColor('titleGradFrom', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+                    })
+                  : null,
+                titleStyleVal === 'gradient'
+                  ? jsx(Row, {
+                      title: t('tabsTitleGradTo'),
+                      description: t('tabsTitleGradToDesc'),
+                      action: colorRowControl(colorFor('titleGradTo'), value => setThemeColor('titleGradTo', value, 'text'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+                    })
+                  : null,
+                titleStyleVal === 'gradient'
+                  ? jsx(Row, {
+                      title: t('tabsTitleGradAngle'),
+                      description: t('tabsTitleGradAngleDesc'),
+                      action: jsx(NumberInput, {
+                        min: 0,
+                        max: 360,
+                        step: 15,
+                        value: colorFor('titleGradAngle'),
+                        onChange: value => setThemeFlag('titleGradAngle', value)
+                      })
+                    })
+                  : null,
+              ] },
+              { id: 'selection', labelKey: 'subSelection', rows: [
+                jsx(Row, {
+                  title: t('tabsSelTint'),
+                  description: t('tabsSelTintDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'standard', label: t('tabsSelTintStandard') },
+                      { id: 'accent', label: t('tabsSelTintAccent') },
+                      { id: 'custom', label: t('tabsSelTintCustom') }
+                    ],
+                    value: tabs.selTint,
+                    onChange: value => patch('tabs', 'selTint', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsSelColor'),
+                  description: t('tabsSelColorDesc'),
+                  action: colorRowControl(colorFor('selColor'), value => setThemeColor('selColor', value, 'fill'), t('personalAccentReset'), { alpha: true, pickerLabel: t('colorPicker'), alphaLabel: t('colorAlpha') })
+                }),
+                jsx(ToggleRow, {
+                  label: t('tabsSelBorder'),
+                  description: t('tabsSelBorderDesc'),
+                  checked: tabs.selBorder,
+                  onChange: value => patch('tabs', 'selBorder', value)
+                }),
+                jsx(Row, {
+                  title: t('tabsSelShadow'),
+                  description: t('tabsSelShadowDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'off', label: t('personalShellShadowOff') },
+                      { id: 'subtle', label: t('personalShellShadowSubtle') },
+                      { id: 'medium', label: t('personalShellShadowMedium') },
+                      { id: 'strong', label: t('personalShellShadowStrong') }
+                    ],
+                    value: colorFor('selShadow'),
+                    onChange: value => setThemeFlag('selShadow', SF_ROW_SHADOWS.includes(value) ? value : 'off')
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsSelHover'),
+                  description: t('tabsSelHoverDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'off', label: t('selHoverOff') },
+                      { id: 'soft', label: t('selHoverSoft') },
+                      { id: 'strong', label: t('selHoverStrong') }
+                    ],
+                    value: tabs.selHover,
+                    onChange: value => patch('tabs', 'selHover', value)
+                  })
+                }),
+              ] },
+              { id: 'effects', labelKey: 'subEffects', rows: [
+                jsx(ToggleRow, {
+                  label: t('tabsRowLive'),
+                  description: t('tabsRowLiveDesc'),
+                  checked: tabs.rowLive,
+                  onChange: value => patch('tabs', 'rowLive', value)
+                }),
+                jsx(Row, {
+                  title: t('tabsLiveFrame'),
+                  description: t('tabsLiveFrameDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'off', label: t('liveFrameOff') },
+                      { id: 'ring', label: t('liveFrameRing') },
+                      { id: 'glow', label: t('liveFrameGlow') }
+                    ],
+                    value: tabs.liveFrame,
+                    onChange: value => patch('tabs', 'liveFrame', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsDoneFx'),
+                  description: t('tabsDoneFxDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'off', label: t('doneFxOff') },
+                      { id: 'glow', label: t('doneFxGlow') },
+                      { id: 'wobble', label: t('doneFxWobble') },
+                      { id: 'glow-wobble', label: t('doneFxGlowWobble') },
+                      { id: 'shine', label: t('doneFxShine') },
+                      { id: 'pop', label: t('doneFxPop') }
+                    ],
+                    value: tabs.doneFx,
+                    onChange: value => patch('tabs', 'doneFx', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsDoneFxAxis'),
+                  description: t('tabsDoneFxAxisDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'x', label: t('doneFxAxisX') },
+                      { id: 'y', label: t('doneFxAxisY') },
+                      { id: 'z', label: t('doneFxAxisZ') }
+                    ],
+                    value: tabs.doneFxAxis,
+                    onChange: value => patch('tabs', 'doneFxAxis', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('tabsDoneFxStrength'),
+                  description: t('tabsDoneFxStrengthDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'subtle', label: t('doneFxSubtle') },
+                      { id: 'medium', label: t('doneFxMedium') },
+                      { id: 'strong', label: t('doneFxStrong') }
+                    ],
+                    value: tabs.doneFxStrength,
+                    onChange: value => patch('tabs', 'doneFxStrength', value)
+                  })
+                }),
+              ] }
+            ]
           })
         ]
       }),
@@ -12166,126 +12564,134 @@ function SettingsPage() {
             checked: uiTabs.enabled,
             onChange: value => patch('uiTabs', 'enabled', value)
           }),
-          jsx(Row, {
-            title: t('uiTabsRadius'),
-            description: t('uiTabsRadiusDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 12,
-              step: 1,
-              value: uiTabs.radius,
-              onChange: value => patch('uiTabs', 'radius', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('uiTabsGap'),
-            description: t('uiTabsGapDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 10,
-              step: 1,
-              value: uiTabs.gap,
-              onChange: value => patch('uiTabs', 'gap', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('uiTabsInset'),
-            description: t('uiTabsInsetDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 8,
-              step: 1,
-              value: uiTabs.insetY,
-              onChange: value => patch('uiTabs', 'insetY', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('uiTabsSeparators'),
-            description: t('uiTabsSeparatorsDesc'),
-            checked: uiTabs.separators,
-            disabled: !uiTabs.enabled,
-            onChange: value => patch('uiTabs', 'separators', value)
-          }),
-          jsx(Row, {
-            title: t('uiTabsActive'),
-            description: t('uiTabsActiveDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'sidebar', label: t('uiTabsActiveSidebar') },
-                { id: 'underline', label: t('uiTabsActiveUnderline') },
-                { id: 'both', label: t('uiTabsActiveBoth') }
-              ],
-              value: uiTabs.activeStyle,
-              onChange: value => patch('uiTabs', 'activeStyle', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('uiTabsLabelCase'),
-            description: t('uiTabsLabelCaseDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'normal', label: t('uiTabsCaseNormal') },
-                { id: 'upper', label: t('uiTabsCaseUpper') }
-              ],
-              value: uiTabs.labelCase,
-              onChange: value => patch('uiTabs', 'labelCase', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('uiTabsLabelSize'),
-            description: t('uiTabsLabelSizeDesc'),
-            action: jsx(NumberInput, {
-              min: 10,
-              max: 13,
-              step: 1,
-              value: uiTabs.labelSize,
-              onChange: value => patch('uiTabs', 'labelSize', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('uiTabsShowLead'),
-            description: t('uiTabsShowLeadDesc'),
-            checked: uiTabs.showLead,
-            disabled: !uiTabs.enabled,
-            onChange: value => patch('uiTabs', 'showLead', value)
-          }),
-          jsx(Row, {
-            title: t('uiTabsCloseMode'),
-            description: t('uiTabsCloseModeDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'hover', label: t('uiTabsCloseOnHover') },
-                { id: 'always', label: t('uiTabsCloseAlways') },
-                { id: 'active', label: t('uiTabsCloseActive') }
-              ],
-              value: uiTabs.closeMode,
-              onChange: value => patch('uiTabs', 'closeMode', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('uiTabsCloseWidth'),
-            description: t('uiTabsCloseWidthDesc'),
-            action: jsx(NumberInput, {
-              min: 14,
-              max: 32,
-              step: 2,
-              value: uiTabs.closeWidth,
-              onChange: value => patch('uiTabs', 'closeWidth', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('uiTabsCloseHoverBg'),
-            description: t('uiTabsCloseHoverBgDesc'),
-            checked: uiTabs.closeHover,
-            disabled: !uiTabs.enabled,
-            onChange: value => patch('uiTabs', 'closeHover', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('uiTabsArc'),
-            description: t('uiTabsArcDesc'),
-            checked: uiTabs.arc,
-            disabled: !uiTabs.enabled,
-            onChange: value => patch('uiTabs', 'arc', value)
+          jsx(SettingsSubtabs, {
+            tabs: [
+              { id: 'look', labelKey: 'subLook', rows: [
+                jsx(Row, {
+                  title: t('uiTabsRadius'),
+                  description: t('uiTabsRadiusDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 12,
+                    step: 1,
+                    value: uiTabs.radius,
+                    onChange: value => patch('uiTabs', 'radius', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('uiTabsGap'),
+                  description: t('uiTabsGapDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 10,
+                    step: 1,
+                    value: uiTabs.gap,
+                    onChange: value => patch('uiTabs', 'gap', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('uiTabsInset'),
+                  description: t('uiTabsInsetDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 8,
+                    step: 1,
+                    value: uiTabs.insetY,
+                    onChange: value => patch('uiTabs', 'insetY', value)
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('uiTabsSeparators'),
+                  description: t('uiTabsSeparatorsDesc'),
+                  checked: uiTabs.separators,
+                  disabled: !uiTabs.enabled,
+                  onChange: value => patch('uiTabs', 'separators', value)
+                }),
+                jsx(Row, {
+                  title: t('uiTabsActive'),
+                  description: t('uiTabsActiveDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'sidebar', label: t('uiTabsActiveSidebar') },
+                      { id: 'underline', label: t('uiTabsActiveUnderline') },
+                      { id: 'both', label: t('uiTabsActiveBoth') }
+                    ],
+                    value: uiTabs.activeStyle,
+                    onChange: value => patch('uiTabs', 'activeStyle', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('uiTabsLabelCase'),
+                  description: t('uiTabsLabelCaseDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'normal', label: t('uiTabsCaseNormal') },
+                      { id: 'upper', label: t('uiTabsCaseUpper') }
+                    ],
+                    value: uiTabs.labelCase,
+                    onChange: value => patch('uiTabs', 'labelCase', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('uiTabsLabelSize'),
+                  description: t('uiTabsLabelSizeDesc'),
+                  action: jsx(NumberInput, {
+                    min: 10,
+                    max: 13,
+                    step: 1,
+                    value: uiTabs.labelSize,
+                    onChange: value => patch('uiTabs', 'labelSize', value)
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('uiTabsShowLead'),
+                  description: t('uiTabsShowLeadDesc'),
+                  checked: uiTabs.showLead,
+                  disabled: !uiTabs.enabled,
+                  onChange: value => patch('uiTabs', 'showLead', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('uiTabsArc'),
+                  description: t('uiTabsArcDesc'),
+                  checked: uiTabs.arc,
+                  disabled: !uiTabs.enabled,
+                  onChange: value => patch('uiTabs', 'arc', value)
+                }),
+              ] },
+              { id: 'behavior', labelKey: 'subBehavior', rows: [
+                jsx(Row, {
+                  title: t('uiTabsCloseMode'),
+                  description: t('uiTabsCloseModeDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'hover', label: t('uiTabsCloseOnHover') },
+                      { id: 'always', label: t('uiTabsCloseAlways') },
+                      { id: 'active', label: t('uiTabsCloseActive') }
+                    ],
+                    value: uiTabs.closeMode,
+                    onChange: value => patch('uiTabs', 'closeMode', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('uiTabsCloseWidth'),
+                  description: t('uiTabsCloseWidthDesc'),
+                  action: jsx(NumberInput, {
+                    min: 14,
+                    max: 32,
+                    step: 2,
+                    value: uiTabs.closeWidth,
+                    onChange: value => patch('uiTabs', 'closeWidth', value)
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('uiTabsCloseHoverBg'),
+                  description: t('uiTabsCloseHoverBgDesc'),
+                  checked: uiTabs.closeHover,
+                  disabled: !uiTabs.enabled,
+                  onChange: value => patch('uiTabs', 'closeHover', value)
+                }),
+              ] }
+            ]
           }),
           jsx('p', { className: 'sf-hint', children: t('uiTabsHint') })
         ]
@@ -12306,158 +12712,168 @@ function SettingsPage() {
             checked: glass.enabled,
             onChange: value => patch('glass', 'enabled', value)
           }),
-          jsx(Row, {
-            title: t('glassBlur'),
-            description: t('glassBlurDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 40,
-              step: 1,
-              value: glass.blurPx,
-              onChange: value => patch('glass', 'blurPx', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('glassSaturate'),
-            description: t('glassSaturateDesc'),
-            action: jsx(NumberInput, {
-              min: 100,
-              max: 200,
-              step: 5,
-              value: glass.saturate,
-              onChange: value => patch('glass', 'saturate', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('glassFill'),
-            description: t('glassFillDesc'),
-            action: jsx(NumberInput, {
-              min: 50,
-              max: 94,
-              step: 2,
-              value: glass.fill,
-              onChange: value => patch('glass', 'fill', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('glassTint'),
-            description: t('glassTintDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 40,
-              step: 1,
-              value: glass.tint,
-              onChange: value => patch('glass', 'tint', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('glassGradient'),
-            description: t('glassGradientDesc'),
-            checked: glass.gradient,
-            disabled: !glass.enabled,
-            onChange: value => patch('glass', 'gradient', value)
-          }),
-          jsx(Row, {
-            title: t('glassAngle'),
-            description: t('glassAngleDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 360,
-              step: 5,
-              value: glass.angle,
-              onChange: value => patch('glass', 'angle', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('glassGradOpacity'),
-            description: t('glassGradOpacityDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 60,
-              step: 2,
-              value: glass.gradOpacity,
-              onChange: value => patch('glass', 'gradOpacity', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('glassReach'),
-            description: t('glassReachDesc'),
-            action: jsx(NumberInput, {
-              min: 20,
-              max: 100,
-              step: 4,
-              value: glass.reach,
-              onChange: value => patch('glass', 'reach', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('glassRing'),
-            description: t('glassRingDesc'),
-            checked: glass.ring,
-            disabled: !glass.enabled,
-            onChange: value => patch('glass', 'ring', value)
-          }),
-          jsx(ToggleRow, {
-            label: t('glassArc'),
-            description: t('glassArcDesc'),
-            checked: glass.arc,
-            disabled: !glass.enabled,
-            onChange: value => patch('glass', 'arc', value)
-          }),
-          jsx(Row, {
-            title: t('glassArcMode'),
-            description: t('glassArcModeDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'always', label: t('glassArcAlways') },
-                { id: 'busy', label: t('glassArcBusy') }
-              ],
-              value: glass.arcMode,
-              onChange: value => patch('glass', 'arcMode', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('glassArcWidth'),
-            description: t('glassArcWidthDesc'),
-            action: jsx(NumberInput, {
-              min: 0.5,
-              max: 4,
-              step: 0.5,
-              value: glass.arcWidth,
-              onChange: value => patch('glass', 'arcWidth', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('glassArcDuration'),
-            description: t('glassArcDurationDesc'),
-            action: jsx(NumberInput, {
-              min: 1,
-              max: 12,
-              step: 0.5,
-              value: glass.arcDuration,
-              onChange: value => patch('glass', 'arcDuration', value)
-            })
-          }),
-          jsx(ToggleRow, {
-            label: t('glassScopeComposer'),
-            description: t('glassScopeComposerDesc'),
-            checked: glass.scopes.composer,
-            disabled: !glass.enabled,
-            onChange: value => patch('glass', 'scopes', { ...glass.scopes, composer: value })
-          }),
-          jsx(ToggleRow, {
-            label: t('glassScopeChips'),
-            description: t('glassScopeChipsDesc'),
-            checked: glass.scopes.chips,
-            disabled: !glass.enabled,
-            onChange: value => patch('glass', 'scopes', { ...glass.scopes, chips: value })
-          }),
-          jsx(ToggleRow, {
-            label: t('glassScopeStatusbar'),
-            description: t('glassScopeStatusbarDesc'),
-            checked: glass.scopes.statusbar,
-            disabled: !glass.enabled,
-            onChange: value => patch('glass', 'scopes', { ...glass.scopes, statusbar: value })
+          jsx(SettingsSubtabs, {
+            tabs: [
+              { id: 'surface', labelKey: 'subSurface', rows: [
+                jsx(Row, {
+                  title: t('glassBlur'),
+                  description: t('glassBlurDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 40,
+                    step: 1,
+                    value: glass.blurPx,
+                    onChange: value => patch('glass', 'blurPx', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('glassSaturate'),
+                  description: t('glassSaturateDesc'),
+                  action: jsx(NumberInput, {
+                    min: 100,
+                    max: 200,
+                    step: 5,
+                    value: glass.saturate,
+                    onChange: value => patch('glass', 'saturate', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('glassFill'),
+                  description: t('glassFillDesc'),
+                  action: jsx(NumberInput, {
+                    min: 50,
+                    max: 94,
+                    step: 2,
+                    value: glass.fill,
+                    onChange: value => patch('glass', 'fill', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('glassTint'),
+                  description: t('glassTintDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 40,
+                    step: 1,
+                    value: glass.tint,
+                    onChange: value => patch('glass', 'tint', value)
+                  })
+                }),
+                jsx(ToggleRow, {
+                  label: t('glassGradient'),
+                  description: t('glassGradientDesc'),
+                  checked: glass.gradient,
+                  disabled: !glass.enabled,
+                  onChange: value => patch('glass', 'gradient', value)
+                }),
+                jsx(Row, {
+                  title: t('glassAngle'),
+                  description: t('glassAngleDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 360,
+                    step: 5,
+                    value: glass.angle,
+                    onChange: value => patch('glass', 'angle', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('glassGradOpacity'),
+                  description: t('glassGradOpacityDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 60,
+                    step: 2,
+                    value: glass.gradOpacity,
+                    onChange: value => patch('glass', 'gradOpacity', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('glassReach'),
+                  description: t('glassReachDesc'),
+                  action: jsx(NumberInput, {
+                    min: 20,
+                    max: 100,
+                    step: 4,
+                    value: glass.reach,
+                    onChange: value => patch('glass', 'reach', value)
+                  })
+                }),
+              ] },
+              { id: 'frame', labelKey: 'subFrame', rows: [
+                jsx(ToggleRow, {
+                  label: t('glassRing'),
+                  description: t('glassRingDesc'),
+                  checked: glass.ring,
+                  disabled: !glass.enabled,
+                  onChange: value => patch('glass', 'ring', value)
+                }),
+                jsx(ToggleRow, {
+                  label: t('glassArc'),
+                  description: t('glassArcDesc'),
+                  checked: glass.arc,
+                  disabled: !glass.enabled,
+                  onChange: value => patch('glass', 'arc', value)
+                }),
+                jsx(Row, {
+                  title: t('glassArcMode'),
+                  description: t('glassArcModeDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'always', label: t('glassArcAlways') },
+                      { id: 'busy', label: t('glassArcBusy') }
+                    ],
+                    value: glass.arcMode,
+                    onChange: value => patch('glass', 'arcMode', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('glassArcWidth'),
+                  description: t('glassArcWidthDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0.5,
+                    max: 4,
+                    step: 0.5,
+                    value: glass.arcWidth,
+                    onChange: value => patch('glass', 'arcWidth', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('glassArcDuration'),
+                  description: t('glassArcDurationDesc'),
+                  action: jsx(NumberInput, {
+                    min: 1,
+                    max: 12,
+                    step: 0.5,
+                    value: glass.arcDuration,
+                    onChange: value => patch('glass', 'arcDuration', value)
+                  })
+                }),
+              ] },
+              { id: 'scope', labelKey: 'subScope', rows: [
+                jsx(ToggleRow, {
+                  label: t('glassScopeComposer'),
+                  description: t('glassScopeComposerDesc'),
+                  checked: glass.scopes.composer,
+                  disabled: !glass.enabled,
+                  onChange: value => patch('glass', 'scopes', { ...glass.scopes, composer: value })
+                }),
+                jsx(ToggleRow, {
+                  label: t('glassScopeChips'),
+                  description: t('glassScopeChipsDesc'),
+                  checked: glass.scopes.chips,
+                  disabled: !glass.enabled,
+                  onChange: value => patch('glass', 'scopes', { ...glass.scopes, chips: value })
+                }),
+                jsx(ToggleRow, {
+                  label: t('glassScopeStatusbar'),
+                  description: t('glassScopeStatusbarDesc'),
+                  checked: glass.scopes.statusbar,
+                  disabled: !glass.enabled,
+                  onChange: value => patch('glass', 'scopes', { ...glass.scopes, statusbar: value })
+                }),
+              ] }
+            ]
           }),
           jsx('p', { className: 'sf-hint', children: t('glassHint') })
         ]
@@ -12471,44 +12887,140 @@ function SettingsPage() {
         title: t('secPersonal'),
         description: t('secPersonalDesc'),
         children: [
-/* #full */
-          jsx(ToggleRow, {
-            label: t('personalAccentOn'),
-            description: t('personalAccentOnDesc'),
-            checked: personal.accentOn,
-            onChange: value => patch('personal', 'accentOn', value)
-          }),
-          jsx(Row, {
-            title: t('personalAccentColor'),
-            description: t('personalAccentColorDesc'),
-            action: jsxs('div', {
-              className: 'sf-row-control',
-              children: [
-                jsx(GroupSwatches, {
-                  value: personal.accentColor || null,
-                  onChange: value => patch('personal', 'accentColor', value || '#7c3aed'),
-                  clearLabel: t('personalAccentReset')
+          /* #full */
+          // Akzent-Override (CSS-Variablen auf <html>) und Hintergrund sind
+          // Full-only — sie greifen hinter das SDK (Review R2, Regel 8). Der
+          // Catalog-Build zeigt darunter nur die Pane-Flaechen-Option.
+          jsx(SettingsSubtabs, {
+            tabs: [
+              { id: 'accent', labelKey: 'subAccent', rows: [
+                jsx(ToggleRow, {
+                  label: t('personalAccentOn'),
+                  description: t('personalAccentOnDesc'),
+                  checked: personal.accentOn,
+                  onChange: value => patch('personal', 'accentOn', value)
                 }),
-                jsx('input', {
-                  'aria-label': t('colorPicker'),
-                  className: 'sf-colorpick',
-                  onChange: event => patch('personal', 'accentColor', String(event.target.value || '').trim()),
-                  title: t('colorPicker'),
-                  type: 'color',
-                  value: /^#[0-9a-f]{6}$/i.test(String(personal.accentColor || '')) ? personal.accentColor : '#7c3aed'
+                jsx(Row, {
+                  title: t('personalAccentColor'),
+                  description: t('personalAccentColorDesc'),
+                  action: jsxs('div', {
+                    className: 'sf-row-control',
+                    children: [
+                      jsx(GroupSwatches, {
+                        value: personal.accentColor || null,
+                        onChange: value => patch('personal', 'accentColor', value || '#7c3aed'),
+                        clearLabel: t('personalAccentReset')
+                      }),
+                      jsx('input', {
+                        'aria-label': t('colorPicker'),
+                        className: 'sf-colorpick',
+                        onChange: event => patch('personal', 'accentColor', String(event.target.value || '').trim()),
+                        title: t('colorPicker'),
+                        type: 'color',
+                        value: /^#[0-9a-f]{6}$/i.test(String(personal.accentColor || '')) ? personal.accentColor : '#7c3aed'
+                      }),
+                      jsx(Input, {
+                        className: 'sf-num',
+                        maxLength: 7,
+                        onChange: event => patch('personal', 'accentColor', String(event.target.value || '').trim()),
+                        placeholder: '#7c3aed',
+                        value: personal.accentColor || ''
+                      })
+                    ]
+                  })
                 }),
-                jsx(Input, {
-                  className: 'sf-num',
-                  maxLength: 7,
-                  onChange: event => patch('personal', 'accentColor', String(event.target.value || '').trim()),
-                  placeholder: '#7c3aed',
-                  value: personal.accentColor || ''
+                jsx('p', { className: 'sf-hint', children: t('personalAccentHint') })
+              ] },
+              { id: 'background', labelKey: 'subBackground', rows: [
+                jsx(ToggleRow, {
+                  label: t('personalBgOn'),
+                  description: t('personalBgOnDesc'),
+                  checked: personal.bgOn,
+                  onChange: value => patch('personal', 'bgOn', value)
+                }),
+                jsx(Row, {
+                  title: t('personalBgKind'),
+                  description: t('personalBgKindDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'image', label: t('personalBgKindImage') },
+                      { id: 'video', label: t('personalBgKindVideo') }
+                    ],
+                    value: personal.bgKind,
+                    onChange: value => patch('personal', 'bgKind', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('personalBgPath'),
+                  description: t('personalBgPathDesc'),
+                  action: jsxs('div', {
+                    className: 'sf-row-control',
+                    children: [
+                      jsx(Input, {
+                        onChange: event => patch('personal', 'bgPath', String(event.target.value || '').trim()),
+                        placeholder: '/home/deniz/Pictures/bg.jpg',
+                        value: personal.bgPath || ''
+                      }),
+                      jsx(Button, {
+                        onClick: () => pickBackgroundFile(),
+                        size: 'sm',
+                        variant: 'ghost',
+                        children: t('personalBgPathPick')
+                      })
+                    ]
+                  })
+                }),
+                jsx('p', { className: 'sf-hint', children: t('personalBgPathHint') }),
+                jsx(Row, {
+                  title: t('personalBgFit'),
+                  description: t('personalBgFitDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'cover', label: t('personalBgFitCover') },
+                      { id: 'contain', label: t('personalBgFitContain') }
+                    ],
+                    value: personal.bgFit,
+                    onChange: value => patch('personal', 'bgFit', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('personalBgDim'),
+                  description: t('personalBgDimDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 85,
+                    step: 5,
+                    value: personal.bgDim,
+                    onChange: value => patch('personal', 'bgDim', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('personalBgBlur'),
+                  description: t('personalBgBlurDesc'),
+                  action: jsx(NumberInput, {
+                    min: 0,
+                    max: 24,
+                    step: 2,
+                    value: personal.bgBlur,
+                    onChange: value => patch('personal', 'bgBlur', value)
+                  })
+                }),
+                jsx(Row, {
+                  title: t('personalBgScope'),
+                  description: t('personalBgScopeDesc'),
+                  action: jsx(Segment, {
+                    options: [
+                      { id: 'chat', label: t('personalBgScopeChat') },
+                      { id: 'all', label: t('personalBgScopeAll') }
+                    ],
+                    value: personal.bgScope,
+                    onChange: value => patch('personal', 'bgScope', value)
+                  })
                 })
-              ]
-            })
+              ] }
+            ]
           }),
-          jsx('p', { className: 'sf-hint', children: t('personalAccentHint') }),
-/* #end */
+          /* #end */
           jsx(Row, {
             title: t('personalPaneSurface'),
             description: t('personalPaneSurfaceDesc'),
@@ -12521,94 +13033,7 @@ function SettingsPage() {
               value: personal.paneSurface === 'chat' || personal.paneSurface === 'none' ? personal.paneSurface : 'native',
               onChange: value => patch('personal', 'paneSurface', value)
             })
-          }),
-/* #full */
-          jsx(ToggleRow, {
-            label: t('personalBgOn'),
-            description: t('personalBgOnDesc'),
-            checked: personal.bgOn,
-            onChange: value => patch('personal', 'bgOn', value)
-          }),
-          jsx(Row, {
-            title: t('personalBgKind'),
-            description: t('personalBgKindDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'image', label: t('personalBgKindImage') },
-                { id: 'video', label: t('personalBgKindVideo') }
-              ],
-              value: personal.bgKind,
-              onChange: value => patch('personal', 'bgKind', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('personalBgPath'),
-            description: t('personalBgPathDesc'),
-            action: jsxs('div', {
-              className: 'sf-row-control',
-              children: [
-                jsx(Input, {
-                  onChange: event => patch('personal', 'bgPath', String(event.target.value || '').trim()),
-                  placeholder: '/home/deniz/Pictures/bg.jpg',
-                  value: personal.bgPath || ''
-                }),
-                jsx(Button, {
-                  onClick: () => pickBackgroundFile(),
-                  size: 'sm',
-                  variant: 'ghost',
-                  children: t('personalBgPathPick')
-                })
-              ]
-            })
-          }),
-          jsx('p', { className: 'sf-hint', children: t('personalBgPathHint') }),
-          jsx(Row, {
-            title: t('personalBgFit'),
-            description: t('personalBgFitDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'cover', label: t('personalBgFitCover') },
-                { id: 'contain', label: t('personalBgFitContain') }
-              ],
-              value: personal.bgFit,
-              onChange: value => patch('personal', 'bgFit', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('personalBgDim'),
-            description: t('personalBgDimDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 85,
-              step: 5,
-              value: personal.bgDim,
-              onChange: value => patch('personal', 'bgDim', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('personalBgBlur'),
-            description: t('personalBgBlurDesc'),
-            action: jsx(NumberInput, {
-              min: 0,
-              max: 24,
-              step: 2,
-              value: personal.bgBlur,
-              onChange: value => patch('personal', 'bgBlur', value)
-            })
-          }),
-          jsx(Row, {
-            title: t('personalBgScope'),
-            description: t('personalBgScopeDesc'),
-            action: jsx(Segment, {
-              options: [
-                { id: 'chat', label: t('personalBgScopeChat') },
-                { id: 'all', label: t('personalBgScopeAll') }
-              ],
-              value: personal.bgScope,
-              onChange: value => patch('personal', 'bgScope', value)
-            })
-          }),
-/* #end */
+          })
         ]
       }),
 
