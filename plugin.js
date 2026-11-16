@@ -117,7 +117,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.29.0'
+const VERSION = '1.29.3'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -8593,7 +8593,9 @@ function TabRow({ row, active, section, t, onOpen, onMore, groupsState, onAssign
 // Terminal öffnen (IPC), Umbenennen (session.title), Anpinnen/Farbe (SDK),
 // Zweig erstellen (session.branch_stored), In Projekt verschieben
 // (session.cwd.set), Archivieren (session.archive), Löschen
-// (session.delete — schließt eine laufende Runtime vorher) und ID kopieren.
+// (session.delete — App-Parität: interrupt → close → delete, mit Owner-
+// Profil-Scope und frischer Runtime-Auflösung, siehe deleteSessionRow)
+// und ID kopieren.
 // Lokale App-Zustände (gelesen/ungelesen, Export) haben keine Plugin-Door und
 // bleiben bewusst außen vor.
 
@@ -8750,9 +8752,42 @@ async function moveSessionRow(row, project) {
   }
 }
 
+/** Session-Flag über die REST-Bridge setzen (App-Parität: die App schreibt
+ * `archived` per fenced PATCH /api/sessions/{id} — Snapshot lesen, dann
+ * Body mit request_id/expected_revision/expected_generation). Seit der
+ * Session-Authority-Migration des Gateways sind Legacy-Session-WRITER über
+ * den WS gesperrt („unknown method: session.archive …") — die REST-Route
+ * bleibt die offizielle Tür und routet über das request-`profile` auch
+ * Zeilen anderer Profile auf deren Backend. Ohne Bridge (ältere Shell)
+ * bleibt der RPC. */
+async function setSessionArchivedRow(row, archived) {
+  const profile = String(row?.profile || '').trim()
+  const bridge = globalThis.window?.hermesDesktop
+
+  if (bridge && typeof bridge.api === 'function') {
+    const identity = mutationIdentity(await fetchMutationSnapshot(bridge, row.id, profile))
+
+    await bridge.api({
+      path: `/api/sessions/${encodeURIComponent(row.id)}${profile ? `?profile=${encodeURIComponent(profile)}` : ''}`,
+      method: 'PATCH',
+      // App-Parität (setSessionArchived): Archivieren hebt den Pin auf.
+      body: { archived, ...(archived ? { pinned: false } : {}), ...identity, ...(profile ? { profile } : {}) },
+      ...(profile ? { profile } : {}),
+      timeoutMs: 10_000
+    })
+    return
+  }
+
+  await host.request('session.archive', {
+    session_id: row.id,
+    archived,
+    ...(profile ? { profile } : {})
+  })
+}
+
 async function archiveSessionRow(row) {
   try {
-    await host.request('session.archive', { archived: true, session_id: row.id })
+    await setSessionArchivedRow(row, true)
     scheduleSessionsRefresh(800)
   } catch (error) {
     host.notifyError(error, CTX?.i18n?.t('archiveSession') || 'Archivieren')
@@ -8762,7 +8797,7 @@ async function archiveSessionRow(row) {
 /** Archiviertes wiederherstellen — zieht beide Listen (aktiv + Archiv) nach. */
 async function restoreSessionRow(row) {
   try {
-    await host.request('session.archive', { archived: false, session_id: row.id })
+    await setSessionArchivedRow(row, false)
     archivedSucceededAt = 0
     kickAppRefresh()
     scheduleSessionsRefresh(400)
@@ -8779,63 +8814,208 @@ function rpcErrorCode(error) {
   return Number.isFinite(code) ? code : null
 }
 
-async function deleteSessionRow(row) {
-  const storedId = String(row?.id || '').trim()
-  // Owner-Profil der Zeile mitgeben: Ohne `profile` schreibt der Gateway in
-  // die state.db des LAUNCH-Profils — Zeilen anderer Profile (Agency-Setup)
-  // quittieren dann mit „session not found“, obwohl sie existieren.
-  const profile = String(row?.profile || '').trim()
+/** „Session ist beschäftigt"-Verweigerung — REST antwortet 409
+ * (code session_active_turn), der Legacy-RPC 4023. Wichtig: 409
+ * client_upgrade_required (fence-loser Client) ist KEIN busy. */
+function isBusySessionError(error) {
+  if (rpcErrorCode(error) === 4023) {
+    return true
+  }
+  const message = String(error?.message || error || '')
+  return /session_active_turn|active turn lease|cannot delete an active session/i.test(message)
+}
+
+/** Ein Retry lohnt sich bei Busy (Turn-Lease) oder veraltetem Fence
+ * (Konflikt 409/412) — mit FRISCHEM Snapshot + neuer request_id. */
+function isRetryableSessionMutationError(error) {
+  const status = Number(error?.statusCode)
+  return status === 409 || status === 412 || isBusySessionError(error)
+}
+
+/** Kurze Pause vor dem Busy-Retry (Guard-Freigabe läuft dem interrupt nach). */
+function sleepDeleteRetry() {
+  return new Promise(resolve => {
+    const timer = typeof CTX?.setTimeout === 'function' ? CTX.setTimeout : window.setTimeout
+    timer(resolve, DELETE_ACTIVE_RETRY_MS)
+  })
+}
+
+/** i18n-Hinweis statt roher Gateway-Message, wenn die Session auch nach
+ * interrupt + Retry noch von einem Turn/Client festgehalten wird. */
+function busySessionError(cause) {
+  return new Error(
+    CTX?.i18n?.t('deleteActiveHint') || String(cause?.message || cause || 'session busy')
+  )
+}
+
+/** Einmalige Request-ID für die Revision-Fence (Retry-Idempotenz). */
+function randomRequestId() {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `sf-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
+  }
+}
+
+/** Frischer Mutation-Snapshot — die Revision-Fence, die der Gateway seit der
+ * Fence-Pflicht von fence-losen REST-Mutationen verlangt (409
+ * „client_upgrade_required: this app is out of sync … to edit sessions").
+ * null = älterer Backend ohne Snapshot-Route → Basis-Write ohne Fence
+ * (App-Parität, mutateSessionFenced MissingMutationSnapshotRoute-Zweig). */
+async function fetchMutationSnapshot(bridge, storedId, profile) {
+  const query = profile ? `?profile=${encodeURIComponent(profile)}` : ''
+
+  try {
+    return await bridge.api({
+      path: `/api/sessions/${encodeURIComponent(storedId)}/mutation-snapshot${query}`,
+      ...(profile ? { profile } : {}),
+      timeoutMs: 10_000
+    })
+  } catch (error) {
+    if (Number(error?.statusCode) === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+/** Fence-Identität aus einem Snapshot (App-Parität:
+ * apps/shared session-http-mutations — request_id + runtime_revision +
+ * runtime_generation). Null-Snapshot ⇒ leere Identität (Basis-Write). */
+function mutationIdentity(snapshot) {
+  if (!snapshot) {
+    return {}
+  }
+
+  const revision = Number(snapshot.runtime_revision)
+  const generation = Number(snapshot.runtime_generation)
+
+  return {
+    request_id: randomRequestId(),
+    ...(Number.isFinite(revision) ? { expected_revision: revision } : {}),
+    ...(Number.isFinite(generation) ? { expected_generation: generation } : {})
+  }
+}
+
+/** DELETE über die REST-Bridge — derselbe Weg, den die Hermes-Sidebar
+ * selbst benutzt (api/sessions.ts deleteSession): Erst
+ * GET /api/sessions/{id}/mutation-snapshot, dann
+ * DELETE ?request_id&expected_revision&expected_generation. 404 = Zeile
+ * schon weg → Ziel erreicht; Busy/Konflikt → ein Retry mit frischem
+ * Snapshot und NEUER request_id. */
+async function deleteSessionRowViaRest(bridge, storedId, profile) {
+  const attempt = async () => {
+    const identity = mutationIdentity(await fetchMutationSnapshot(bridge, storedId, profile))
+    const params = new URLSearchParams()
+
+    if (profile) {
+      params.set('profile', profile)
+    }
+    for (const [name, value] of Object.entries(identity)) {
+      params.set(name, String(value))
+    }
+
+    const query = params.toString()
+
+    return bridge.api({
+      path: `/api/sessions/${encodeURIComponent(storedId)}${query ? `?${query}` : ''}`,
+      method: 'DELETE',
+      ...(profile ? { profile } : {}),
+      timeoutMs: 10_000
+    })
+  }
+
+  try {
+    await attempt()
+    return
+  } catch (error) {
+    if (Number(error?.statusCode) === 404) {
+      return // Zeile existiert schon nicht mehr — stiller Erfolg
+    }
+    if (!isRetryableSessionMutationError(error)) {
+      throw error
+    }
+  }
+
+  await sleepDeleteRetry()
+
+  try {
+    await attempt()
+  } catch (retryError) {
+    if (Number(retryError?.statusCode) === 404) {
+      return
+    }
+    if (isBusySessionError(retryError)) {
+      throw busySessionError(retryError)
+    }
+    throw retryError
+  }
+}
+
+/** RPC-Pfad für Shells OHNE REST-Bridge (ältere Hermes-Builds, in denen
+ * session.delete/session.close noch über den WS bedient werden). */
+async function deleteSessionRowViaRpc(storedId, profile, runtimeId) {
   const scope = profile ? { profile } : {}
 
-  // Runtime FRISCH auflösen (App-Parität): Der $liveMap-Snapshot (30-s-Poll)
-  // kennt frisch gestartete oder fremd laufende Runtimes (Bot/Cron/Kanban/
-  // TUI) evtl. noch nicht — findLiveSessionIdByKey fragt session.active_list
-  // nach, bevor close/interrupt gar nicht erst geschickt würden.
-  const runtimeId = await findLiveSessionIdByKey(storedId)
-
   if (runtimeId) {
-    // App-Parität (#75587 / Gateway #123583): ERST interrupt, DANN close.
-    // close allein läuft nicht durch den Interrupt-Pfad und gibt eine aktive
-    // Turn-Lease (Write-Guard) nicht her — session.delete verweigert dann
-    // mit 4023 „cannot delete an active session“.
-    try {
-      await host.request('session.interrupt', { session_id: runtimeId, ...scope })
-    } catch {
-      /* Runtime evtl. schon weg — delete entscheidet */
-    }
     try {
       await host.request('session.close', { session_id: runtimeId, ...scope })
     } catch {
-      /* dito — close scheitert auch, wenn interrupt die Runtime schon beendet hat */
+      /* Runtime evtl. schon weg — delete entscheidet */
     }
   }
 
   try {
     await host.request('session.delete', { session_id: storedId, ...scope })
   } catch (error) {
-    // Die Guard-Freigabe kann dem close um Kurzes nachlaufen (Turn-Thread
-    // muss die Abbrechen-Bedingung sehen) — EIN mal kurz warten und erneut
-    // versuchen, bevor der Fehler dem User gemeldet wird.
-    if (rpcErrorCode(error) !== 4023) {
+    if (!isBusySessionError(error)) {
       throw error
     }
 
-    await new Promise(resolve => {
-      const timer = typeof CTX?.setTimeout === 'function' ? CTX.setTimeout : window.setTimeout
-      timer(resolve, DELETE_ACTIVE_RETRY_MS)
-    })
+    await sleepDeleteRetry()
 
     try {
       await host.request('session.delete', { session_id: storedId, ...scope })
     } catch (retryError) {
-      // Auch nach dem Retry noch 4023: Ein anderer Client/Turn hält die
-      // Session wirklich fest — rohe Gateway-Message durch i18n-Hinweis
-      // ersetzen (auflösbar, ohne den technischen Kontext zu erfinden).
-      if (rpcErrorCode(retryError) === 4023) {
-        throw new Error(CTX?.i18n?.t('deleteActiveHint') || String(retryError?.message || retryError))
+      if (isBusySessionError(retryError)) {
+        throw busySessionError(retryError)
       }
       throw retryError
     }
+  }
+}
+
+async function deleteSessionRow(row) {
+  const storedId = String(row?.id || '').trim()
+  const profile = String(row?.profile || '').trim()
+
+  // Laufenden Turn zuerst abbrechen: `session.interrupt` ist ein Authority-
+  // Verb und funktioniert auf neuen UND alten Backends (kein profile-Schlüssel
+  // — das Param-Set ist geschlossen; die Runtime-ID ist prozess-eindeutig).
+  // Ohne interrupt hält die Turn-Lease (Write-Guard, Gateway #123583) das
+  // DELETE mit „session_active_turn"/4023 auf.
+  const runtimeId = await findLiveSessionIdByKey(storedId)
+
+  if (runtimeId) {
+    try {
+      await host.request('session.interrupt', { session_id: runtimeId })
+    } catch {
+      /* Runtime evtl. schon weg — delete entscheidet */
+    }
+  }
+
+  // Löschen selbst per REST-Bridge (App-Parität): Seit der Session-Authority-
+  // Migration bedient der WS `session.delete` für Desktop-Sockets nicht mehr
+  // („unknown method: session.delete — not available on this Hermes backend",
+  // ws_legacy_fallback sperrt Legacy-Session-Writer). Die REST-Route ist die
+  // offizielle Tür und routet über das request-`profile` auf das richtige
+  // Backend — Ohne Bridge fällt der Call auf den Legacy-RPC zurück.
+  const bridge = globalThis.window?.hermesDesktop
+
+  if (bridge && typeof bridge.api === 'function') {
+    await deleteSessionRowViaRest(bridge, storedId, profile)
+  } else {
+    await deleteSessionRowViaRpc(storedId, profile, runtimeId)
   }
   scheduleSessionsRefresh(800)
 }

@@ -361,7 +361,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, deleteSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor, resetSettings, $settings }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, deleteSessionRow, archiveSessionRow, restoreSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor, resetSettings, $settings }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -3761,6 +3761,282 @@ try {
   mod.$projectsList.set([])
 } catch (error) {
   check('v1.27.4-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── 35) v1.29.1-RPC: Delete-Flow — interrupt → close → delete, Owner-Profil, 4023-Retry
+// App-Parität (Gateway #123583): delete verweigert Sessions mit aktiver
+// Turn-Lease; ohne interrupt/close bzw. ohne profile-Param kommt die rohe
+// Gateway-Meldung (4023/4007) als Toast. Hier wird die RPC-Folge direkt
+// gegen einen aufzeichnenden Stub verifiziert.
+try {
+  const prevRequest = hostStub.request
+  const frames = []
+  let deleteAttempts = 0
+
+  // Fall 1: Live-Session (nur über active_list auffindbar, leere $liveMap),
+  // erster delete verweigert mit 4023, Retry erzeugt.
+  hostStub.request = async (method, params = {}) => {
+    frames.push({ method, params })
+    if (method === 'session.active_list') {
+      return { sessions: [{ id: 'rt-del', session_key: 'st-del', status: 'working' }] }
+    }
+    if (method === 'session.delete') {
+      deleteAttempts += 1
+      if (deleteAttempts === 1) {
+        const err = new Error('cannot delete an active session')
+        err.code = 4023
+        throw err
+      }
+      return { deleted: params.session_id }
+    }
+    return {}
+  }
+
+  mod.$liveMap.set({})
+  await mod.deleteSessionRow({ id: 'st-del', profile: 'agency-lead' })
+
+  const seq = frames.map(f => f.method)
+  check(
+    'v1.29.1-RPC: Delete fragt frisch session.active_list nach (stale Map reicht nicht)',
+    seq.includes('session.active_list'),
+    `seq=${seq.join(',')}`
+  )
+  check(
+    'v1.29.1-RPC: Delete-Reihenfolge interrupt → close → delete',
+    seq.indexOf('session.interrupt') >= 0 &&
+      seq.indexOf('session.interrupt') < seq.indexOf('session.close') &&
+      seq.indexOf('session.close') < seq.indexOf('session.delete'),
+    `seq=${seq.join(',')}`
+  )
+  const intFrame = frames.find(f => f.method === 'session.interrupt')
+  check(
+    'v1.29.2: interrupt adressiert die Runtime-ID (ohne profile — geschlossenes Param-Set)',
+    intFrame?.params?.session_id === 'rt-del' && intFrame?.params?.profile === undefined,
+    JSON.stringify(intFrame?.params)
+  )
+  for (const m of ['session.close', 'session.delete']) {
+    const f = frames.find(x => x.method === m)
+    check(
+      `v1.29.2: RPC-Fallback ${m} trägt das Owner-Profil der Zeile`,
+      f?.params?.profile === 'agency-lead',
+      JSON.stringify(f?.params)
+    )
+  }
+  check(
+    'v1.29.1-RPC: 4023 löst genau EINEN Retry aus',
+    deleteAttempts === 2,
+    `attempts=${deleteAttempts}`
+  )
+
+  // Fall 2: 4023 bleibt auch nach dem Retry → i18n-Hinweis statt Rohtext.
+  frames.length = 0
+  deleteAttempts = 0
+  hostStub.request = async (method, params = {}) => {
+    frames.push({ method, params })
+    if (method === 'session.delete') {
+      deleteAttempts += 1
+      const err = new Error('cannot delete an active session')
+      err.code = 4023
+      throw err
+    }
+    return {}
+  }
+  let thrown = null
+  try {
+    await mod.deleteSessionRow({ id: 'st-stubborn' })
+  } catch (error) {
+    thrown = error
+  }
+  check(
+    'v1.29.1-RPC: doppelte 4023 wirft den i18n-Hinweis deleteActiveHint',
+    thrown?.message === 'deleteActiveHint',
+    `msg=${thrown?.message}`
+  )
+
+  // Den vom Erfolg geplanten Refresh (800 ms, echte Timer) INNERHALB der
+  // Sektion ableben lassen, damit er keine spätere Sektion trifft; danach
+  // Fixtures und Request-Stub zurückstellen.
+  await new Promise(resolve => setTimeout(resolve, 900))
+  hostStub.request = prevRequest
+  mod.$liveMap.set({})
+  mod.$sessions.set([])
+} catch (error) {
+  check('v1.29.1-RPC-Tests durchgelaufen', false, error && (error.stack || error.message))
+}
+
+// ── 36) v1.29.3: Delete/Archive über die REST-Bridge mit Revision-Fence
+// (Session-Authority-Migration: Legacy-session.delete/-archive sind über den
+// WS gesperrt; der Gateway verlangt für REST-Mutationen zusätzlich Snapshot
+// + request_id/expected_revision/expected_generation — ohne sie: 409
+// „client_upgrade_required“).
+try {
+  const prevRequest = hostStub.request
+  const prevBridge = globalThis.window && globalThis.window.hermesDesktop
+  const restCalls = []
+  const rpcMethods = []
+
+  let deleteAttempts = 0
+  const snapshotOf = id => ({ session_id: id, exists: true, runtime_revision: 7, runtime_generation: 3 })
+
+  globalThis.window.hermesDesktop = {
+    api: async req => {
+      restCalls.push(req)
+      const path = String(req?.path || '')
+
+      if (req?.method === 'DELETE') {
+        deleteAttempts += 1
+        if (deleteAttempts === 1) {
+          const err = new Error('409: {"detail":"session_active_turn: session has an active turn lease"}')
+          err.statusCode = 409
+          throw err
+        }
+        return { object: 'hermes.session.deleted', id: 'st-rest', deleted: true }
+      }
+      if (req?.method === 'PATCH') {
+        return { object: 'hermes.session', session: { id: 'st-rest', archived: true } }
+      }
+      if (path.includes('/mutation-snapshot')) {
+        return snapshotOf('st-rest')
+      }
+      return { sessions: [] } // Listen-Nachzug des Refresh-Debounces
+    }
+  }
+  hostStub.request = async (method, params = {}) => {
+    rpcMethods.push({ method, params })
+    if (method === 'session.active_list') {
+      return { sessions: [{ id: 'rt-rest', session_key: 'st-rest', status: 'working' }] }
+    }
+    return {}
+  }
+
+  mod.$liveMap.set({})
+  await mod.deleteSessionRow({ id: 'st-rest', profile: 'agency-design' })
+
+  const snapReq = restCalls.find(r => String(r?.path || '').includes('/mutation-snapshot'))
+  check(
+    'v1.29.3: Delete liest vorab den Mutation-Snapshot (Fence-Pflicht)',
+    Boolean(snapReq) && snapReq.profile === 'agency-design',
+    JSON.stringify(snapReq || null)
+  )
+
+  const delReq = restCalls.find(r => r.method === 'DELETE')
+  const delQuery = new URLSearchParams(String(delReq?.path || '').split('?')[1] || '')
+  check(
+    'v1.29.3: DELETE trägt request_id + expected_revision + expected_generation',
+    delReq?.method === 'DELETE' && delQuery.get('request_id') &&
+      delQuery.get('expected_revision') === '7' && delQuery.get('expected_generation') === '3',
+    JSON.stringify(delReq?.path || null)
+  )
+  check(
+    'v1.29.3: DELETE nennt das Owner-Profil (Query + routing-Feld)',
+    delQuery.get('profile') === 'agency-design' && delReq?.profile === 'agency-design',
+    JSON.stringify(delReq || null)
+  )
+  check(
+    'v1.29.3: interrupt bleibt RPC (Authority-Verb), adressiert Runtime ohne profile',
+    rpcMethods.some(m => m.method === 'session.interrupt' && m.params.session_id === 'rt-rest' && m.params.profile === undefined),
+    JSON.stringify(rpcMethods.filter(m => m.method === 'session.interrupt'))
+  )
+  check(
+    'v1.29.3: KEIN session.delete/session.close über den WS (Authority sperrt Legacy)',
+    !rpcMethods.some(m => m.method === 'session.delete' || m.method === 'session.close'),
+    JSON.stringify(rpcMethods.map(m => m.method))
+  )
+  check(
+    'v1.29.3: Busy-409 löst genau EINEN Retry aus',
+    deleteAttempts === 2,
+    `attempts=${deleteAttempts}`
+  )
+
+  const deleteReqs = restCalls.filter(r => r.method === 'DELETE')
+  const ids = deleteReqs.map(r => new URLSearchParams(String(r.path).split('?')[1] || '').get('request_id'))
+  const snapshots = restCalls.filter(r => String(r?.path || '').includes('/mutation-snapshot'))
+  check(
+    'v1.29.3: Retry nutzt frischen Snapshot + neue request_id',
+    snapshots.length === 2 && ids.length === 2 && ids[0] && ids[1] && ids[0] !== ids[1],
+    `snapshots=${snapshots.length} ids=${JSON.stringify(ids)}`
+  )
+
+  // Archivieren geht jetzt per fenced PATCH — mit demselben Profil-Routing.
+  restCalls.length = 0
+  await mod.archiveSessionRow({ id: 'st-rest', profile: 'agency-design' })
+  const patchReq = restCalls.find(r => r.method === 'PATCH')
+  check(
+    'v1.29.3: Archivieren per PATCH mit Fence + Profil-Routing',
+    patchReq?.body?.archived === true && patchReq?.body?.pinned === false &&
+      Boolean(patchReq?.body?.request_id) && patchReq?.body?.expected_revision === 7 &&
+      patchReq?.profile === 'agency-design',
+    JSON.stringify(patchReq || null)
+  )
+
+  // Bleibende Busy-409 → i18n-Hinweis.
+  deleteAttempts = 0
+  globalThis.window.hermesDesktop = {
+    api: async req => {
+      const path = String(req?.path || '')
+      if (req?.method === 'DELETE') {
+        deleteAttempts += 1
+        const err = new Error('409: {"detail":"session_active_turn: session has an active turn lease"}')
+        err.statusCode = 409
+        throw err
+      }
+      if (path.includes('/mutation-snapshot')) {
+        return snapshotOf('st-stuck')
+      }
+      return { sessions: [] }
+    }
+  }
+  let thrownRest = null
+  try {
+    await mod.deleteSessionRow({ id: 'st-stuck' })
+  } catch (error) {
+    thrownRest = error
+  }
+  check(
+    'v1.29.3: bleibende Busy-409 wirft den i18n-Hinweis deleteActiveHint',
+    thrownRest?.message === 'deleteActiveHint',
+    `msg=${thrownRest?.message}`
+  )
+
+  // client_upgrade_required ist KEIN Busy → rohe Meldung, kein Hinweis.
+  globalThis.window.hermesDesktop = {
+    api: async req => {
+      const path = String(req?.path || '')
+      if (req?.method === 'DELETE') {
+        const err = new Error('409: {"detail":"client_upgrade_required: this app is out of sync with the Hermes backend"}')
+        err.statusCode = 409
+        throw err
+      }
+      if (path.includes('/mutation-snapshot')) {
+        return snapshotOf('st-outofsync')
+      }
+      return { sessions: [] }
+    }
+  }
+  let thrownUpgrade = null
+  try {
+    await mod.deleteSessionRow({ id: 'st-outofsync' })
+  } catch (error) {
+    thrownUpgrade = error
+  }
+  check(
+    'v1.29.3: client_upgrade_required bleibt als Rohfehler (kein Busy-Hinweis)',
+    Boolean(thrownUpgrade) && thrownUpgrade.message !== 'deleteActiveHint' &&
+      /client_upgrade_required/.test(String(thrownUpgrade?.message || '')),
+    `msg=${thrownUpgrade?.message}`
+  )
+
+  await new Promise(resolve => setTimeout(resolve, 900)) // Refresh-Debounce ableben lassen
+  if (prevBridge === undefined) {
+    delete globalThis.window.hermesDesktop
+  } else {
+    globalThis.window.hermesDesktop = prevBridge
+  }
+  hostStub.request = prevRequest
+  mod.$liveMap.set({})
+  mod.$sessions.set([])
+} catch (error) {
+  check('v1.29.3-Tests durchgelaufen', false, error && (error.stack || error.message))
 }
 
 console.log(failed ? '\n=== FEHLGESCHLAGEN ===' : '\n=== RENDER-SMOKETEST BESTANDEN ===')

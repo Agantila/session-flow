@@ -1,9 +1,44 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.29.0 (2026-11-16). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.29.3 (2026-11-16). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Revision-Fence für Delete/Archive** (v1.29.3, Plan:
+  `docs/plans/2026-11-16-session-delete-fix.md`): Der Gateway verlangt für
+  REST-Session-Mutationen eine Fence-Identität
+  (`request_id`/`expected_revision`/`expected_generation`) — ohne sie: 409
+  „client_upgrade_required … update the app to edit sessions“. Das Plugin
+  liest jetzt vor jeder Mutation `GET /api/sessions/{id}/mutation-snapshot`
+  und schickt die Identität mit (DELETE-Query, PATCH-Body); Konflikt/Busy →
+  ein Retry mit frischem Snapshot und neuer request_id. „client_upgrade_required“
+  wird bewusst NICHT als „Session beschäftigt“ fehlklassifiziert.
+
+- **Delete/Archive auf REST umgestellt** (v1.29.2, Plan:
+  `docs/plans/2026-11-16-session-delete-fix.md`): Der Gateway des aktuellen
+  Hermes-Desktop bedient Legacy-Session-Writer (`session.delete`, `session.close`,
+  `session.archive`) über Desktop-Sockets nicht mehr — die Session-Authority
+  übernimmt („unknown method … not available on this Hermes backend"). Das
+  Plugin löscht jetzt wie die App selbst: `session.interrupt` (Authority-Verb)
+  + REST `DELETE /api/sessions/{id}` über die Bridge mit `profile`-Routing;
+  Archivieren per REST `PATCH {archived}`. 409-Retry + i18n-Hinweis bei
+  bleibend aktiver Turn-Lease. RPC-Pfad bleibt als Fallback für Brücken-lose
+  Shells (v1.29.1-Logik). Achtung Rollback-Sicht: v1.29.1 alone fixte nur
+  Old-Backends — der gemeldete Fehler war die Authority-Sperre.
+
+- **Session-Löschen repariert** (v1.29.1, Plan:
+  `docs/plans/2026-11-16-session-delete-fix.md`): Delete läuft jetzt in der
+  App-Sequenz `session.interrupt` → `session.close` → `session.delete` mit
+  frischer Runtime-Auflösung (`findLiveSessionIdByKey` statt nur dem
+  30-s-Live-Poll) und Owner-Profil-Scope (`row.profile`) auf allen drei
+  RPCs. Hintergrund: Der Gateway verweigert `session.delete` seit #123583
+  auch bei aktiver Turn-Lease (Write-Guard) mit 4023 — ohne interrupt
+  stand der Fehler-Toast; ohne `profile` traf der Write die DB des
+  Launch-Profils (4007 für Agency-Zeilen). Ein 4023-Retry (600 ms) und der
+  i18n-Hinweis `deleteActiveHint` bei bleibender Verweigerung ergänzen das.
+  Bekannte Folge-Lücke (bewusst nicht mitgefixt): `session.archive`
+  (Archivieren/Wiederherstellen) trägt ebenfalls noch kein `profile`.
 
 - **Settings-Subtabs** (v1.29.0, Plan:
   `docs/plans/2026-11-16-settings-subtabs.md`): die vier langen Sektionen

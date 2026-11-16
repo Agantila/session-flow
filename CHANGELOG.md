@@ -3,6 +3,66 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.29.3] — 2026-11-16
+
+### Fixed
+- **Löschen scheitert an „client_upgrade_required“** — der Gateway verlangt
+  für REST-Mutationen inzwischen eine **Revision-Fence**: ohne
+  `request_id`/`expected_revision`/`expected_generation` lehnt er die
+  Mutation mit 409 „this app is out of sync (different versions) with the
+  Hermes backend; update the app to edit sessions“ ab (das war der Toast in
+  v1.29.2). Das Plugin liest jetzt wie die Hermes-Sidebar zuerst
+  `GET /api/sessions/{id}/mutation-snapshot` (`runtime_revision` /
+  `runtime_generation`) und hängt die Fence-Identität an den DELETE
+  (Query) bzw. an den PATCH-Body (Archivieren). Konflikte/Busy (409/412)
+  werden mit **frischem** Snapshot und **neuer** `request_id` genau einmal
+  wiederholt. Wichtig: „client_upgrade_required“ ist kein „Session
+  beschäftigt“ — dieser Fehler bleibt als Rohtext sichtbar, statt als
+  irreführender Busy-Hinweis aufzutauchen.
+
+## [1.29.2] — 2026-11-16
+
+### Fixed
+- **„Unknown method session.delete“** — die eigentliche Ursache des
+  Lösch-Fehlers: Der Gateway des aktuellen Hermes-Desktop läuft mit
+  **Session-Authority** über den Desktop-Socket. Seitdem bedient der WS
+  Legacy-Session-Writer für Desktop-Verbindungen nicht mehr
+  (`ws_legacy_fallback.py` sperrt `session.delete`/`session.close`/
+  `session.archive` gezielt; Antwort: „unknown method: … not available on
+  this Hermes backend"). Die App selbst löscht deshalb per
+  REST `DELETE /api/sessions/{id}`. Das Plugin macht das jetzt genauso:
+  Laufenden Turn per `session.interrupt` abbrechen (Authority-Verb,
+  funktioniert), dann per REST-Bridge löschen — mit `profile`-Routing-Feld
+  für Zeilen anderer Profile (Agency-Setup). 409 „session_active_turn"
+  wird einmal nach 600 ms wiederholt, bleibende Verweigerung zeigt den
+  i18n-Hinweis `deleteActiveHint`. **Archivieren/Wiederherstellen**
+  (dasselbe Authority-Problem, `session.archive` wäre ebenfalls -32601)
+  läuft parallel auf REST `PATCH /api/sessions/{id} {archived}` um. Ohne
+  Bridge (ältere Shells) bleibt der v1.29.1-RPC-Pfad als Fallback.
+
+## [1.29.1] — 2026-11-16
+
+### Fixed
+- **Session-Löschen schlägt fehl („cannot delete an active session“ /
+  „session not found“)** — `deleteSessionRow` läuft jetzt in der
+  App-Sequenz: Runtime frisch über `findLiveSessionIdByKey` auflösen
+  (30-s-`$liveMap`-Poll kennt frische/fremde Runtimes noch nicht), dann
+  `session.interrupt` → `session.close` → `session.delete`. Der Gateway
+  verweigert deletes seit #123583 zweistufig (Live-Runtime UND aktive
+  Turn-Lease/Write-Guard) — ohne interrupt blieb die Lease stehen und der
+  Löschversuch endete im 4023-Fehler-Toast. Zusätzlich trägt jeder der
+  drei RPCs jetzt das Owner-Profil der Zeile (`row.profile`): ohne
+  `profile` schreibt der Gateway in die state.db des LAUNCH-Profils und
+  Zeilen anderer Profile (Agency-Setup) quittieren mit 4007 „session not
+  found“, obwohl sie existieren. Ein 4023 nach close wird einmalig nach
+  600 ms wiederholt (Guard-Freigabe läuft dem close kurz nach); bleibt er,
+  zeigt der Toast den i18n-Hinweis `deleteActiveHint` statt der rohen
+  Gateway-Message (Plan: `docs/plans/2026-11-16-session-delete-fix.md`).
+  **Hinweis:** Der Live-Fehler kam vom Gateway-Socket (Authority sperrt
+  Legacy-Writer) und von der Fence-Pflicht der REST-Route — beides ist in
+  v1.29.2/v1.29.3 behoben; dieser Eintrag allein genügt auf aktuellen
+  Backends NICHT.
+
 ## [1.29.0] — 2026-11-16
 
 ### Changed
