@@ -2,11 +2,30 @@
 
 This PR adds a single file, `plugin-catalog/session-flow.yaml`, listing
 [`agantila/session-flow`](https://github.com/agantila/session-flow) at the
-pinned commit `359f9afecb5872fe0864eec79867a4dfa4d88d33` (**v1.29.1**).
+pinned commit `26fa4c63db78d6b633fbfcc7e1f76470d4a46e0e` (**v1.30.0**).
 
 **Resubmission of #134760** (review by @teknium1, two rounds). Round 1
 marked three of four decline reasons fixed; round 2's four remaining points
-are all addressed in v1.29.1 — see "Review response (round 2)" below.
+are all addressed since v1.29.1 — see "Review response (round 2)" below.
+
+**Re-pin on v1.30.0** (2026-11-16) — the pinned build is unchanged in
+shape (SDK-only catalog build at `desktop/plugin.js`, same layout, same
+rule-8 surface); the release adds a user-visible feature and merges the
+feature line into the catalog layout:
+
+- **Status-Loader (Donut-Ring) statt Core-Status-Punkt** — die
+  Status-Darstellung je Session-Zeile hat jetzt einen eigenen Loader: ein
+  äußerer Kreis, der sich wie ein Loader dreht (heller Kopf mit
+  auslaufendem Schweif), mit dezentem Glow-Impuls beim Zustandswechsel;
+  alle Zustände sind visuell und farblich abgebildet. Der Core-Primitive
+  `SessionStatusDot` wird nicht mehr gerendert.
+- **Settings-Subtabs** — lange Einstellungs-Sektionen gruppieren ihre Rows
+  per Subtab (Session-Tabs: Ansicht · Design · Auswahl · Effekte). Der
+  Catalog-Build kennt nur die Subtabs der Session-Tabs-Sektion; die
+  übrigen Sektionen bleiben Full-only (unverändert).
+- **Session-Löschen/Archivieren über REST mit Revision-Fence** — Full-only
+  (Desktop-Bridge). Der Catalog-Build nutzt unverändert den Legacy-RPC
+  und dokumentiert dessen Sperre auf Authority-Backends.
 Contact for this submission: **info@agantila.com** (also in the entry,
 plugin.yaml and marketplace.json).
 
@@ -19,7 +38,7 @@ Submission checklist (mirrored from the repo, kept here since the entry
 YAML itself is comment-free):
 
 1. `sha` pins the full 40-hex commit of the reviewed fix stand
-   (v1.29.1); `image`/`screenshots` URLs are pinned to the SAME sha.
+   (v1.30.0); `image`/`screenshots` URLs are pinned to the SAME sha.
 2. `image` is 2:1 (1200×600 banner above).
 3. Screenshots show only catalog-build features (the composer-glass hero
    was dropped in v1.29.1 — it depicts a full-build-only decoration).
@@ -36,7 +55,8 @@ plugin, all live-configurable from a built-in settings page:
    into a stack (spine/fanned/pill), optional auto-grouping by date/source/
    project folder (fed by `projects.tree`). Drop a tab on a project header to
    move it. Live status icons (thinking / writing / tool / waiting / done /
-   error) from gateway RPCs and events. Search + quick filter bar. App
+   error) from gateway RPCs and events, plus a rotating status loader per
+   row (icon, loader, or both — configurable). Search + quick filter bar. App
    quick-start row above the toolbar (SDK `host.navigate` routes).
 2. **Ctrl+Scroll = session cycling** — hold a modifier and wheel through your
    active sessions; a HUD shows position and title. The gesture listener only
@@ -196,5 +216,5 @@ Rule 5: owner of `agantila/session-flow`. Rule 2: pinned to a full 40-hex
 commit. Rule 3: no self-updater. Rule 4: every SHA bump is a new PR.
 Rule 8: catalog build is SDK-only, enforced by the repo's own surface
 tripwire. Rule 13: disclosure above matches the code at the pin.
-Rule 14: `requires_hermes: ">=0.21.5"` is a SemVer floor; `version: "1.29.1"`
+Rule 14: `requires_hermes: ">=0.21.5"` is a SemVer floor; `version: "1.30.0"`
 matches the code. Contact: **info@agantila.com**.

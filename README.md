@@ -234,7 +234,8 @@ presets (“Sidebar-Look”, “Minimal”, “Hermes-Standard”).
   tint/outline/shadow incl. hover strength, live glow with the app’s
   **glowing ring**, hover lift — all colors via **native color picker**,
   swatches or hex, with alpha #RRGGBBAA), status style
-  (icon/dot/both), time, preview, message
+  (icon/loader/both — the loader is a rotating donut ring that shows the
+  live state), time, preview, message
   count, source badge, open-as (replace/stack/tab), max sessions, hide cron,
   live poll, refresh.
 - **Tab groups**: on/off, auto-grouping (off/date/source), stack style,

@@ -243,7 +243,8 @@ die aktuelle. Die UI-Tabs-Sektion bietet zusätzlich Ein-Klick-Presets
   Auswahl-Tönung/-Kontur/-Schatten inkl. Hover-Stufe, Live-Glow mit dem
   **glühenden Ring** der App, Hover-Anhebung — alle Farben per **Farb-Picker**,
   Swatches oder Hex, mit Alpha #RRGGBBAA),
-  Status-Darstellung (Icon/Punkt/beides),
+  Status-Darstellung (Icon/Loader/beides — der Loader ist ein drehender
+  Donut-Ring, der den Live-Zustand zeigt),
   Zeit, Vorschau, Nachrichtenanzahl, Quelle, Öffnen-als (Ersetzen/Stapeln/Tab),
   max. Sessions, Cron ausblenden, Live-Poll, Refresh.
 - **Tab-Gruppen**: an/aus, Auto-Gruppierung (aus/Datum/Quelle), Stapel-Stil,

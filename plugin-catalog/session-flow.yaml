@@ -1,11 +1,12 @@
 name: session-flow
 repo: https://github.com/agantila/session-flow
-sha: 359f9afecb5872fe0864eec79867a4dfa4d88d33
+sha: 26fa4c63db78d6b633fbfcc7e1f76470d4a46e0e
 description: >-
   Ctrl+Scroll session cycling, Firefox-style session groups with project
-  grouping, a session pane with list/grid views, sidebar-style content tabs
-  and personalization — five features in a single plain-ESM plugin, all
-  live-configurable from a built-in settings page. Catalog build
+  grouping, a session pane with list/grid views, a rotating status loader
+  per session row, sidebar-style content tabs and personalization — five
+  features in a single plain-ESM plugin, all live-configurable from a
+  built-in settings page. Catalog build
   (desktop/plugin.js) is SDK-only (panes, settings page, sidebar nav,
   palette, keybinds via ctx.register). Disclosure — reads the local Hermes
   gateway through public RPCs (projects.tree, projects.list, session.list,
@@ -30,14 +31,14 @@ tier: community
 category: desktop
 requires_hermes: ">=0.21.5"
 docs_url: https://github.com/agantila/session-flow#readme
-version: "1.29.1"
-image: https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/sf-catalog-banner-2x1.png
+version: "1.30.0"
+image: https://raw.githubusercontent.com/agantila/session-flow/26fa4c63db78d6b633fbfcc7e1f76470d4a46e0e/docs/marketing/sf-catalog-banner-2x1.png
 screenshots:
-  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg
-  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a7-settings-16x9.png
-  - https://raw.githubusercontent.com/agantila/session-flow/359f9afecb5872fe0864eec79867a4dfa4d88d33/docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/26fa4c63db78d6b633fbfcc7e1f76470d4a46e0e/docs/marketing/heroes/sf-hero-a9-sidebar-kanban-files-16x9.jpg
+  - https://raw.githubusercontent.com/agantila/session-flow/26fa4c63db78d6b633fbfcc7e1f76470d4a46e0e/docs/marketing/heroes/sf-hero-a5-ctrlscroll-hud-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/26fa4c63db78d6b633fbfcc7e1f76470d4a46e0e/docs/marketing/heroes/sf-hero-a6-contenttabs-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/26fa4c63db78d6b633fbfcc7e1f76470d4a46e0e/docs/marketing/heroes/sf-hero-a7-settings-16x9.png
+  - https://raw.githubusercontent.com/agantila/session-flow/26fa4c63db78d6b633fbfcc7e1f76470d4a46e0e/docs/marketing/heroes/sf-hero-a8-workspace-personal-16x9.png
 readme: true
 platforms: []
 capabilities:
