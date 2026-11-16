@@ -99,7 +99,6 @@ const {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   SegmentedControl,
-  SessionStatusDot,
   ColorSwatches,
   PROFILE_SWATCHES,
   LocalizedTabTitle,
@@ -117,7 +116,7 @@ const {
 } = SDK
 
 const ID = 'session-flow'
-const VERSION = '1.29.3'
+const VERSION = '1.30.0'
 const SETTINGS_KEY = 'settings.v1'
 const GROUPS_KEY = 'groups.v1'
 
@@ -464,6 +463,24 @@ function loadSettings() {
         next.lightTheme = ltNext
       }
       $settings.set({ ...current, tabs: next })
+      scheduleSettingsSave()
+    }
+  } catch {
+    /* egal */
+  }
+
+  // v1.30.0: Der Core-Status-Punkt wurde durch den eigenen Status-Loader
+  // (Donut-Ring) ersetzt. Gespeicherte Altwerte `dot`/`glyph+dot` werden
+  // einmalig auf `loader`/`glyph+loader` umgestellt — die gewaehlte
+  // Darstellungsart bleibt erhalten, nur der Punkt wird zum Loader.
+  try {
+    const current = $settings.get()
+    const style = current?.tabs?.statusStyle
+    if (style === 'dot' || style === 'glyph+dot') {
+      $settings.set({
+        ...current,
+        tabs: { ...current.tabs, statusStyle: normalizeStatusStyle(style) }
+      })
       scheduleSettingsSave()
     }
   } catch {
@@ -4955,10 +4972,10 @@ const EN = {
   tabsDensityCompact: 'Compact',
   tabsDensityCozy: 'Cozy',
   tabsStatusStyle: 'Status display',
-  tabsStatusStyleDesc: 'Activity marker per tab: icon, core status dot, or both.',
+  tabsStatusStyleDesc: 'Activity marker per tab: icon, status loader, or both.',
   tabsStatusGlyph: 'Icon',
-  tabsStatusDot: 'Dot',
-  tabsStatusBoth: 'Icon + dot',
+  tabsStatusLoader: 'Loader',
+  tabsStatusBoth: 'Icon + loader',
   tabsThemeSplit: 'Separate colours for the light theme',
   tabsThemeSplitDesc: 'On: the list & grid colours below get their own set for the light theme and switch automatically with the app theme. Off: one colour set applies to both themes.',
   tabsThemeAutoDerive: 'Derive the matching colour automatically',
@@ -5598,10 +5615,10 @@ const DE = {
   tabsDensityCompact: 'Kompakt',
   tabsDensityCozy: 'Bequem',
   tabsStatusStyle: 'Status-Darstellung',
-  tabsStatusStyleDesc: 'Aktivitäts-Marker je Tab: Icon, Core-Status-Punkt oder beides.',
+  tabsStatusStyleDesc: 'Aktivitäts-Marker je Tab: Icon, Status-Loader oder beides.',
   tabsStatusGlyph: 'Icon',
-  tabsStatusDot: 'Punkt',
-  tabsStatusBoth: 'Icon + Punkt',
+  tabsStatusLoader: 'Loader',
+  tabsStatusBoth: 'Icon + Loader',
   tabsThemeSplit: 'Eigene Farben fürs Light-Theme',
   tabsThemeSplitDesc: 'An: die Liste-&-Grid-Farben unten haben fürs Light-Theme einen eigenen Satz und schalten mit dem App-Theme automatisch um. Aus: ein Satz gilt für beide Themes.',
   tabsThemeAutoDerive: 'Gegenfarbe automatisch ableiten',
@@ -6319,6 +6336,34 @@ html[data-renderer-animations-paused] .sf-tab[data-just-moved=true]{animation-pl
 .sf-tab-lead[data-kind=done]{color:var(--ui-success,var(--ui-accent))}
 .sf-tab-lead[data-kind=unread]{color:var(--ui-success,var(--ui-accent))}
 .sf-tab-lead[data-kind=error]{color:var(--destructive,#ef4444)}
+/* Status-Loader (v1.30.0) — ersetzt den Core-Status-Punkt. Ein aeusserer Ring
+   (Donut), der sich wie ein Loader dreht: der helle Kopf laeuft mit auslaufendem
+   Schweif wie ein Ladebalken im Kreis ueber den Ring und spiegelt damit
+   Interaktion und Zustand. Farb-Vokabel identisch zum Aktivitaets-Icon oben;
+   der Glow-Impuls laeuft einmalig, wenn der Zustand wechselt. */
+.sf-loader{--sf-loader-color:var(--ui-text-tertiary);--sf-loader-arc:0;--sf-loader-dur:1.4s;position:relative;display:inline-block;width:11px;height:11px;border-radius:50%;flex-shrink:0;filter:drop-shadow(0 0 2px color-mix(in srgb,var(--sf-loader-color) 42%,transparent))}
+.sf-loader::before{content:'';position:absolute;inset:0;border-radius:50%;background:color-mix(in srgb,var(--sf-loader-color) 22%,transparent);-webkit-mask:radial-gradient(closest-side,transparent 0 58%,#000 60%);mask:radial-gradient(closest-side,transparent 0 58%,#000 60%)}
+.sf-loader::after{content:'';position:absolute;inset:0;border-radius:50%;opacity:var(--sf-loader-arc);background:conic-gradient(from 0deg,var(--sf-loader-color) 0deg,color-mix(in srgb,var(--sf-loader-color) 55%,transparent) 58deg,transparent 128deg,transparent 360deg);-webkit-mask:radial-gradient(closest-side,transparent 0 58%,#000 60%);mask:radial-gradient(closest-side,transparent 0 58%,#000 60%);animation:sf-loader-spin var(--sf-loader-dur) linear infinite}
+.sf-loader[data-kind=thinking],.sf-loader[data-kind=streaming],.sf-loader[data-kind=tool],.sf-loader[data-kind=working]{--sf-loader-color:var(--ui-accent);--sf-loader-arc:1}
+.sf-loader[data-kind=waiting]{--sf-loader-color:#f59e0b;--sf-loader-arc:1;--sf-loader-dur:2.8s}
+.sf-loader[data-kind=done],.sf-loader[data-kind=unread]{--sf-loader-color:var(--ui-success,var(--ui-accent))}
+.sf-loader[data-kind=error]{--sf-loader-color:var(--destructive,#ef4444)}
+.sf-loader[data-kind=done]::after,.sf-loader[data-kind=unread]::after,.sf-loader[data-kind=error]::after{background:var(--sf-loader-color);opacity:1;animation:none}
+.sf-loader[data-kind=done],.sf-loader[data-kind=unread],.sf-loader[data-kind=error]{animation:sf-loader-glow 1.15s cubic-bezier(.22,.8,.3,1) 1}
+.sf-loader[data-kind=idle]{filter:none}
+.sf-loader[data-kind=idle]::after{animation:none}
+/* Modus „Icon + Loader": der Loader legt sich als aeusserer Ring UM das Icon
+   (konzentrisch) — beide ergeben zusammen EIN Icon statt zweier Elemente
+   nebeneinander. Der Ring wird dafuer groesser (18 px) und sein Loch
+   entsprechend weiter (72 % statt 58 %), damit das 13-px-Icon frei im Ring
+   sitzt; die Ringstaerke bleibt mit ~2,5 px auf der des Solo-Loaders. */
+.sf-tab-lead[data-mode="glyph+loader"]{position:relative;min-width:18px}
+.sf-tab-lead[data-mode="glyph+loader"] .sf-loader{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px}
+.sf-tab-lead[data-mode="glyph+loader"] .sf-loader::before,.sf-tab-lead[data-mode="glyph+loader"] .sf-loader::after{-webkit-mask:radial-gradient(closest-side,transparent 0 72%,#000 74%);mask:radial-gradient(closest-side,transparent 0 72%,#000 74%)}
+@keyframes sf-loader-spin{to{transform:rotate(360deg)}}
+@keyframes sf-loader-glow{0%{filter:drop-shadow(0 0 1px color-mix(in srgb,var(--sf-loader-color) 30%,transparent))}38%{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--sf-loader-color) 72%,transparent))}100%{filter:drop-shadow(0 0 2px color-mix(in srgb,var(--sf-loader-color) 42%,transparent))}}
+@media (prefers-reduced-motion:reduce){.sf-loader,.sf-loader::after{animation:none}}
+html[data-renderer-animations-paused] .sf-loader,html[data-renderer-animations-paused] .sf-loader::after{animation-play-state:paused}
 .sf-tab-main{min-width:0;flex:1;display:flex;flex-direction:column;justify-content:center;gap:1px}
 .sf-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--sf-row-label-size,10px);line-height:14px;font-weight:500;color:inherit;margin:0}
 .sf-tab[data-active=true] .sf-tab-title{font-weight:600}
@@ -7623,7 +7668,7 @@ function createWheelController(ctx) {
 // UI — kleine Bausteine
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Eigener Status-Glyph (Aktivitäts-Icon) mit Core-Fallback via SessionStatusDot. */
+/** Eigener Status-Glyph (Aktivitäts-Icon). */
 /**
  * Codicon-Aufruf mit `~spin`-Marker. Die App-Komponente kennt den Marker NICHT —
  * sie erwartet den `spinning`-Prop; ein Name wie `codicon-sync~spin` ist eine
@@ -7643,40 +7688,70 @@ function SfIcon({ name, size, className, ...rest }) {
   })
 }
 
+/**
+ * Status-Loader (v1.30.0) — Nachfolger des Core-Status-Punkts.
+ *
+ * Ein äußerer Ring (Donut), der sich wie ein Loader dreht: der helle Kopf mit
+ * auslaufendem Schweif läuft wie ein Ladebalken im Kreis über den Ring und
+ * spiegelt damit Interaktion und Zustand. Farbe, Dreh-Verhalten und Glow
+ * stecken komplett im CSS (`data-kind`) — ein Zustandswechsel ändert damit nur
+ * ein Attribut.
+ *
+ * Der `key` hängt am Zustand: React baut das Element bei jedem Wechsel neu
+ * auf, sodass der dezente Glow-Impuls (CSS-Animation) neu startet.
+ */
+function StatusLoader({ kind }) {
+  return jsx(
+    'span',
+    {
+      className: 'sf-loader',
+      'data-kind': kind,
+      'aria-hidden': 'true'
+    },
+    `loader-${kind}`
+  )
+}
+
+/**
+ * v1.30.0: Alte Punkt-Werte auf den Loader umstellen. Gespeicherte Settings
+ * aus v1.29.x tragen `dot`/`glyph+dot` — die One-Shot-Migration schreibt sie
+ * um, diese Funktion fängt Altwerte zusätzlich ab (z. B. beim Export).
+ */
+function normalizeStatusStyle(value) {
+  if (value === 'loader' || value === 'glyph+loader') {
+    return value
+  }
+
+  if (value === 'dot') {
+    return 'loader'
+  }
+
+  if (value === 'glyph+dot') {
+    return 'glyph+loader'
+  }
+
+  return 'glyph'
+}
+
 function StatusLead({ row, live, activity, style, t }) {
   const detail = activityFor(row, live, activity)
   const glyph = ACTIVITY_GLYPHS[detail.kind] || ACTIVITY_GLYPHS.idle
   const label = activityLabel(t, detail)
-  const showGlyph = style === 'glyph' || style === 'glyph+dot'
-  const showDot = style === 'dot' || style === 'glyph+dot'
+  const mode = normalizeStatusStyle(style)
+  const showGlyph = mode === 'glyph' || mode === 'glyph+loader'
+  const showLoader = mode === 'loader' || mode === 'glyph+loader'
 
   return jsxs('span', {
     className: 'sf-tab-lead',
     'data-kind': detail.kind,
+    'data-mode': mode,
     title: label,
     role: 'status',
     'aria-label': label,
     children: [
-      showGlyph ? jsx(SfIcon, { name: glyph.icon, size: '0.8125rem' }) : showDot ? renderDot(row) : null,
-      showDot && showGlyph ? renderDot(row) : null
+      showGlyph ? jsx(SfIcon, { key: 'glyph', name: glyph.icon, size: '0.8125rem' }) : null,
+      showLoader ? jsx(StatusLoader, { key: 'loader', kind: detail.kind }) : null
     ]
-  })
-}
-
-function renderDot(row) {
-  if (SessionStatusDot) {
-    return jsx(SessionStatusDot, { storedSessionId: row.id, session: null })
-  }
-
-  return jsx('span', {
-    'aria-hidden': 'true',
-    style: {
-      width: '5px',
-      height: '5px',
-      borderRadius: '50%',
-      background: 'var(--ui-text-quaternary)',
-      display: 'inline-block'
-    }
   })
 }
 
@@ -11772,11 +11847,11 @@ function SettingsPage() {
                   action: jsx(Segment, {
                     options: [
                       { id: 'glyph', label: t('tabsStatusGlyph') },
-                      { id: 'dot', label: t('tabsStatusDot') },
-                      { id: 'glyph+dot', label: t('tabsStatusBoth') }
+                      { id: 'loader', label: t('tabsStatusLoader') },
+                      { id: 'glyph+loader', label: t('tabsStatusBoth') }
                     ],
-                    value: tabs.statusStyle,
-                    onChange: value => patch('tabs', 'statusStyle', value)
+                    value: normalizeStatusStyle(tabs.statusStyle),
+                    onChange: value => patch('tabs', 'statusStyle', normalizeStatusStyle(value))
                   })
                 }),
                 jsx(ToggleRow, {

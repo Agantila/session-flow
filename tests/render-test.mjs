@@ -361,7 +361,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, deleteSessionRow, archiveSessionRow, restoreSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor, resetSettings, $settings }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, StatusLoader, normalizeStatusStyle, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, deleteSessionRow, archiveSessionRow, restoreSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor, resetSettings, $settings }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -798,6 +798,96 @@ check(
 )
 const waitingGlyph = glyphOf(leadEl('waiting', 'waiting'))
 check('v1.13.4: Wartend-Icon (bell) intakt', waitingGlyph && waitingGlyph.p.name === 'bell' && !waitingGlyph.p.spinning, waitingGlyph && String(waitingGlyph.p.name))
+
+// 16b) v1.30.0: Status-Loader (Donut-Ring) ERSETZT den Core-Status-Punkt.
+// Der Loader ist ein eigener Baustein mit data-kind (Farbe/Drehung im CSS);
+// sein key haengt am Zustand, damit der Glow-Impuls bei jedem Wechsel neu
+// startet. Alte Settings-Werte ("dot"/"glyph+dot") zeigen jetzt den Loader.
+const resolveChild = el => (el && typeof el.t === 'function' ? el.t(el.p || {}) : el)
+const loaderOf = lead =>
+  (lead.p.children || []).map(resolveChild).find(child => child && child.p && child.p.className === 'sf-loader') || null
+const leadWithStyle = style =>
+  mod.StatusLead({
+    row: { id: 's-lead' },
+    live: { r1: { storedId: 's-lead', status: 'working' } },
+    activity: {},
+    style,
+    t: key => key
+  })
+
+const loaderOnly = leadWithStyle('loader')
+check('v1.30.0: Modus „Loader" rendert den Status-Loader', Boolean(loaderOf(loaderOnly)), 'kein Loader gefunden')
+check(
+  'v1.30.0: Loader trägt den Zustand als data-kind',
+  loaderOf(loaderOnly) && loaderOf(loaderOnly).p['data-kind'] === 'working',
+  loaderOf(loaderOnly) && String(loaderOf(loaderOnly).p['data-kind'])
+)
+check('v1.30.0: Modus „Loader" rendert KEIN Aktivitäts-Icon', !glyphOf(loaderOnly), 'Icon gefunden')
+check(
+  'v1.30.0: Loader-Key folgt dem Zustand (Glow startet neu)',
+  loaderOf(loaderOnly) && loaderOf(loaderOnly).k === 'loader-working',
+  loaderOf(loaderOnly) && String(loaderOf(loaderOnly).k)
+)
+
+const glyphAndLoader = leadWithStyle('glyph+loader')
+check(
+  'v1.30.0: „Icon + Loader" rendert Icon UND Loader',
+  Boolean(glyphOf(glyphAndLoader)) && Boolean(loaderOf(glyphAndLoader)),
+  `icon=${Boolean(glyphOf(glyphAndLoader))} loader=${Boolean(loaderOf(glyphAndLoader))}`
+)
+check(
+  'v1.30.0: Lead meldet den Modus als data-mode',
+  leadWithStyle('glyph+loader').p['data-mode'] === 'glyph+loader',
+  String(leadWithStyle('glyph+loader').p['data-mode'])
+)
+
+check(
+  'v1.30.0: Altwert „dot" wird zum Loader (Migration)',
+  Boolean(loaderOf(leadWithStyle('dot'))) && !glyphOf(leadWithStyle('dot')),
+  `loader=${Boolean(loaderOf(leadWithStyle('dot')))}`
+)
+check(
+  'v1.30.0: Altwert „glyph+dot" wird zu Icon + Loader',
+  Boolean(glyphOf(leadWithStyle('glyph+dot'))) && Boolean(loaderOf(leadWithStyle('glyph+dot'))),
+  `icon=${Boolean(glyphOf(leadWithStyle('glyph+dot')))} loader=${Boolean(loaderOf(leadWithStyle('glyph+dot')))}`
+)
+check(
+  'v1.30.0: normalizeStatusStyle bildet Alt- und Neuwerte ab',
+  mod.normalizeStatusStyle('dot') === 'loader' &&
+    mod.normalizeStatusStyle('glyph+dot') === 'glyph+loader' &&
+    mod.normalizeStatusStyle('glyph') === 'glyph' &&
+    mod.normalizeStatusStyle('loader') === 'loader' &&
+    mod.normalizeStatusStyle('glyph+loader') === 'glyph+loader' &&
+    mod.normalizeStatusStyle(undefined) === 'glyph',
+  JSON.stringify(
+    ['dot', 'glyph+dot', 'glyph', 'loader', 'glyph+loader', undefined].map(v => mod.normalizeStatusStyle(v))
+  )
+)
+check(
+  'v1.30.0: Settings kennen „Icon + Loader" statt „Icon + Punkt"',
+  globalThis.__SF__.bundles &&
+    globalThis.__SF__.bundles.en.tabsStatusLoader === 'Loader' &&
+    globalThis.__SF__.bundles.en.tabsStatusBoth === 'Icon + loader' &&
+    globalThis.__SF__.bundles.de.tabsStatusLoader === 'Loader' &&
+    globalThis.__SF__.bundles.de.tabsStatusBoth === 'Icon + Loader' &&
+    !('tabsStatusDot' in globalThis.__SF__.bundles.en) &&
+    !('tabsStatusDot' in globalThis.__SF__.bundles.de),
+  'Bundles ohne tabsStatusDot erwartet'
+)
+
+try {
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  walk(settingsPage.render(), { el: [], text: [] })
+  const seen = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  check(
+    'v1.30.0: Einstellungs-Seite zeigt „Loader" + „Icon + Loader"',
+    seen.has('tabsStatusLoader') && seen.has('tabsStatusBoth') && !seen.has('tabsStatusDot'),
+    `loader=${seen.has('tabsStatusLoader')} both=${seen.has('tabsStatusBoth')} dot=${seen.has('tabsStatusDot')}`
+  )
+} catch (error) {
+  check('v1.30.0: Einstellungs-Seite rendert (Status-Darstellung)', false, error.message)
+}
 
 // 17) Info-Dichte-Abstufung: data-density, reichere Detail-Zeile, Stats bei Detailreich
 try {

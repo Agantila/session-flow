@@ -47,6 +47,7 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 | `--radius-scalar` | Theme-Radius-Skalar (echte Variable); `--radius-2xl` existiert NICHT zur Laufzeit (Tailwind inlined) |
 | `--ui-accent` | Akzent der Kern-UI (Basis aller Fills/Strokes/Hover/Aktiv-Zustände via `color-mix`); Quelle: `--theme-midground` | 
 | `--ui-text-*`, `--ui-stroke-*` | Text/Rahmen überall |
+| `--ui-accent` / `--ui-success` / `--destructive` | Farb-Vokabel des **Status-Loader** (v1.30.0) — identisch zur Farbe des Aktivitäts-Icons (`sf-tab-lead[data-kind]`); der Loader übernimmt damit die Farbwelt der App, statt eine eigene aufzumachen. `waiting` nutzt weiterhin den Bernstein-Fallback `#f59e0b`, `error` den Rot-Fallback `#ef4444`. |
 
 **Regel:** Keine hartkodierten Farben. Alles über Tokens + `color-mix(...)`.
 
@@ -63,6 +64,11 @@ Feature wirklich lädt und greift. **Bei App-Updates zuerst hier nachsehen.**
 - **`prefers-reduced-motion`**: alle unsere Animationen gehen auf `none`.
 - **Pane-Tab-Geometrie**: Chip-Optik über `height:auto` + `margin-block`;
   Label-Fade via `mask-image` (wie die App beim Hover-Schließen).
+- **Status-Loader (v1.30.0)**: Ring-Technik wie beim Kontext-Donut —
+  `conic-gradient` + radiale Maske (`radial-gradient(closest-side, transparent
+  0 X%, #000 Y%)`), Rotation per `transform`-Keyframe auf `::after`. Der
+  Loader ist **Plugin-Code**; das Core-Primitive `SessionStatusDot` wird
+  nicht mehr gerendert (siehe `docs/plans/2026-11-16-status-loader.md`).
 - **Radius-Konzentrizität**: Innen liegende Ringe brauchen `r − 1px`
   (Border-Breite); wir **messen** den echten Surface-Radius zur Laufzeit
   (`getComputedStyle(...).borderTopLeftRadius` → `--sf-arc-radius`, 4-s-Refresh),

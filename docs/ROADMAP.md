@@ -1,9 +1,20 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.29.3 (2026-11-16). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.30.0 (2026-11-16). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Status-Loader (Donut-Ring) ersetzt den Core-Status-Punkt** (v1.30.0, Plan:
+  `docs/plans/2026-11-16-status-loader.md`): Die Status-Darstellung der
+  Session-Einträge hat jetzt einen eigenen Loader — ein äußerer Kreis, der
+  sich wie ein Loader dreht (heller Kopf mit auslaufendem Schweif, wie ein
+  Ladebalken im Kreis). Die Donut-Animation spiegelt Interaktion bzw.
+  Zustand; beim Zustandswechsel läuft ein dezenter Glow-Impuls. Alle Zustände
+  sind visuell UND farblich abgebildet (Farb-Vokabel identisch zum
+  Aktivitäts-Icon). Im Modus „Icon + Loader" liegt der Ring **konzentrisch um
+  das Icon** — beide ergeben zusammen ein Icon. Einstellung „Punkt“ heißt jetzt
+  „Loader“; gespeicherte Altwerte werden einmalig migriert.
 
 - **Revision-Fence für Delete/Archive** (v1.29.3, Plan:
   `docs/plans/2026-11-16-session-delete-fix.md`): Der Gateway verlangt für
@@ -341,10 +352,12 @@ und docs/plans/2026-10-04-info-dichte-abstufung.md.
   dass es ausdrücklich gewünscht ist.
 - **Animation nur auf Assistant-Markdown.** User-Nachrichten und Tool-Karten
   bleiben unangetastet — weniger Flackern, klare Lesbarkeit.
-- **Kein eigener Status-Punkt.** Der Core-`SessionStatusDot` bleibt die einzige
-  Statusquelle im Tab (SDK-Regel: Plugins, die daneben einen eigenen Punkt
-  malen, brechen die Farb-Vokabel der App). Wir erweitern ihn nur um den
-  Live-Glow (gleiche Engine wie die Sidebar).
+- **Kein eigener Status-Punkt.** ~~Der Core-`SessionStatusDot` bleibt die einzige
+  Statusquelle im Tab~~ — **seit v1.30.0 umgekehrt**: Der Core-Punkt ist weg,
+  der eigene Status-Loader (Donut-Ring) übernimmt die Aufgabe vollständig
+  (Farb-Vokabel, Zustands-Abdeckung, Live-Glow). Grund: der Punkt war starr
+  und konnte die Interaktion nicht zeigen; der Loader kann es (Plan:
+  `docs/plans/2026-11-16-status-loader.md`).
 - **Kein `!important` auf `backdrop-filter`.** Der systemweite
   „Transparenz reduzieren"-Gate der App muss gewinnen.
 - **Filter-Leiste ephemeral.** Bewusst nicht persistiert (siehe Hermes-Vorbild)

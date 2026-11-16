@@ -78,7 +78,7 @@ Animationen unabhängig von diesen Schaltern.
 | `tabs.doneFxStrength` | `subtle` | Stärke des Wackel-Effekts: `subtle` (dezent) / `medium` / `strong`. |
 | `tabs.showContext` | `false` | Kontextfenster (kompakt): Prozent-Label je Zeile/Karte für **Live-Sessions** (read-only `session.context_breakdown`, kein Provider-Call). Ab 70 % bernstein, ab 90 % rot; Tooltip zeigt used/max. |
 | `tabs.ctxPie` | `true` | Kontextfenster als **Donut**: Außenring = Füllstand, Innenkreis ausgespart (die Zeilenfläche scheint durch). Der Wert steht im Loch — weiß mit mehrlagigem Text-Schatten (Kontur + Glow); Farbstufen ab 70 %/90 %. Aus = reines Prozent-Label. **Listen-Ansicht:** Donut ganz rechts am Ende (nach der Zeit); **Grid:** vor der Zeit. |
-| `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `dot` (Core-Status-Punkt), `glyph+dot`. |
+| `tabs.statusStyle` | `glyph` | `glyph` (Aktivitäts-Icon), `loader` (eigener Status-Loader: Donut-Ring, der sich wie ein Loader dreht), `glyph+loader` (Icon + Loader). Ersetzt seit v1.30.0 den Core-Status-Punkt; gespeicherte Altwerte `dot`/`glyph+dot` werden beim Start einmalig auf `loader`/`glyph+loader` umgestellt. |
 | `tabs.showTime` | `true` | Alter der Session anzeigen. |
 | `tabs.showPreview` | `false` | Letzte Nachricht als Vorschau (cozy-Dichte). |
 | `tabs.showCounts` | `false` | Nachrichtenanzahl anzeigen. |

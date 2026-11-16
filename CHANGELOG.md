@@ -3,6 +3,35 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.30.0] — 2026-11-16
+
+### Added
+- **Status-Loader (Donut-Ring) ersetzt den Core-Status-Punkt** — die
+  Status-Darstellung der Session-Einträge hat jetzt einen eigenen Loader:
+  ein äußerer Kreis, der sich wie ein Loader dreht — der helle Kopf läuft mit
+  auslaufendem Schweif wie ein Ladebalken im Kreis über den Ring, und diese
+  Donut-Animation spiegelt Interaktion bzw. Zustand. Beim Zustandswechsel
+  läuft zusätzlich ein **dezenter Glow-Impuls** (einmalig, ~1,15 s) — „wenn
+  etwas passiert“. Alle Zustände sind visuell UND farblich abgebildet:
+  *arbeiten/denkt/Tool* = Akzent (Ring dreht 1,4 s), *wartet* = Bernstein
+  (dreht langsam, 2,8 s), *fertig/ungelesen* = ruhender Vollring in der
+  Erfolgsfarbe, *Fehler* = ruhender Vollring in Fehlerfarbe, *idle* = ruhender,
+  matter Ring. Die Farb-Vokabel ist identisch zum Aktivitäts-Icon — der Loader
+  bricht die Farbwelt der App also nicht.
+- **Einstellung „Status-Darstellung“**: „Punkt“ heißt jetzt **„Loader“**,
+  „Icon + Punkt“ heißt **„Icon + Loader“**. Im Modus „Icon + Loader“ liegt der
+  Ring **konzentrisch um das Icon** — beide ergeben zusammen EIN Icon statt
+  zweier Elemente nebeneinander. Gespeicherte Altwerte (`dot`, `glyph+dot`)
+  werden beim Start einmalig auf die neuen Werte umgestellt — die gewählte
+  Darstellungsart bleibt erhalten. Plan:
+  `docs/plans/2026-11-16-status-loader.md`.
+
+### Changed
+- **Der Core-`SessionStatusDot` wird nicht mehr gerendert.** Bewusste
+  Umkehr der bisherigen Design-Entscheidung („kein eigener Status-Punkt“):
+  Der Loader übernimmt die Punkt-Aufgabe vollständig — inklusive Farb-Vokabel
+  und Zustands-Abdeckung.
+
 ## [1.29.3] — 2026-11-16
 
 ### Fixed

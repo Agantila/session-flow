@@ -108,6 +108,13 @@ const fxRow = (id, label, withShine) =>
 const activityRow = id =>
   `<div class="sf-tab" id="${id}" data-density="detailed"><span class="sf-tab-lead"></span><div class="sf-tab-main"><div class="sf-tab-title">Info-Zeile</div><div class="sf-tab-details">zuletzt aktiv 11m</div><div class="sf-tab-activity" data-tone="accent"><span class="sf-activity-tick"><span class="sf-activity-info sf-activity-out">Denkt nach…</span><span class="sf-activity-info sf-activity-in">Tool läuft: browser_exec</span></span></div></div></div>`
 
+// v1.30.0: Status-Loader (Donut-Ring) — Ring-Geometrie, Farbe je Zustand,
+// Rotation (Spin) und der dezente Glow-Impuls werden am echten Chromium
+// gemessen. `withIcon` bildet den Modus „Icon + Loader" nach (Icon als
+// 13-px-Platzhalter, wie der Codicon im echten Render).
+const loaderRow = (id, kind, mode = 'loader', withIcon = false) =>
+  `<div class="sf-tab" id="${id}" data-density="compact"><span class="sf-tab-lead" data-mode="${mode}" data-kind="${kind}">${withIcon ? '<span class="sf-icon" style="display:inline-block;width:13px;height:13px"></span>' : ''}<span class="sf-loader" data-kind="${kind}"></span></span><span class="sf-tab-main"><span class="sf-tab-title">Loader ${kind}</span></span></div>`
+
 const html = `<!doctype html>
 <html lang="de"
   data-sf-rowgrad="on" data-sf-rowshadow="medium" data-sf-titlegrad="on"
@@ -160,6 +167,19 @@ const html = `<!doctype html>
         </div>
         <div class="sf-items" data-view="grid">
           ${densityRow('dg', 'detailed')}
+        </div>
+      </div>
+    </div>
+    <div class="sf-section">
+      <h4 style="color:#9ca3af;font:600 11px/1 system-ui;margin:14px 4px 6px">Status-Loader (v1.30.0)</h4>
+      <div style="width:320px">
+        <div class="sf-items" data-view="list">
+          ${loaderRow('li-idle', 'idle')}
+          ${loaderRow('li-work', 'working')}
+          ${loaderRow('li-wait', 'waiting')}
+          ${loaderRow('li-done', 'done')}
+          ${loaderRow('li-err', 'error')}
+          ${loaderRow('li-both', 'working', 'glyph+loader', true)}
         </div>
       </div>
     </div>
@@ -480,6 +500,76 @@ const densityProbeExpr = `(() => {
   return { dc: mk('dc'), dd: mk('dd'), dg: mk('dg') }
 })()`
 const readDensity = () => page.evaluate(densityProbeExpr)
+// v1.30.0: Status-Loader — Ring-Geometrie, Farbe, Rotation und Glow-Impuls.
+const loaderProbeExpr = `(() => {
+  // Erwartungs-Farbe im Browser berechnen (gleiche color-mix-Formel) — so
+  // bleibt der Vergleich unabhaengig von der Notationsform des Browsers
+  // (rgb() vs. color(srgb …)).
+  const mixColor = (color, pct) => {
+    const probe = document.createElement('span')
+    probe.style.color = 'color-mix(in srgb, ' + color + ' ' + pct + '%, transparent)'
+    document.body.appendChild(probe)
+    const value = getComputedStyle(probe).color
+    probe.remove()
+    return value
+  }
+  const read = id => {
+    const el = document.getElementById(id)
+    const loader = el ? el.querySelector('.sf-loader') : null
+    if (!loader) return null
+    const cs = getComputedStyle(loader)
+    const after = getComputedStyle(loader, '::after')
+    const before = getComputedStyle(loader, '::before')
+    const lead = el.querySelector('.sf-tab-lead')
+    return {
+      width: cs.width,
+      height: cs.height,
+      radius: cs.borderRadius,
+      display: cs.display,
+      animName: cs.animationName,
+      animDur: cs.animationDuration,
+      filter: cs.filter,
+      afterImage: after.backgroundImage,
+      afterColor: after.backgroundColor,
+      afterOpacity: after.opacity,
+      afterAnim: after.animationName,
+      afterDur: after.animationDuration,
+      afterMask: after.maskImage || after.webkitMaskImage || '',
+      beforeColor: before.backgroundColor,
+      beforeMask: before.maskImage || before.webkitMaskImage || '',
+      leadWidth: lead ? getComputedStyle(lead).width : '',
+      // v1.30.0: „Icon + Loader" liegt UEBEREINANDER — der Loader ist ein
+      // aeusserer Ring um das Icon. Geprueft wird die Konzentrizitaet
+      // (Mittelpunkt Icon == Mittelpunkt Ring).
+      iconBox: (() => {
+        const icon = loader.parentElement ? loader.parentElement.querySelector('.sf-icon') : null
+        if (!icon) return null
+        const a = icon.getBoundingClientRect()
+        const b = loader.getBoundingClientRect()
+        return {
+          iconCx: a.left + a.width / 2,
+          iconCy: a.top + a.height / 2,
+          loaderCx: b.left + b.width / 2,
+          loaderCy: b.top + b.height / 2,
+          loaderW: b.width,
+          loaderH: b.height,
+          position: getComputedStyle(loader).position
+        }
+      })()
+    }
+  }
+  return {
+    idle: read('li-idle'),
+    working: read('li-work'),
+    waiting: read('li-wait'),
+    done: read('li-done'),
+    error: read('li-err'),
+    both: read('li-both'),
+    expectedAccent: mixColor('#3b82f6', 22),
+    expectedAmber: mixColor('#f59e0b', 22)
+  }
+})()`
+const readLoader = () => page.evaluate(loaderProbeExpr)
 // .sf-tab transitioniert transform/box-shadow/background-color (130 ms) — nach
 // einem Zustandswechsel liefert getComputedStyle sonst den START-Wert der
 // laufenden Transition. Vor jeder Messung kurz auslaufen lassen.
@@ -1289,6 +1379,85 @@ try {
   check('v1.28.0 Drag: .sf-drag-ghost ist fixed + pointer-events:none', DND.ghostInfo.position === 'fixed' && DND.ghostInfo.pointerEvents === 'none', JSON.stringify(DND.ghostInfo))
 } catch (error) {
   check('v1.28.0 Drag-Test ohne Exception', false, error && error.message)
+}
+
+// ── 20) v1.30.0: Status-Loader (Donut-Ring) ────────────────────────────────
+// Der Loader ersetzt den Core-Status-Punkt: ein äußerer Ring (Donut), der
+// sich wie ein Loader dreht. Gemessen wird am echten Chromium, was der
+// Browser tatsächlich rendert:
+//   • Ring-Geometrie (11 px, rund, Inline-Block) + Loch via radialer Maske,
+//   • Rotation als conic-gradient mit auslaufendem Schweif (Spin-Keyframes),
+//   • Farb-Vokabel je Zustand (identisch zum Aktivitäts-Icon),
+//   • ruhender Idle-Ring (kein Spin) und ruhender Vollring bei done/error
+//     mit dem dezenten Glow-Impuls (einmalig, Keyframe sf-loader-glow).
+try {
+  const L = await readLoader()
+
+  check(
+    'v1.30.0 Loader: Ring-Geometrie 11x11 px, rund',
+    L.working && L.working.width === '11px' && L.working.height === '11px' && L.working.radius === '50%',
+    L.working ? `${L.working.width}/${L.working.height} r=${L.working.radius}` : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Ring = Loch via radialer Maske (kein voller Kreis)',
+    L.working && L.working.afterMask.includes('radial-gradient') && L.working.beforeMask.includes('radial-gradient'),
+    L.working ? L.working.afterMask.slice(0, 80) : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Bogen = conic-gradient mit auslaufendem Schweif',
+    L.working && L.working.afterImage.includes('conic-gradient'),
+    L.working ? L.working.afterImage.slice(0, 110) : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Arbeits-Zustand dreht (sf-loader-spin)',
+    L.working && L.working.afterAnim === 'sf-loader-spin' && L.working.afterDur === '1.4s',
+    L.working ? `${L.working.afterAnim}/${L.working.afterDur}` : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Arbeits-Zustand in Akzentfarbe (Farb-Vokabel des Icons)',
+    L.working && L.working.beforeColor === L.expectedAccent,
+    L.working ? `${L.working.beforeColor} (erwartet ${L.expectedAccent})` : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Wartend dreht langsamer und in Bernstein',
+    L.waiting && L.waiting.afterAnim === 'sf-loader-spin' && L.waiting.afterDur === '2.8s' && L.waiting.beforeColor === L.expectedAmber,
+    L.waiting ? `${L.waiting.afterDur} ${L.waiting.beforeColor} (erwartet ${L.expectedAmber})` : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Idle ruht (kein Spin, Bogen unsichtbar)',
+    L.idle && L.idle.afterAnim === 'none' && L.idle.afterOpacity === '0',
+    L.idle ? `${L.idle.afterAnim} op=${L.idle.afterOpacity}` : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Fertig = ruhender Vollring (kein Spin) + Glow-Impuls',
+    L.done && L.done.afterAnim === 'none' && L.done.afterImage === 'none' && L.done.afterOpacity === '1' && L.done.animName === 'sf-loader-glow',
+    L.done ? `anim=${L.done.animName} after=${L.done.afterAnim} op=${L.done.afterOpacity}` : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Fehler = Vollring in Fehlerfarbe + Glow-Impuls',
+    L.error && L.error.animName === 'sf-loader-glow' && L.error.afterColor === 'rgb(239, 68, 68)',
+    L.error ? `${L.error.animName} ${L.error.afterColor}` : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Modus „Icon + Loader" legt den Ring UM das Icon (konzentrisch)',
+    L.both &&
+      L.both.iconBox &&
+      L.both.iconBox.position === 'absolute' &&
+      Math.abs(L.both.iconBox.iconCx - L.both.iconBox.loaderCx) <= 0.6 &&
+      Math.abs(L.both.iconBox.iconCy - L.both.iconBox.loaderCy) <= 0.6 &&
+      L.both.iconBox.loaderW > L.both.iconBox.loaderH - 0.1 &&
+      parseFloat(L.both.iconBox.loaderW) >= 17,
+    L.both && L.both.iconBox
+      ? `icon=${L.both.iconBox.iconCx.toFixed(1)}/${L.both.iconBox.iconCy.toFixed(1)} loader=${L.both.iconBox.loaderCx.toFixed(1)}/${L.both.iconBox.loaderCy.toFixed(1)} ring=${L.both.iconBox.loaderW}x${L.both.iconBox.loaderH} pos=${L.both.iconBox.position}`
+      : 'null'
+  )
+  check(
+    'v1.30.0 Loader: Lead-Cell im Icon+Loader-Modus passt den Ring (>= 18 px)',
+    L.both && parseFloat(L.both.leadWidth) >= 18,
+    L.both ? L.both.leadWidth : 'null'
+  )
+} catch (error) {
+  check('v1.30.0 Loader-Test ohne Exception', false, error && error.message)
 }
 
 // ── Optional: Screenshots für die Sichtprüfung ──────────────────────────────
