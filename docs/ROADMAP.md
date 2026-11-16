@@ -1,9 +1,20 @@
 # Roadmap & bekannte Grenzen
 
-Stand: v1.28.0 (2026-10-07). Reihenfolge = grobe Priorität, nichts davon ist
+Stand: v1.29.0 (2026-11-16). Reihenfolge = grobe Priorität, nichts davon ist
 zugesagt.
 
 ## Zuletzt umgesetzt (Referenz für Weiterentwicklung)
+
+- **Settings-Subtabs** (v1.29.0, Plan:
+  `docs/plans/2026-11-16-settings-subtabs.md`): die vier langen Sektionen
+  (Session-Tabs, UI-Tabs, Glass, Individualisierung) gruppieren ihre Rows
+  jetzt per Subtab über eine generische `SettingsSubtabs`-Komponente.
+  Alle Panes bleiben gemountet, inaktive tragen nur `hidden` — der
+  Render-Smoke asserting auf dem t()-Call-Log blieb dadurch unangetastet.
+  Abweichungen vom Plan: Glass bekam 3 Subtabs (Fläche/Rahmen/Bereiche,
+  statt 2), Individualisierung nur 2 (Akzent/Hintergrund — die im Plan
+  genannten Shell-Rows existieren nicht mehr); alignTop/hoverLift wanderten
+  von Design nach Ansicht.
 
 - **DnD komplett auf Pointer-Events umgestellt** (v1.28.0, live
   verifiziert): natives HTML5-DnD (`draggable`/`dragstart`/`dragover`/
@@ -251,6 +262,11 @@ Vollständige Pläne zu v1.14.0: `docs/plans/2026-10-04-grouping-filter-dnd-tab-
 und docs/plans/2026-10-04-info-dichte-abstufung.md.
 
 ## Geplant / Ideen
+
+- **Settings-Subtabs nachschärfen** (Follow-ups aus v1.29.0): „Erweitert"-
+  Disclosure für die doneFx-Feinparameter (Achse/Stärke), falls der
+  Effekte-Tab als zu lang empfunden wird; optional Persistenz des aktiven
+  Subtabs je Sektion (dann Settings-Schema-Version mitnehmen).
 
 - **Echter Draft-CWD-Hebel (App-PR)**: Plugin-Tür für `$projectScope`/einen
   `setCurrentCwd`-Door, damit der Projekt-Chip den offenen App-Draft direkt

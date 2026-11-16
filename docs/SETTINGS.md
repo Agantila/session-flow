@@ -7,6 +7,14 @@ und sind live: Änderungen greifen sofort. Erreichbar über die Seite
 Die Seite hat seit v1.5.0 eine **sticky Kategorie-Leiste** oben: ein Klick springt
 zur jeweiligen Sektion, die aktuelle wird beim Scrollen automatisch markiert.
 
+Seit v1.29.0 gliedern die vier langen Sektionen ihre Optionen zusätzlich per
+**Subtab** (Segment oben in der Sektion): Session-Tabs („Ansicht · Design ·
+Auswahl · Effekte"), UI-Tabs („Optik · Verhalten"), Glass („Fläche · Rahmen ·
+Bereiche") und Individualisierung („Akzent · Hintergrund"). Master-Schalter
+(`uiTabs.enabled`, `glass.enabled`), Preset- und Hinweis-Zeilen stehen außerhalb
+der Subtabs; alle Panes bleiben geladen, inaktive sind nur ausgeblendet. Der
+aktive Subtab ist reiner UI-Zustand und wird nicht persistiert.
+
 ## Chat-Animation
 
 | Key | Default | Wirkung |

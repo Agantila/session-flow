@@ -361,7 +361,7 @@ const rewritten = src
   .replace("from 'react'", `from '${stubUrl}'`)
   .replace("from '@hermes/plugin-sdk'", `from '${stubUrl}'`)
   .concat(
-    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor, resetSettings, $settings }\n'
+    '\nexport { patchSettings, applyPersonal, clearPersonal, syncPaneBackgrounds, StatusLead, pollLiveSessions, $liveMap, $ctxInfo, $sessions, $projectsList, $pinnedRows, $doneFx, $activityPrev, $activity, $folderSizes, $loadPhase, $archivedRows, $sessionsError, refreshSessions, invalidateProjectTree, startNewProjectSession, startNewSessionInCwd, branchSessionRow, openFreshSession, ambientOwnerProfile, projectForCwd, composerDraftAnchor, composerDraftLabel, adoptComposerPickForNewSession, $composerPick, moveSessionRow, deleteSessionRow, findLiveSessionIdByKey, resolveNewProjectSessionCwd, $sessionProjectSeed, $dragActive, reconnectRefresh, scheduleSettleIn, bootstrapSessionData, SETTLE_IN_DELAYS_MS, NAV_APPS, SF_NAV_ROUTES, navigateAppRoute, kanbanAvailable, $navStatus, kanbanBoardToStatus, cronJobsToStatus, cronJobState, navStatusTone, refreshNavStatus, deriveForTheme, detectAppTheme, applyRows, activeRowColors, effectiveOpenIntent, createGroup, updateGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, groupsContainingProject, normalizeProjectIds, loadGroups, $groupsState, activityFor, resetSettings, $settings }\n'
   )
 writeFileSync(join(dir, 'plugin.mjs'), rewritten)
 const mod = await import(pathToFileURL(join(dir, 'plugin.mjs')).href)
@@ -376,7 +376,9 @@ const ctx = {
   },
   onDispose: () => {},
   setInterval: () => () => {},
-  setTimeout: () => 0,
+  // Echte Timer: Der 4023-Retry im Delete-Flow (CTX.setTimeout) muss im Test
+  // wirklich auflösen. Der Bootstrap-Fallback (20 s) feuert vor Testende nie.
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
   onEvent: () => () => {},
   addEventListener: () => () => {},
   storage: {
@@ -643,6 +645,38 @@ try {
   }
 } catch (error) {
   check('Einstellungs-Seite (Theme-Farben) rendert', false, error.message)
+}
+
+// 11c) v1.29: Settings-Subtabs — Panes bleiben alle gemountet, inaktive hidden.
+// Der Segment-Stub rendert null (kein 'pinned'), deshalb wird über Panes und
+// t()-Call-Log asserting — nicht über Tab-Buttons.
+try {
+  stub.__resetSlots()
+  globalThis.__SF__.tCalls.length = 0
+  const out11c = { el: [], text: [] }
+  walk(settingsPage.render(), out11c)
+  const seen11c = new Set(globalThis.__SF__.tCalls.map(([k]) => k))
+  const subKeys = [
+    'subView', 'subDesign', 'subSelection', 'subEffects',
+    'subLook', 'subBehavior', 'subSurface', 'subFrame', 'subScope',
+    'subAccent', 'subBackground'
+  ]
+  for (const key of subKeys) {
+    check(`Einstellungs-Seite enthält Subtab-Key ${key}`, seen11c.has(key))
+  }
+  const panes11c = out11c.el.filter(e => e.tag === 'div' && e.cls.includes('sf-subtab-pane'))
+  const hidden11c = panes11c.filter(e => e.props && e.props.hidden === true)
+  const visible11c = panes11c.filter(e => !e.props || e.props.hidden !== true)
+  check('Subtabs: 11 Panes (4+2+3+2 Gruppen)', panes11c.length === 11, `panes=${panes11c.length}`)
+  check('Subtabs: je Gruppe genau 1 Pane sichtbar (4)', visible11c.length === 4, `visible=${visible11c.length}`)
+  check('Subtabs: 7 inaktive Panes hidden', hidden11c.length === 7, `hidden=${hidden11c.length}`)
+  // Mount-alles: auch Rows in versteckten Panes feuern t() — bestehende
+  // Key-Assertions bleiben so unangetastet grün.
+  for (const key of ['tabsThemeSplit', 'tabsSelTint', 'tabsDoneFx', 'glassArcWidth', 'personalBgFit', 'uiTabsCloseMode']) {
+    check(`Subtabs: versteckte Pane rendert weiter (${key})`, seen11c.has(key))
+  }
+} catch (error) {
+  check('Einstellungs-Seite (Subtabs) rendert', false, error.message)
 }
 
 // 12) v1.13: App-Optik-Attribute (Text oben, Hover-Anhebung, Kontext-Pie, Live-Rahmen)

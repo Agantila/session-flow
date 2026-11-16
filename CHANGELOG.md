@@ -3,6 +3,23 @@
 Alle nennenswerten Änderungen an diesem Plugin. Format lose angelehnt an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [1.29.0] — 2026-11-16
+
+### Changed
+- **Settings-Sektionen mit Subtabs gruppiert** (Plan:
+  `docs/plans/2026-11-16-settings-subtabs.md`): Die vier langen Sektionen
+  brechen ihre Scroll-Länge jetzt per Subtab auf — Session-Tabs:
+  „Ansicht / Design / Auswahl / Effekte", UI-Tabs: „Optik / Verhalten",
+  Glass: „Fläche / Rahmen / Bereiche", Individualisierung:
+  „Akzent / Hintergrund". Master-Schalter (`uiTabs.enabled`,
+  `glass.enabled`) und Preset-/Hinweis-Zeilen bleiben außerhalb der Tabs
+  immer sichtbar; die sticky Kategorie-Navigation und alle Anker-IDs sind
+  unverändert. Technisch: eine generische `SettingsSubtabs`-Komponente,
+  deren Panes alle gemountet bleiben und inaktive nur `hidden` tragen —
+  der Render-Smoke (t()-Call-Log) sieht dadurch weiterhin jede Zeile, alle
+  bestehenden Settings-Assertions blieben unangetastet grün. Der aktive
+  Subtab ist reiner UI-Zustand (nicht persistiert, kein Schema-Wandel).
+
 ## [1.28.1] — 2026-10-07
 
 ### Fixed
